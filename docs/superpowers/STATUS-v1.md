@@ -6,7 +6,7 @@
 
 | Phase | Tasks | Depends | Parallel-safe | Status | Branch | Worker thread | Updated |
 |-------|-------|---------|---------------|--------|--------|---------------|---------|
-| 1 Skeleton | 1–8 | — | no | running | impl/v1-p1-skeleton | (dispatching) | 2026-08-12 |
+| 1 Skeleton | 1–8 | — | no | running | impl/v1-p1-skeleton | [T-019ff852…](https://ampcode.com/threads/T-019ff852-7005-72aa-8c35-51e3f9ff61fb) | 2026-08-12 |
 | 2 Projects + source | 9–14 | 1 | no | todo | impl/v1-p2-projects | | |
 | 3 Sessions + chat | 15–20 | 2 | no | todo | impl/v1-p3-sessions | | |
 | 4 Workspace tools | 21–24 | 3 | no | todo | impl/v1-p4-tools | | |
@@ -22,6 +22,7 @@
 |------|--------|
 | 2026-08-12 | Board created. Plan on origin. Awaiting master dispatch of Phase 1. |
 | 2026-08-12 | Master online. `main` clean @ e32026c. Dispatching Phase 1 worker. |
+| 2026-08-12 | Phase 1 worker dispatched: https://ampcode.com/threads/T-019ff852-7005-72aa-8c35-51e3f9ff61fb branch `impl/v1-p1-skeleton` tasks 1–8. Board @ f15382d. |
 
 ## Active blockers
 
