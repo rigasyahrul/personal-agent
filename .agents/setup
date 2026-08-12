@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+echo "==> Checking Go toolchain"
+if ! command -v go >/dev/null 2>&1; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    apt=(apt-get)
+  else
+    apt=(sudo -n apt-get)
+  fi
+
+  export DEBIAN_FRONTEND=noninteractive
+  time "${apt[@]}" update
+  time "${apt[@]}" install -y --no-install-recommends golang-go
+fi
+go version
+
+if [[ -f go.mod ]]; then
+  echo "==> Downloading Go modules"
+  time go mod download
+else
+  echo "==> No go.mod found; no dependencies to install"
+fi
+
+echo "==> Orb setup complete"
