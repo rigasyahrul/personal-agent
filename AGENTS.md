@@ -44,6 +44,7 @@ After non-trivial work or a user correction: append a lesson under `docs/memory/
 - **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is lessons only.
 - **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; Oracle until Approved. → `docs/memory/2026-08-12-lessons.md`
 - **No extra doc trees** (`docs/solutions/`, process/planning splits) unless the user asks. Prefer one lessons file + AGENTS.md.
+- **v1 execution:** master thread = `docs/superpowers/HANDOFF-master-execution.md` + board `STATUS-v1.md`. Workers implement phases; master coordinates merge/ship.
 
 ## Notes for Amp orbs
 
