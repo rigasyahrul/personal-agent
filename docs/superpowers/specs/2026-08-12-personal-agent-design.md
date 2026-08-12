@@ -1,6 +1,6 @@
 # Personal Agent — Design Spec
 
-**Status:** Draft for user review (brainstorming complete; pending approval before implementation plan)  
+**Status:** Approved (2026-08-12) — ready for `writing-plans`  
 **Date:** 2026-08-12  
 **Repo:** `personal-agent`  
 **v1 name:** Thin vertical — self-hosted learning dashboard  
@@ -524,7 +524,10 @@ These do not block approving this design.
 
 ## 17. Approval
 
-**User review gate:** Please read this spec and say whether to:
+**Approved by user on 2026-08-12.**
 
-1. **Approve** → proceed to `writing-plans` (implementation plan under `docs/superpowers/plans/`), or  
-2. **Request changes** → list sections to revise before planning.
+Next step: invoke **writing-plans** and save the implementation plan to:
+
+`docs/superpowers/plans/2026-08-12-personal-agent-v1.md`
+
+(Do not implement code until that plan exists and is reviewed.)
