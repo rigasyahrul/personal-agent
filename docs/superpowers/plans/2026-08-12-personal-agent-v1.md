@@ -662,7 +662,7 @@ Map to HTTP: 404/409/409/401/403/400/409 as appropriate.
 ---
 
 
-<!-- Assembled from docs/memory/plan-drafts/ — implementers: this file is authoritative -->
+<!-- Assembled from docs/superpowers/plans/2026-08-12-personal-agent-v1-drafts/ — implementers: this file is authoritative -->
 
 
 ## Phase 1: Skeleton
@@ -5352,4 +5352,4 @@ Plan complete and saved to `docs/superpowers/plans/2026-08-12-personal-agent-v1.
 Do not implement application code until execution is explicitly approved.
 
 **Spec SoT:** `docs/superpowers/specs/2026-08-12-personal-agent-design.md`  
-**Coordination scratch:** `docs/memory/` (optional; this plan file is authoritative)
+**Optional lock/drafts:** `docs/superpowers/plans/2026-08-12-personal-agent-v1-lock.md` and `…-v1-drafts/`. **Lessons:** `docs/memory/`. This plan file is authoritative for implementation.

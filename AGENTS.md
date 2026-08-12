@@ -25,6 +25,26 @@ Announce which skill you are using, then follow it exactly.
 - `requesting-code-review` / `receiving-code-review`
 - `dispatching-parallel-agents` / `writing-skills`
 
+## Compounding engineering (keep it simple)
+
+Pattern: [Compounding Engineering](https://www.agentic-patterns.com/patterns/compounding-engineering-pattern/) — each unit of work should make the next easier. Codify learnings so agents stop repeating mistakes.
+
+| What | Where |
+|------|--------|
+| Specs | `docs/superpowers/specs/YYYY-MM-DD-*-design.md` |
+| Plans (+ optional lock/drafts) | `docs/superpowers/plans/YYYY-MM-DD-*.md` |
+| **Lessons learned** | **`docs/memory/YYYY-MM-DD-lessons.md`** (one file; append) |
+| Standing rules | **This file** (short bullets below) |
+
+After non-trivial work or a user correction: append a lesson under `docs/memory/`, and add a standing bullet here if it should load every session.
+
+### Standing rules
+
+- **Ship = push.** Commit is not enough. After ship/done/archive: `git push`, confirm not `ahead of origin`, then archive the thread. → details in `docs/memory/2026-08-12-lessons.md`
+- **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is lessons only.
+- **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; Oracle until Approved. → `docs/memory/2026-08-12-lessons.md`
+- **No extra doc trees** (`docs/solutions/`, process/planning splits) unless the user asks. Prefer one lessons file + AGENTS.md.
+
 ## Notes for Amp orbs
 
 - Skills live in `.agents/skills/` (project-local; survives orb recreation when committed).

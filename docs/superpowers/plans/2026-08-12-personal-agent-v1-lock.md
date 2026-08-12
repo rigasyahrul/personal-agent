@@ -1,4 +1,4 @@
-# Plan lock — personal-agent v1
+# Plan lock — personal-agent v1 (`2026-08-12-plan-lock.md`)
 
 **Frozen for all plan-draft subagents.** Do not invent conflicting package paths, type names, or limits.
 **Spec SoT:** `docs/superpowers/specs/2026-08-12-personal-agent-design.md`  
@@ -335,7 +335,7 @@ All mutations require auth cookie + CSRF (except bootstrap/login/health as desig
 | Phase | Tasks | Draft file |
 |-------|-------|------------|
 | 0 Header + file map + constraints | (assembler) | `00-header.md` |
-| 1 Skeleton | 1–8 | `01-skeleton.md` |
+| 1 Skeleton | 1–8 | `docs/superpowers/plans/2026-08-12-personal-agent-v1-drafts/01-skeleton.md` |
 | 2 Projects + source | 9–14 | `02-projects-source.md` |
 | 3 Sessions + chat | 15–20 | `03-sessions-chat.md` |
 | 4 Workspace tools | 21–24 | `04-workspace-tools.md` |
@@ -378,9 +378,9 @@ Each phase draft starts with `## Phase N: Title` and contains only its tasks.
 ## Subagent instructions summary
 
 1. Read this lock + full design spec.
-2. Write ONLY your phase file under `docs/memory/plan-drafts/`.
+2. Write ONLY your phase file under `docs/superpowers/plans/2026-08-12-personal-agent-v1-drafts/`.
 3. Follow writing-plans task format exactly.
 4. Use exact paths/types from this lock.
 5. Include real Go test + impl code in steps.
-6. Do not implement application code outside `docs/memory/`.
+6. Do not implement application code. Drafts only under `docs/superpowers/plans/…-drafts/`.
 7. End file with a short "Phase self-check" listing spec sections covered.
