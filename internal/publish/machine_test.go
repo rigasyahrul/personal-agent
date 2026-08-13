@@ -107,7 +107,8 @@ func TestWholeReviewConflictMustMatchExactReusableRow(t *testing.T) {
 	updates := map[string]string{
 		"stage": `stage=1`, "interval": `interval_days=1`, "ease": `ease_factor=2.6`, "reps": `reps=1`,
 		"lapses": `lapses=1`, "row_version": `row_version=1`, "last_reviewed": `last_reviewed_at='2026-08-13T01:02:03Z'`,
-		"future_due": `due_at='2026-08-14T01:02:03Z'`, "scheduler": `scheduler_version='other'`,
+		"future_due": `due_at='2026-08-14T01:02:03Z'`, "future_due_same_second": `due_at='2026-08-13T01:02:03.9Z'`,
+		"scheduler": `scheduler_version='other'`,
 	}
 	for name, update := range updates {
 		t.Run(name, func(t *testing.T) {
@@ -491,6 +492,7 @@ func TestRecoverAllPromoteRejectsInvalidReviewEnqueuedState(t *testing.T) {
 		{name: "nonzero_row_version", update: `UPDATE review_items SET row_version=1 WHERE note_id=?`},
 		{name: "last_reviewed", update: `UPDATE review_items SET last_reviewed_at='2026-08-13T01:02:03Z' WHERE note_id=?`},
 		{name: "future_due", update: `UPDATE review_items SET due_at='2026-08-14T01:02:03Z' WHERE note_id=?`},
+		{name: "future_due_same_second", update: `UPDATE review_items SET due_at='2026-08-13T01:02:03.9Z' WHERE note_id=?`},
 	} {
 		t.Run("whole/"+tc.name, func(t *testing.T) {
 			_, db, m, in, _ := preparePromoteRecovery(t, "review_enqueued", "whole")

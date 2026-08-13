@@ -33,6 +33,10 @@ func reviewStoreFixture(t *testing.T) (*store.ReviewStore, string) {
 func TestRateIsAtomicIdempotentAndVersioned(t *testing.T) {
 	s, itemID := reviewStoreFixture(t)
 	ctx := context.Background()
+	expectedPrevious := store.RatedItem{
+		ID: itemID, Stage: 0, IntervalDays: 0, EaseFactor: 2.5, Reps: 0, Lapses: 0,
+		DueAt: s.Clock.Now().UTC(), LastReviewedAt: nil, RowVersion: 0, SchedulerVersion: "sm2-lite-v1",
+	}
 	got, err := s.Rate(ctx, itemID, "rate-1", 0, domain.RatingGood, 1250)
 	if err != nil {
 		t.Fatal(err)
@@ -49,8 +53,8 @@ func TestRateIsAtomicIdempotentAndVersioned(t *testing.T) {
 		t.Fatalf("event metadata=(%q,%q,%q,%d)", rating, scheduler, reviewedAt, duration)
 	}
 	var previous, eventResult store.RatedItem
-	if err := json.Unmarshal([]byte(previousJSON), &previous); err != nil || previous.ID != itemID || previous.RowVersion != 0 || previous.Stage != 0 || previous.IntervalDays != 0 || previous.EaseFactor != 2.5 || previous.Reps != 0 || previous.Lapses != 0 || previous.LastReviewedAt != nil || previous.SchedulerVersion != "sm2-lite-v1" {
-		t.Fatalf("previous=%+v err=%v", previous, err)
+	if err := json.Unmarshal([]byte(previousJSON), &previous); err != nil || !reflect.DeepEqual(previous, expectedPrevious) {
+		t.Fatalf("previous=%+v err=%v, want %+v", previous, err, expectedPrevious)
 	}
 	if err := json.Unmarshal([]byte(resultingJSON), &eventResult); err != nil || !reflect.DeepEqual(eventResult, got) {
 		t.Fatalf("event result=%+v err=%v, want %+v", eventResult, err, got)

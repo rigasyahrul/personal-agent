@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
@@ -75,6 +76,34 @@ func (m *Machine) now() string {
 }
 func stageName(kind, id string) string { return "staging/" + kind + "/" + id + "/body.md" }
 func digest(b []byte) string           { return fmt.Sprintf("%x", sha256.Sum256(b)) }
+
+type rowQueryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func canonicalWholeReviewCount(ctx context.Context, q rowQueryer, o store.DirectOperation, now time.Time) (int, error) {
+	rows, err := q.QueryContext(ctx, `SELECT due_at FROM review_items WHERE project_id=? AND note_id=? AND kind='whole' AND source_sha256=? AND source_revision=1 AND prompt='Review this note' AND stage=0 AND interval_days=0 AND ease_factor=2.5 AND reps=0 AND lapses=0 AND row_version=0 AND last_reviewed_at IS NULL AND status='active' AND scheduler_version='sm2-lite-v1'`, o.ProjectID, o.NoteID, o.FrozenSHA)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var encoded string
+		if err := rows.Scan(&encoded); err != nil {
+			return 0, err
+		}
+		due, err := time.Parse(time.RFC3339Nano, encoded)
+		if err != nil {
+			return 0, fmt.Errorf("parse whole review due_at: %w", err)
+		}
+		if due.After(now.UTC()) {
+			return 0, nil
+		}
+		count++
+	}
+	return count, rows.Err()
+}
 
 func (m *Machine) dataRoot() (*fsroot.Root, error) { return fsroot.Open(m.DataDir) }
 func (m *Machine) readStage(kind, id string) ([]byte, error) {
@@ -642,8 +671,8 @@ func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 		return err
 	}
 	if o.ReviewMode == "whole" {
-		var count int
-		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM review_items WHERE project_id=? AND note_id=? AND kind='whole' AND source_sha256=? AND source_revision=1 AND prompt='Review this note' AND stage=0 AND interval_days=0 AND ease_factor=2.5 AND reps=0 AND lapses=0 AND row_version=0 AND last_reviewed_at IS NULL AND due_at<=? AND status='active' AND scheduler_version='sm2-lite-v1'`, o.ProjectID, o.NoteID, o.FrozenSHA, now).Scan(&count)
+		count, countErr := canonicalWholeReviewCount(ctx, tx, o, m.Clock.Now().UTC())
+		err = countErr
 		if err != nil || count != 1 {
 			return fmt.Errorf("whole review reconciliation failed: count=%d: %w", count, err)
 		}
