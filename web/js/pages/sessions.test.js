@@ -15,6 +15,7 @@ class Root {
       addEventListener: (type, handler) => { this.back.listeners.set(type, handler) },
     } : null
     this.sendButton = value.includes('data-chat') ? {disabled: /<button disabled>Send<\/button>/.test(value)} : null
+    this.workspace = value.includes('data-workspace-panel') ? {} : null
     this.sessionButtons = [...value.matchAll(/data-session="([^"]+)"/g)].map(match => ({dataset: {session: match[1]}}))
   }
   get innerHTML() { return this.html }
@@ -25,6 +26,7 @@ class Root {
     if (selector === '[name=message]') return this.chatForm?.elements.message
     if (selector === '[data-back]') return this.back
     if (selector === 'form[data-chat] button') return this.sendButton
+    if (selector === '[data-workspace-panel]') return this.workspace
     return null
   }
   querySelectorAll(selector) { return selector === '[data-session]' ? this.sessionButtons : [] }
@@ -153,6 +155,34 @@ test('poll failure retains cached chat history and reports the error', async () 
   assert.match(root.textContent, /network down/)
   assert.match(root.innerHTML, /class="run-status" role="status" aria-live="polite"/)
   assert.match(root.textContent, /Run: running/)
+})
+
+test('workspace is tools-on only and refreshes with newly polled tool messages', async () => {
+  const renders = []
+  let messages = []
+  const workspaceAPI = {workspaceTree() {}, workspaceFile() {}}
+  const renderWorkspace = async options => { renders.push(options) }
+  const api = async path => path.endsWith('/messages') ? messages : null
+  const root = new Root()
+  const page = createSessionsPage({root, api, workspaceAPI, renderWorkspace, projectID: 'p', setInterval: () => 1, clearInterval() {}})
+
+  await page.openChat({id: 'off', title: 'Off', provider: 'p', model_id: 'm', tool_grants_json: '{"workspace_files":false}'})
+  assert.equal(renders.length, 0)
+  assert.doesNotMatch(root.innerHTML, /data-workspace-panel/)
+
+  await page.openChat({id: 'on', title: 'On', provider: 'p', model_id: 'm', tool_grants: {workspace_files: true}})
+  assert.match(root.innerHTML, /data-workspace-panel/)
+  assert.equal(renders.at(-1).sessionID, 'on')
+  messages = [{role: 'tool', changed_path: 'new.txt'}]
+  await page.poll()
+  assert.deepEqual(renders.at(-1).messages, messages)
+})
+
+test('malformed persisted grants default workspace off', async () => {
+  let renders = 0
+  const page = createSessionsPage({root: new Root(), api: async path => path.endsWith('/messages') ? [] : null, workspaceAPI: {}, renderWorkspace: async () => { renders++ }, projectID: 'p', setInterval: () => 1, clearInterval() {}})
+  await page.openChat({id: 's', title: 'S', provider: 'p', model_id: 'm', tool_grants_json: '{bad'})
+  assert.equal(renders, 0)
 })
 
 test('pending and failed send disables submit and retains draft, history, and one key', async () => {

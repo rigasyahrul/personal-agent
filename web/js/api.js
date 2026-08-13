@@ -4,3 +4,5 @@ export async function request(path,options={}){const headers={Accept:'applicatio
 export function get(path){return request(path)}
 export function mutate(path,method,body){return request(path,{method,body:JSON.stringify(body)})}
 export function api(path,options={}){return request(`/api/v1${path}`,options)}
+export const workspaceTree=sessionID=>request(`/api/v1/sessions/${encodeURIComponent(sessionID)}/workspace/tree`)
+export const workspaceFile=(sessionID,path)=>request(`/api/v1/sessions/${encodeURIComponent(sessionID)}/workspace/file?path=${encodeURIComponent(path)}`)

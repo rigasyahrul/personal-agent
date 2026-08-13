@@ -1,5 +1,14 @@
+import {renderWorkspacePanel} from '../components/workspace.mjs'
+import {workspaceTree, workspaceFile} from '../api.js'
+
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]))
 const pathID = value => encodeURIComponent(value)
+
+function workspaceEnabled(session) {
+  if (session?.tool_grants && typeof session.tool_grants === 'object') return session.tool_grants.workspace_files === true
+  if (typeof session?.tool_grants_json !== 'string') return false
+  try { return JSON.parse(session.tool_grants_json)?.workspace_files === true } catch { return false }
+}
 
 export function createSessionsPage({
   root,
@@ -9,6 +18,8 @@ export function createSessionsPage({
   setInterval = globalThis.setInterval.bind(globalThis),
   clearInterval = globalThis.clearInterval.bind(globalThis),
   isCurrent = () => true,
+  workspaceAPI = {workspaceTree, workspaceFile},
+  renderWorkspace = renderWorkspacePanel,
 }) {
   let session = null
   let timer = null
@@ -68,11 +79,19 @@ export function createSessionsPage({
 
   function renderChat(preserveDraft = true) {
     const draft = preserveDraft ? root.querySelector('[name=message]')?.value || '' : ''
-    root.innerHTML = `<section class="sessions-chat"><button type="button" data-back>Sessions</button><div class="page-heading"><h2>${esc(session.title)}</h2><span class="model-badge">${esc(session.provider)}:${esc(session.model_id)}</span></div><ol class="messages">${[...messages].sort((a, b) => a.sequence - b.sequence).map(message => `<li class="message message-${esc(message.role)}"><strong>${esc(message.role)}</strong><p>${esc(message.content)}</p></li>`).join('')}</ol><p class="run-status" role="status" aria-live="polite">${run ? `Run: ${esc(run.status)}` : 'Idle'}</p><p class="error" role="alert">${esc(error)}</p><form data-chat><label>Message<textarea name="message" required></textarea></label><button ${sending || run ? 'disabled' : ''}>Send</button></form></section>`
+    const workspace = workspaceEnabled(session) ? '<aside data-workspace-panel></aside>' : ''
+    root.innerHTML = `<div class="session-layout"><section class="sessions-chat"><button type="button" data-back>Sessions</button><div class="page-heading"><h2>${esc(session.title)}</h2><span class="model-badge">${esc(session.provider)}:${esc(session.model_id)}</span></div><ol class="messages">${[...messages].sort((a, b) => a.sequence - b.sequence).map(message => `<li class="message message-${esc(message.role)}"><strong>${esc(message.role)}</strong><p>${esc(message.content)}</p></li>`).join('')}</ol><p class="run-status" role="status" aria-live="polite">${run ? `Run: ${esc(run.status)}` : 'Idle'}</p><p class="error" role="alert">${esc(error)}</p><form data-chat><label>Message<textarea name="message" required></textarea></label><button ${sending || run ? 'disabled' : ''}>Send</button></form></section>${workspace}</div>`
     const input = root.querySelector('[name=message]')
     if (input) input.value = draft
     root.querySelector('[data-back]')?.addEventListener('click', () => { void list().catch(listError => { if (!destroyed && isCurrent()) root.innerHTML = `<p class="error" role="alert">${esc(listError.message)}</p>` }) })
     root.querySelector('form[data-chat]').onsubmit = send
+  }
+
+  async function refreshWorkspace(generation, id) {
+    if (!workspaceEnabled(session)) return
+    const container = root.querySelector('[data-workspace-panel]')
+    if (!container) return
+    await renderWorkspace({container, sessionID: id, messages, api: workspaceAPI, isCurrent: () => current(generation) && session?.id === id})
   }
 
   async function poll() {
@@ -96,6 +115,7 @@ export function createSessionsPage({
             if (pollFailed) error = ''
             pollFailed = false
             renderChat()
+            if (workspaceEnabled(session)) await refreshWorkspace(generation, id)
           }
         } catch (pollError) {
           if (current(generation) && session?.id === id) {
