@@ -9,3 +9,8 @@ export function parseRoute(hash=''){
   return{name:'home'}
 }
 export function route(){return parseRoute(globalThis.location?.hash)}
+export function navigateIfCurrent(isCurrent,destination,navigate=value=>{globalThis.location.hash=value}){
+  if(!isCurrent())return false
+  navigate(destination)
+  return true
+}

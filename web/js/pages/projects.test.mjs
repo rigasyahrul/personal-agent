@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {projectCard} from './home.js'
 import {projectOverview} from './project.js'
-import {bodyWithinByteLimit, directPayload, nextPublicationKey, noteViewer, publicationDestination, treeRows} from './notes.js'
-import {parseRoute} from '../router.js'
+import {bodyWithinByteLimit, directPayload, nextPublicationKey, noteViewer, publicationDestination, publicationResultState, treeRows} from './notes.js'
+import {navigateIfCurrent, parseRoute} from '../router.js'
 
 test('project card includes counts and vault badge', () => {
   const html = projectCard({id: 'p1', name: 'Go', vault_name: 'Learning', note_count: 2, session_count: 0, due_count: 1})
@@ -61,6 +61,33 @@ test('body byte validation accepts the boundary and rejects multibyte overflow',
 test('publication destination requires a note id', () => {
   assert.equal(publicationDestination('p1', {note_id: `n'\"><x>`}), '#/projects/p1/notes/n%27%22%3E%3Cx%3E')
   assert.equal(publicationDestination('p1', {status: 'completed'}), null)
+})
+
+test('publication result preserves retry key whenever no note id is returned', () => {
+  const pending = {fingerprint: 'same payload', key: 'key-1'}
+  for (const result of [
+    {status: 'accepted', operation_id: 'op-1'},
+    {status: 'in_progress'},
+    {},
+  ]) {
+    const state = publicationResultState('p1', pending, result)
+    assert.equal(state.publicationKey, pending)
+    assert.equal(state.destination, null)
+    assert.match(state.message, /Publication/)
+  }
+})
+
+test('publication result clears retry key only for a note destination', () => {
+  const state = publicationResultState('p1', {fingerprint: 'payload', key: 'key-1'}, {status: 'completed', note_id: 'n1'})
+  assert.equal(state.publicationKey, null)
+  assert.equal(state.destination, '#/projects/p1/notes/n1')
+})
+
+test('current-route navigation invokes callbacks only for current work', () => {
+  const destinations = []
+  assert.equal(navigateIfCurrent(() => true, '#/projects/p1', value => destinations.push(value)), true)
+  assert.equal(navigateIfCurrent(() => false, '#/projects/stale', value => destinations.push(value)), false)
+  assert.deepEqual(destinations, ['#/projects/p1'])
 })
 
 test('render generation gate rejects stale work', async () => {
