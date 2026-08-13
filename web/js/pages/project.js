@@ -1,0 +1,4 @@
+import{api}from'../api.js';
+const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+export const projectOverview=p=>`<div class="page-heading"><h2>${esc(p.name)}</h2>${p.vault_name?`<span class="badge">${esc(p.vault_name)}</span>`:''}</div><nav class="tabs"><a href="#/projects/${encodeURIComponent(p.id)}/notes">Notes</a></nav><section class="cards"><article class="card"><strong>${Number(p.note_count)||0}</strong> notes</article><article class="card"><strong>${Number(p.session_count)||0}</strong> sessions</article><article class="card"><strong>${Number(p.due_count)||0}</strong> due</article></section><p><a class="button" href="#/projects/${encodeURIComponent(p.id)}/notes">New source file</a></p>`;
+export async function renderProject(root,id){root.innerHTML=projectOverview(await api(`/projects/${encodeURIComponent(id)}`))}

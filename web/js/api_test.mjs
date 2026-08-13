@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import {APIError, get, mutate} from './api.js'
+import {APIError, api, get, mutate} from './api.js'
 
 globalThis.document = {cookie: ''}
 globalThis.fetch = async () => new Response(null, {status: 201})
@@ -28,3 +28,13 @@ await assert.rejects(get('/api/v1/auth/me'), error => {
   return true
 })
 console.log('PASS api request preserves failure status and body')
+
+let requested
+globalThis.fetch = async (path, options) => {
+  requested = {path, options}
+  return new Response('{"id":"p1"}', {status: 201})
+}
+assert.deepEqual(await api('/projects', {method: 'POST', body: {name: 'Go'}}), {id: 'p1'})
+assert.equal(requested.path, '/api/v1/projects')
+assert.equal(requested.options.body, '{"name":"Go"}')
+console.log('PASS api prefixes project paths and serializes object bodies')
