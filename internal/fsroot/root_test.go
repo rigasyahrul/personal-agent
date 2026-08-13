@@ -273,6 +273,85 @@ func TestWriteFileAtomicDoesNotReplaceSpecialFileCreatedDuringCommit(t *testing.
 	}
 }
 
+func TestWritesStayAnchoredWhenOpenedRootPathIsReplaced(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		write func(*fsroot.Root) error
+	}{
+		{"atomic", func(r *fsroot.Root) error {
+			return r.WriteFileAtomic("nested/note.md", []byte("anchored"), 0600)
+		}},
+		{"no-replace", func(r *fsroot.Root) error {
+			return r.WriteFileNoReplace("nested/note.md", []byte("anchored"), 0600)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parent := t.TempDir()
+			opened := filepath.Join(parent, "root")
+			moved := filepath.Join(parent, "moved")
+			if err := os.MkdirAll(filepath.Join(opened, "nested"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			r, err := fsroot.Open(opened)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			if err := os.Rename(opened, moved); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(opened, "nested"), 0700); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := tc.write(r); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(moved, "nested", "note.md"))
+			if err != nil || string(got) != "anchored" {
+				t.Fatalf("opened root content = %q, %v", got, err)
+			}
+			if _, err := os.Stat(filepath.Join(opened, "nested", "note.md")); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("replacement root was modified: %v", err)
+			}
+		})
+	}
+}
+
+func TestWriteFileAtomicCommitFailurePreservesOldRegularFileAndCleansTemps(t *testing.T) {
+	dir := t.TempDir()
+	old := []byte("old bytes stay exactly intact")
+	if err := os.WriteFile(filepath.Join(dir, "note.md"), old, 0600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := fsroot.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+
+	if err := r.WriteFileAtomic("note.md", []byte("replacement"), 0600); err == nil {
+		t.Fatal("write unexpectedly succeeded")
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "note.md"))
+	if err != nil || string(got) != string(old) {
+		t.Fatalf("old file = %q, %v", got, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".pa-write-") {
+			t.Fatalf("temporary sibling remains: %s", entry.Name())
+		}
+	}
+}
+
 func TestEditFileAtomicRequiresExactlyOneMatch(t *testing.T) {
 	r, err := fsroot.Open(t.TempDir())
 	if err != nil {

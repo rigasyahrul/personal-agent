@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/rigasyahrul/personal-agent/internal/paths"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -130,7 +131,6 @@ func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error
 		dir = ""
 	}
 	parent := r.root
-	parentPath := r.root.Name()
 	if dir != "" {
 		var err error
 		parent, err = r.root.OpenRoot(dir)
@@ -138,8 +138,13 @@ func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error
 			return ErrUnsafe
 		}
 		defer parent.Close()
-		parentPath = filepath.Join(parentPath, filepath.FromSlash(dir))
 	}
+	parentDir, err := parent.Open(".")
+	if err != nil {
+		return err
+	}
+	defer parentDir.Close()
+	parentFD := int(parentDir.Fd())
 	final := filepath.Base(name)
 	if info, err := parent.Lstat(final); err == nil {
 		if !info.Mode().IsRegular() {
@@ -175,7 +180,7 @@ func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error
 	// Link is an atomic no-replace commit. It closes the check/rename race for
 	// newly created destinations: a node appearing during the write survives.
 	if _, err := parent.Lstat(final); errors.Is(err, fs.ErrNotExist) {
-		if err := os.Link(filepath.Join(parentPath, tmp), filepath.Join(parentPath, final)); err != nil {
+		if err := unix.Linkat(parentFD, tmp, parentFD, final, 0); err != nil {
 			if errors.Is(err, fs.ErrExist) {
 				return ErrUnsafe
 			}
@@ -191,7 +196,20 @@ func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error
 	} else if info, err := parent.Lstat(final); err != nil || !info.Mode().IsRegular() {
 		return ErrUnsafe
 	}
-	if err := os.Rename(filepath.Join(parentPath, tmp), filepath.Join(parentPath, final)); err != nil {
+	// Exchange keeps the prior destination available at tmp so its type can be
+	// validated after the atomic commit operation. If a special node won the
+	// race after Lstat, put it back rather than replacing it.
+	if err := unix.Renameat2(parentFD, tmp, parentFD, final, unix.RENAME_EXCHANGE); err != nil {
+		return err
+	}
+	oldInfo, err := parent.Lstat(tmp)
+	if err != nil || !oldInfo.Mode().IsRegular() {
+		if restoreErr := unix.Renameat2(parentFD, tmp, parentFD, final, unix.RENAME_EXCHANGE); restoreErr != nil {
+			return restoreErr
+		}
+		return ErrUnsafe
+	}
+	if err := parent.Remove(tmp); err != nil {
 		return err
 	}
 	remove = false
@@ -267,7 +285,6 @@ func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) er
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	parent := r.root
-	parentPath := r.root.Name()
 	if dir != "" {
 		var err error
 		parent, err = r.root.OpenRoot(dir)
@@ -275,8 +292,13 @@ func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) er
 			return ErrUnsafe
 		}
 		defer parent.Close()
-		parentPath = filepath.Join(parentPath, filepath.FromSlash(dir))
 	}
+	parentDir, err := parent.Open(".")
+	if err != nil {
+		return err
+	}
+	defer parentDir.Close()
+	parentFD := int(parentDir.Fd())
 	final := filepath.Base(name)
 	random := make([]byte, 16)
 	if _, err := rand.Read(random); err != nil {
@@ -302,7 +324,7 @@ func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) er
 	if err != nil {
 		return err
 	}
-	err = os.Link(filepath.Join(parentPath, tmp), filepath.Join(parentPath, final))
+	err = unix.Linkat(parentFD, tmp, parentFD, final, 0)
 	if errors.Is(err, fs.ErrExist) {
 		return fs.ErrExist
 	}
