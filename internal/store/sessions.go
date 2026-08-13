@@ -121,6 +121,13 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 		}
 		return os.RemoveAll(workspace)
 	}
+	var activeRun bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE session_id=? AND status IN ('queued','running'))`, id).Scan(&activeRun); err != nil {
+		return err
+	}
+	if activeRun {
+		return ErrSessionBusy
+	}
 
 	now := s.Now().UTC()
 	result, err := tx.ExecContext(ctx, `UPDATE sessions SET status='terminal',deleted_at=?,updated_at=? WHERE id=? AND status='active'`, formatTime(now), formatTime(now), id)

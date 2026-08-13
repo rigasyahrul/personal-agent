@@ -176,6 +176,46 @@ func TestSessionDeleteRemovesOnlyWorkspace(t *testing.T) {
 	}
 }
 
+func TestSessionDeleteBlocksActiveRunUntilTerminal(t *testing.T) {
+	dataDir := t.TempDir()
+	ss := seedProject(t, dataDir)
+	session, err := ss.CreateProject(context.Background(), store.CreateSessionInput{
+		ProjectID: "p1", Provider: "openai", ModelID: "gpt-test", ModelParametersJSON: `{}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := layout.SessionWorkspace(dataDir, session.Home, "v1", "p1", session.ID)
+	if _, err := ss.DB.Exec(`INSERT INTO agent_runs(id,session_id,request_key,status,created_at) VALUES('run',?,?,'running',?)`, session.ID, "request", time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ss.Delete(context.Background(), session.ID); !errors.Is(err, store.ErrSessionBusy) {
+		t.Fatalf("Delete error = %v, want ErrSessionBusy", err)
+	}
+	got, err := ss.Get(context.Background(), session.ID)
+	if err != nil || got.Status != "active" || got.DeletedAt != nil {
+		t.Fatalf("session changed while run active: %#v, %v", got, err)
+	}
+	if info, err := os.Stat(workspace); err != nil || !info.IsDir() {
+		t.Fatalf("workspace removed while run active: %v", err)
+	}
+
+	if _, err := ss.DB.Exec(`UPDATE agent_runs SET status='completed',completed_at=? WHERE id='run'`, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if err := ss.Delete(context.Background(), session.ID); err != nil {
+		t.Fatalf("Delete after terminal run: %v", err)
+	}
+	got, err = ss.Get(context.Background(), session.ID)
+	if err != nil || got.Status != "terminal" || got.DeletedAt == nil {
+		t.Fatalf("session not tombstoned: %#v, %v", got, err)
+	}
+	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
+		t.Fatalf("workspace remains: %v", err)
+	}
+}
+
 func TestSessionDeleteRetriesWorkspaceCleanupAfterTombstone(t *testing.T) {
 	dataDir := t.TempDir()
 	ss := seedProject(t, dataDir)
