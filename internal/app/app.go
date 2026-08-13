@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/rigasyahrul/personal-agent/internal/agent"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	database "github.com/rigasyahrul/personal-agent/internal/db"
@@ -23,7 +24,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	machine := &publish.Machine{DB: db, DataDir: cfg.DataDir, Clock: clock.RealClock{}}
+	realClock := clock.RealClock{}
+	machine := &publish.Machine{DB: db, DataDir: cfg.DataDir, Clock: realClock}
 	if err := machine.RecoverAll(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -34,11 +36,13 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		handler: httpapi.New(httpapi.ServerDeps{
 			DB:             db,
 			DataDir:        cfg.DataDir,
-			Clock:          clock.RealClock{},
+			Clock:          realClock,
 			BootstrapToken: cfg.BootstrapToken,
 			SecureCookies:  cfg.SecureCookies,
 			Static:         http.Dir("web"),
 			Publish:        machine,
+			Models:         cfg.Models,
+			Provider:       &agent.OpenAICompat{APIKey: cfg.OpenAIAPIKey, BaseURL: cfg.OpenAIBaseURL},
 		}),
 	}, nil
 }
