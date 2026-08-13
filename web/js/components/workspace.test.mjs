@@ -15,10 +15,14 @@ class WorkspaceContainer {
   set innerHTML(value) {
     this.html = value
     this.panel = value.includes('class="workspace-panel"') ? {preview: null, querySelector: selector => selector === '.workspace-preview' ? this.panel.preview : null} : null
-    this.panel && (this.panel.preview = value.includes('class="workspace-preview"') ? {
-      value: 'Select a file',
+    const previewMarkup = value.match(/<pre class="workspace-preview"([^>]*)>([^<]*)<\/pre>/)
+    this.panel && (this.panel.preview = previewMarkup ? {
+      tagName: 'PRE',
+      attributes: new Map([...previewMarkup[1].matchAll(/([\w-]+)="([^"]*)"/g)].map(match => [match[1], decodeHTML(match[2])])),
+      value: decodeHTML(previewMarkup[2]),
       set textContent(content) { this.value = String(content); this.writes.push(String(content)) },
       get textContent() { return this.value },
+      getAttribute(name) { return this.attributes.get(name) ?? null },
       writes: this.previewWrites,
     } : null)
     this.buttons = [...value.matchAll(/class="[^"]*workspace-entry--file[^"]*" data-path="([^"]*)"/g)].map(match => ({
@@ -93,19 +97,25 @@ test('renderWorkspacePanel contains tree and file rejections with accessible con
     workspaceFile: async () => { throw new Error('secret file detail') },
   }})
   await assert.doesNotReject(fileContainer.buttons[0].listeners.get('click')())
-  assert.equal(fileContainer.querySelector('.workspace-preview').textContent, 'Unable to read file.')
+  const errorPreview = fileContainer.querySelector('.workspace-preview')
+  assert.equal(errorPreview.tagName, 'PRE')
+  assert.equal(errorPreview.getAttribute('aria-live'), 'polite')
+  assert.equal(errorPreview.textContent, 'Unable to read file.')
 })
 
-test('stale tree and file completions cannot render into replacement content', async () => {
+test('stale tree rejection cannot overwrite replacement content', async () => {
   const staleTree = deferred()
   const treeContainer = new WorkspaceContainer()
   let current = true
   const treeRender = renderWorkspacePanel({container: treeContainer, sessionID: 'old', messages: [], api: {workspaceTree: () => staleTree.promise}, isCurrent: () => current})
   current = false
-  staleTree.resolve({entries: [{path: 'old.txt', kind: 'file'}]})
-  await treeRender
-  assert.equal(treeContainer.innerHTML, '')
+  treeContainer.innerHTML = '<section class="replacement">new session</section>'
+  staleTree.reject(new Error('stale tree failure'))
+  await assert.doesNotReject(treeRender)
+  assert.equal(treeContainer.innerHTML, '<section class="replacement">new session</section>')
+})
 
+test('stale file rejection cannot overwrite replacement content', async () => {
   const staleFile = deferred()
   const fileContainer = new WorkspaceContainer()
   await renderWorkspacePanel({container: fileContainer, sessionID: 'old', messages: [], api: {
@@ -114,8 +124,8 @@ test('stale tree and file completions cannot render into replacement content', a
   }})
   const click = fileContainer.buttons[0].listeners.get('click')()
   fileContainer.innerHTML = '<section class="workspace-panel"><pre class="workspace-preview">replacement</pre></section>'
-  staleFile.resolve({content: 'stale content'})
-  await click
+  staleFile.reject(new Error('stale file failure'))
+  await assert.doesNotReject(click)
   assert.deepEqual(fileContainer.previewWrites, [])
-  assert.notEqual(fileContainer.querySelector('.workspace-preview').textContent, 'stale content')
+  assert.equal(fileContainer.querySelector('.workspace-preview').textContent, 'replacement')
 })
