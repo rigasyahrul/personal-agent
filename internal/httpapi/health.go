@@ -4,15 +4,26 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"path/filepath"
 )
+
+var healthProbeReady = func() {}
 
 func healthHandler(dataDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		path := filepath.Join(dataDir, ".health-write")
-		err := os.WriteFile(path, []byte("ok"), 0o600)
+		file, err := os.CreateTemp(dataDir, ".health-write-*")
 		if err == nil {
-			err = os.Remove(path)
+			path := file.Name()
+			defer os.Remove(path)
+
+			_, err = file.Write([]byte("ok"))
+			closeErr := file.Close()
+			if err == nil {
+				err = closeErr
+			}
+			if err == nil {
+				healthProbeReady()
+				err = os.Remove(path)
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")

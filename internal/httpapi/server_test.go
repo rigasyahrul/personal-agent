@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -65,5 +66,51 @@ func TestHealthReportsUnwritableStorage(t *testing.T) {
 	}
 	if body["ok"] || body["storage_writable"] {
 		t.Fatalf("body = %#v", body)
+	}
+}
+
+func TestConcurrentHealthRequestsUseIndependentProbeFiles(t *testing.T) {
+	dir := t.TempDir()
+	h := healthHandler(dir)
+
+	ready := make(chan struct{}, 2)
+	release := make(chan struct{})
+	healthProbeReady = func() {
+		ready <- struct{}{}
+		<-release
+	}
+	t.Cleanup(func() { healthProbeReady = func() {} })
+
+	const requests = 2
+	statuses := make(chan int, requests)
+	var wg sync.WaitGroup
+	for range requests {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health", nil))
+			statuses <- w.Code
+		}()
+	}
+
+	for range requests {
+		<-ready
+	}
+	close(release)
+	wg.Wait()
+	close(statuses)
+
+	for status := range statuses {
+		if status != http.StatusOK {
+			t.Errorf("status = %d, want %d", status, http.StatusOK)
+		}
+	}
+	probeFiles, err := filepath.Glob(filepath.Join(dir, ".health-write*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(probeFiles) != 0 {
+		t.Fatalf("probe files left behind: %v", probeFiles)
 	}
 }
