@@ -71,11 +71,12 @@ func TestChatAPIValidationAuthAndRunMappings(t *testing.T) {
 	for name, body := range map[string]string{
 		"whitespace content":     `{"content":" ","request_key":"k"}`,
 		"whitespace request key": `{"content":"x","request_key":" \t"}`,
-		"trailing JSON value":    `{"content":"x","request_key":"k"}{"content":"y","request_key":"z"}`,
+		"trailing JSON value":    `{"content":"hello","request_key":"k"}{"extra":true}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if got := rawAPIRequest(t, h, "POST", path, body, cookies, "csrf").Code; got != http.StatusBadRequest {
-				t.Fatalf("invalid message %q=%d", body, got)
+			res := rawAPIRequest(t, h, "POST", path, body, cookies, "csrf")
+			if res.Code != http.StatusBadRequest || res.Body.String() != `{"error":"invalid_message"}`+"\n" {
+				t.Fatalf("invalid message %q=%d body=%q", body, res.Code, res.Body.String())
 			}
 		})
 	}
