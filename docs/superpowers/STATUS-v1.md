@@ -11,7 +11,7 @@
 | 3 Sessions + chat | 15–20 | 2 | no | done | impl/v1-p3-sessions | [T-019ff8ea…](https://ampcode.com/threads/T-019ff8ea-6a0b-77fe-91e5-09fbb64e6678) | 2026-08-13 |
 | 4 Workspace tools | 21–24 | 3 | no | done | impl/v1-p4-tools | [T-019ff945…](https://ampcode.com/threads/T-019ff945-5949-7619-946a-e050c40d177f) | 2026-08-13 |
 | 5 Promote + review | 25–32 | 4 | no | done | impl/v1-p5-promote-review | [T-019ff978…](https://ampcode.com/threads/T-019ff978-ac06-73fc-9f51-d4c8fcff2854) | 2026-08-13 |
-| 6 Backup | 33–36 | 5 | no | running | impl/v1-p6-backup | [T-019ff9ed…](https://ampcode.com/threads/T-019ff9ed-36ec-7326-85b7-cad13a6a6675) | 2026-08-13 |
+| 6 Backup | 33–36 | 5 | no | running | impl/v1-p6-backup | [T-019ffa08…](https://ampcode.com/threads/T-019ffa08-4f95-72c1-98fc-da8d98162847) | 2026-08-13 |
 | 7 Hardening | 37–42 | 6 | no | todo | impl/v1-p7-hardening | | |
 
 **Status:** `todo` | `running` | `review` | `done` | `blocked`
@@ -23,7 +23,8 @@
 | 2026-08-13 | Phases 1–4 DONE and FF-merged to main. |
 | 2026-08-13 | Phase 5 DONE @ `85172f2` (25 commits) → FF main. Master `go test ./...` green. |
 | 2026-08-13 | Dispatching Phase 6 worker (tasks 33–36, branch `impl/v1-p6-backup`). |
-| 2026-08-13 | Phase 6 worker on sandbox: https://ampcode.com/threads/T-019ff9ed-36ec-7326-85b7-cad13a6a6675 |
+| 2026-08-13 | Phase 6 worker T-019ff9ed hit OpenAI usage limit mid-T34 cleanup (unpushed). Superseded. |
+| 2026-08-13 | Phase 6 retry worker: https://ampcode.com/threads/T-019ffa08-4f95-72c1-98fc-da8d98162847 |
 
 ## Active blockers
 
