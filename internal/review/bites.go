@@ -220,6 +220,13 @@ func (w *BiteWorker) complete(ctx context.Context, j leasedJob, n noteSnapshot, 
 	if !ok {
 		return ErrLeaseLost
 	}
+	var existing int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM review_items WHERE generation_id=?`, j.id).Scan(&existing); err != nil {
+		return err
+	}
+	if existing != 0 {
+		return fmt.Errorf("review generation %s already has items", j.id)
+	}
 	now := w.Clock.Now().UTC().Format(time.RFC3339Nano)
 	for ordinal, b := range bites {
 		_, err = tx.ExecContext(ctx, `INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,answer,generation_id,ordinal,stage,due_at,interval_days,ease_factor,reps,lapses,last_reviewed_at,row_version,status,scheduler_version) VALUES(?,?,?,'bite',?,?,?,?,?,?,0,?,0,2.5,0,0,NULL,0,'active','sm2-lite-v1')`, uuid.NewString(), n.projectID, j.noteID, j.hash, n.revision, b.Prompt, b.Answer, j.id, ordinal, now)

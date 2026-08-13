@@ -142,6 +142,28 @@ func TestBiteWorkerConflictingOrdinalRollsBackCompletion(t *testing.T) {
 	}
 }
 
+func TestBiteWorkerExistingNoncanonicalOrdinalRollsBackCompletion(t *testing.T) {
+	db, dir, generation, note, hash := fixture(t)
+	if _, err := db.Exec(`INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,answer,generation_id,ordinal,stage,due_at,interval_days,ease_factor,reps,lapses,row_version,status,scheduler_version) VALUES('existing','p',?,'bite',?,3,'extra','content',?,7,0,'2026-08-12T09:00:00Z',0,2.5,0,0,0,'active','sm2-lite-v1')`, note, hash, generation); err != nil {
+		t.Fatal(err)
+	}
+	w := review.BiteWorker{DB: db, DataDir: dir, Clock: &clock.FakeClock{T: time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)}, Generator: fakeGenerator{bites: []review.Bite{{"first", "one"}, {"second", "two"}}}, Lease: time.Minute}
+	if did, err := w.LeaseAndRun(context.Background()); !did || err == nil || !strings.Contains(err.Error(), "already has items") {
+		t.Fatalf("did=%v err=%v", did, err)
+	}
+	var count int
+	var status string
+	if err := db.QueryRow(`SELECT count(*) FROM review_items WHERE generation_id=?`, generation).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT status FROM review_pending WHERE id=?`, generation).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || status != "leased" {
+		t.Fatalf("items=%d status=%s", count, status)
+	}
+}
+
 func TestBiteWorkerLeaseTimingAndOwnership(t *testing.T) {
 	t.Run("same-second expired and attempts", func(t *testing.T) {
 		db, dir, _, _, _ := fixture(t)
