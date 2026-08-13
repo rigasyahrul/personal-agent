@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -226,6 +228,48 @@ func TestWriteFileAtomicRejectsSymlinkAndSpecialFile(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outside, "new")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("outside file changed: %v", err)
+	}
+}
+
+func TestWriteFileAtomicDoesNotReplaceSpecialFileCreatedDuringCommit(t *testing.T) {
+	dir := t.TempDir()
+	r, err := fsroot.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	created := make(chan error, 1)
+	go func() {
+		for {
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				created <- err
+				return
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), ".pa-write-") {
+					created <- unix.Mkfifo(filepath.Join(dir, "note.md"), 0600)
+					return
+				}
+			}
+			runtime.Gosched()
+		}
+	}()
+
+	err = r.WriteFileAtomic("note.md", make([]byte, 1<<20), 0600)
+	if createErr := <-created; createErr != nil {
+		t.Fatal(createErr)
+	}
+	if !errors.Is(err, fs.ErrExist) && !errors.Is(err, fsroot.ErrUnsafe) {
+		t.Fatalf("write error = %v, want collision", err)
+	}
+	info, statErr := os.Lstat(filepath.Join(dir, "note.md"))
+	if statErr != nil {
+		t.Fatal(statErr)
+	}
+	if info.Mode()&os.ModeNamedPipe == 0 {
+		t.Fatalf("destination was replaced: mode=%v", info.Mode())
 	}
 }
 

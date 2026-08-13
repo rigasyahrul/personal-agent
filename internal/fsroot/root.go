@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/rigasyahrul/personal-agent/internal/paths"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -24,7 +24,7 @@ var (
 
 type Root struct {
 	root *os.Root
-	fd   int
+	mu   sync.Mutex
 }
 
 type Entry struct {
@@ -59,21 +59,11 @@ func Open(name string) (*Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	fd, err := unix.Openat2(unix.AT_FDCWD, abs, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_NO_SYMLINKS})
-	if err != nil {
-		_ = r.Close()
-		return nil, ErrUnsafe
-	}
-	return &Root{root: r, fd: fd}, nil
+	return &Root{root: r}, nil
 }
 
 func (r *Root) Close() error {
-	a := r.root.Close()
-	b := unix.Close(r.fd)
-	if a != nil {
-		return a
-	}
-	return b
+	return r.root.Close()
 }
 
 func valid(name string) error {
@@ -133,29 +123,29 @@ func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error
 	if len(body) > paths.MaxMarkdownBytes {
 		return ErrUnsafe
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	dir := filepath.ToSlash(filepath.Dir(name))
 	if dir == "." {
 		dir = ""
 	}
-	parentFD := r.fd
-	var err error
+	parent := r.root
+	parentPath := r.root.Name()
 	if dir != "" {
-		parentFD, err = unix.Openat2(r.fd, dir, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS})
-		if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.EXDEV) || errors.Is(err, unix.ENOTDIR) {
+		var err error
+		parent, err = r.root.OpenRoot(dir)
+		if err != nil {
 			return ErrUnsafe
 		}
-		if err != nil {
-			return err
-		}
-		defer unix.Close(parentFD)
+		defer parent.Close()
+		parentPath = filepath.Join(parentPath, filepath.FromSlash(dir))
 	}
 	final := filepath.Base(name)
-	var stat unix.Stat_t
-	if err := unix.Fstatat(parentFD, final, &stat, unix.AT_SYMLINK_NOFOLLOW); err == nil {
-		if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+	if info, err := parent.Lstat(final); err == nil {
+		if !info.Mode().IsRegular() {
 			return ErrUnsafe
 		}
-	} else if !errors.Is(err, unix.ENOENT) {
+	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	random := make([]byte, 16)
@@ -163,17 +153,16 @@ func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error
 		return err
 	}
 	tmp := ".pa-write-" + hex.EncodeToString(random)
-	tfd, err := unix.Openat(parentFD, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, uint32(perm.Perm()))
+	f, err := parent.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm.Perm())
 	if err != nil {
 		return err
 	}
 	remove := true
 	defer func() {
 		if remove {
-			_ = unix.Unlinkat(parentFD, tmp, 0)
+			_ = parent.Remove(tmp)
 		}
 	}()
-	f := os.NewFile(uintptr(tfd), tmp)
 	if _, err = f.Write(body); err == nil {
 		err = f.Sync()
 	}
@@ -183,11 +172,39 @@ func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error
 	if err != nil {
 		return err
 	}
-	if err := unix.Renameat(parentFD, tmp, parentFD, final); err != nil {
+	// Link is an atomic no-replace commit. It closes the check/rename race for
+	// newly created destinations: a node appearing during the write survives.
+	if _, err := parent.Lstat(final); errors.Is(err, fs.ErrNotExist) {
+		if err := os.Link(filepath.Join(parentPath, tmp), filepath.Join(parentPath, final)); err != nil {
+			if errors.Is(err, fs.ErrExist) {
+				return ErrUnsafe
+			}
+			return err
+		}
+		if err := parent.Remove(tmp); err != nil {
+			return err
+		}
+		remove = false
+		return syncDir(parent)
+	} else if err != nil {
+		return err
+	} else if info, err := parent.Lstat(final); err != nil || !info.Mode().IsRegular() {
+		return ErrUnsafe
+	}
+	if err := os.Rename(filepath.Join(parentPath, tmp), filepath.Join(parentPath, final)); err != nil {
 		return err
 	}
 	remove = false
-	return unix.Fsync(parentFD)
+	return syncDir(parent)
+}
+
+func syncDir(root *os.Root) error {
+	d, err := root.Open(".")
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
 
 func (r *Root) EditFileAtomic(name, old, replacement string) error {
@@ -247,17 +264,18 @@ func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) er
 			return err
 		}
 	}
-	parentFD := r.fd
-	var err error
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	parent := r.root
+	parentPath := r.root.Name()
 	if dir != "" {
-		parentFD, err = unix.Openat2(r.fd, dir, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS})
-		if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.EXDEV) || errors.Is(err, unix.ENOTDIR) {
+		var err error
+		parent, err = r.root.OpenRoot(dir)
+		if err != nil {
 			return ErrUnsafe
 		}
-		if err != nil {
-			return err
-		}
-		defer unix.Close(parentFD)
+		defer parent.Close()
+		parentPath = filepath.Join(parentPath, filepath.FromSlash(dir))
 	}
 	final := filepath.Base(name)
 	random := make([]byte, 16)
@@ -265,17 +283,16 @@ func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) er
 		return err
 	}
 	tmp := ".publish-" + hex.EncodeToString(random)
-	tfd, err := unix.Openat(parentFD, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, uint32(perm.Perm()))
+	f, err := parent.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm.Perm())
 	if err != nil {
 		return err
 	}
 	remove := true
 	defer func() {
 		if remove {
-			_ = unix.Unlinkat(parentFD, tmp, 0)
+			_ = parent.Remove(tmp)
 		}
 	}()
-	f := os.NewFile(uintptr(tfd), tmp)
 	if _, err = f.Write(body); err == nil {
 		err = f.Sync()
 	}
@@ -285,18 +302,18 @@ func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) er
 	if err != nil {
 		return err
 	}
-	err = unix.Renameat2(parentFD, tmp, parentFD, final, unix.RENAME_NOREPLACE)
-	if errors.Is(err, unix.EEXIST) {
+	err = os.Link(filepath.Join(parentPath, tmp), filepath.Join(parentPath, final))
+	if errors.Is(err, fs.ErrExist) {
 		return fs.ErrExist
-	}
-	if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.EXDEV) || errors.Is(err, unix.ENOTDIR) {
-		return ErrUnsafe
 	}
 	if err != nil {
 		return err
 	}
+	if err := parent.Remove(tmp); err != nil {
+		return err
+	}
 	remove = false
-	return unix.Fsync(parentFD)
+	return syncDir(parent)
 }
 
 func (r *Root) Walk(fn func(path string, info fs.FileInfo) error) error {
