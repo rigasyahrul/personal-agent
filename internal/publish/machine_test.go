@@ -135,3 +135,57 @@ func TestRecoverAfterPublishedFileBeforeFinalization(t *testing.T) {
 		t.Fatalf("%s %s %v", ns, os, err)
 	}
 }
+
+func TestAcceptedRecoveryMissingStageFailsAndContinues(t *testing.T) {
+	d, db, c := fixture(t)
+	now := c.Now().Format(time.RFC3339Nano)
+	for _, id := range []string{"missing", "next"} {
+		_, err := db.Exec(`INSERT INTO direct_ops(id,request_key,request_fingerprint,target_project_id,target_relative_path,review_mode,note_id,status,created_at,updated_at) VALUES(?,?,?,?,?,'none',?,'accepted',?,?)`, id, id, id, "p1", id+".md", "n"+id, now, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	stage := filepath.Join(d, "staging", "direct", "next")
+	if err := os.MkdirAll(stage, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stage, "body.md"), []byte("next"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m := publish.Machine{DB: db, DataDir: d, Clock: c}
+	if err := m.RecoverAll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var failedStatus, failedError, nextStatus string
+	if err := db.QueryRow(`SELECT status,error FROM direct_ops WHERE id='missing'`).Scan(&failedStatus, &failedError); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT status FROM direct_ops WHERE id='next'`).Scan(&nextStatus); err != nil {
+		t.Fatal(err)
+	}
+	if failedStatus != "failed" || failedError == "" || nextStatus != "completed" {
+		t.Fatalf("missing=(%s,%q) next=%s", failedStatus, failedError, nextStatus)
+	}
+}
+
+func TestUnknownProjectAndUnsafeOpIDCreateNoArtifacts(t *testing.T) {
+	d, db, c := fixture(t)
+	m := publish.Machine{DB: db, DataDir: d, Clock: c}
+	for _, mutate := range []func(*publish.PublishInput){
+		func(in *publish.PublishInput) { in.TargetProjectID = "missing" },
+		func(in *publish.PublishInput) { in.OpID = "../escape" },
+	} {
+		in := input()
+		mutate(&in)
+		if _, _, err := m.Run(context.Background(), in); err == nil {
+			t.Fatal("expected rejection")
+		}
+	}
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM direct_ops`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("ops=%d err=%v", count, err)
+	}
+	if _, err := os.Stat(filepath.Join(d, "staging")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("staging artifact: %v", err)
+	}
+}

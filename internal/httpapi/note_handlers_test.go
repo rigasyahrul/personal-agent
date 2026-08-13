@@ -37,22 +37,22 @@ func TestDirectNoteHandlerValidationIdempotencyAndVaultPlacement(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	good := `{"path":"guide/new.md","review_mode":"none","body":"# New\n"}`
+	good := `{"relative_path":"guide/new.md","review_mode":"none","body":"# New\n"}`
 	first := request("key", good)
 	if first.Code != 201 {
 		t.Fatalf("first=%d %s", first.Code, first.Body.String())
 	}
 	retry := request("key", good)
-	if retry.Code != 200 && retry.Code != 201 {
+	if retry.Code != 200 {
 		t.Fatalf("retry=%d", retry.Code)
 	}
-	if got := request("key", `{"path":"guide/other.md","review_mode":"none","body":"x"}`).Code; got != 409 {
+	if got := request("key", `{"relative_path":"guide/other.md","review_mode":"none","body":"x"}`).Code; got != 409 {
 		t.Fatalf("conflict=%d", got)
 	}
 	if b, err := os.ReadFile(filepath.Join(layout.SourceDir(layout.ProjectRoot(dataDir, "v1", "p1")), "guide", "new.md")); err != nil || string(b) != "# New\n" {
 		t.Fatalf("vault bytes=%q %v", b, err)
 	}
-	for _, tc := range []struct{ key, body string }{{"", good}, {"x", `{"path":"x.txt","review_mode":"none","body":"x"}`}, {"x", `{"path":"x.md","review_mode":"bad","body":"x"}`}} {
+	for _, tc := range []struct{ key, body string }{{"", good}, {"x", `{"relative_path":"x.txt","review_mode":"none","body":"x"}`}, {"x", `{"relative_path":"x.md","review_mode":"bad","body":"x"}`}} {
 		if got := request(tc.key, tc.body).Code; got != 400 {
 			t.Errorf("invalid got %d", got)
 		}

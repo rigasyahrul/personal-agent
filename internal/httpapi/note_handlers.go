@@ -45,11 +45,11 @@ func (h noteHandlers) direct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Path       string            `json:"path"`
-		ReviewMode domain.ReviewMode `json:"review_mode"`
-		Body       string            `json:"body"`
+		RelativePath string            `json:"relative_path"`
+		ReviewMode   domain.ReviewMode `json:"review_mode"`
+		Body         string            `json:"body"`
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, paths.MaxMarkdownBytes+4096)
+	r.Body = http.MaxBytesReader(w, r.Body, 6*paths.MaxMarkdownBytes+4096)
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&in); err != nil {
 		http.Error(w, "invalid request", 400)
@@ -59,14 +59,23 @@ func (h noteHandlers) direct(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", 400)
 		return
 	}
-	clean, err := paths.ValidateRelPath(in.Path)
+	clean, err := paths.ValidateRelPath(in.RelativePath)
 	if err != nil {
 		http.Error(w, "invalid request", 400)
 		return
 	}
 	project := r.PathValue("id")
 	sum := sha256.Sum256([]byte(project + "\x00" + clean + "\x00" + string(in.ReviewMode) + "\x00" + in.Body))
-	status, note, err := h.publish.Run(r.Context(), publish.PublishInput{OpID: uuid.NewString(), RequestKey: key, RequestFingerprint: fmt.Sprintf("%x", sum), Kind: "direct", Body: []byte(in.Body), TargetProjectID: project, TargetRelPath: clean, ReviewMode: in.ReviewMode, NoteID: uuid.NewString()})
+	existing, lookupErr := (store.DirectStore{DB: h.db}).ByKey(r.Context(), key)
+	created := store.IsNoRows(lookupErr)
+	opID, noteID := uuid.NewString(), uuid.NewString()
+	if lookupErr == nil {
+		opID, noteID = existing.ID, existing.NoteID
+	} else if !created {
+		internalError(w)
+		return
+	}
+	status, note, err := h.publish.Run(r.Context(), publish.PublishInput{OpID: opID, RequestKey: key, RequestFingerprint: fmt.Sprintf("%x", sum), Kind: "direct", Body: []byte(in.Body), TargetProjectID: project, TargetRelPath: clean, ReviewMode: in.ReviewMode, NoteID: noteID})
 	if errors.Is(err, publish.ErrInvalid) {
 		http.Error(w, "invalid request", 400)
 		return
@@ -75,11 +84,19 @@ func (h noteHandlers) direct(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "conflict", 409)
 		return
 	}
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "project not found", 404)
+		return
+	}
 	if err != nil {
 		internalError(w)
 		return
 	}
-	jsonResponse(w, 201, map[string]string{"status": status, "note_id": note})
+	code := http.StatusCreated
+	if !created {
+		code = http.StatusOK
+	}
+	jsonResponse(w, code, map[string]string{"operation_id": opID, "status": status, "note_id": note})
 }
 
 func (h noteHandlers) tree(w http.ResponseWriter, r *http.Request) {

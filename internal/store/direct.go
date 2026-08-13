@@ -10,17 +10,18 @@ type DirectOperation struct {
 	ID, RequestKey, RequestFingerprint, ProjectID, RelativePath, ReviewMode, NoteID, Status string
 	FrozenSHA                                                                               string
 	FrozenSize                                                                              int64
+	Error                                                                                   string
 }
 type DirectStore struct{ DB *sql.DB }
 
 func (s DirectStore) ByKey(ctx context.Context, key string) (DirectOperation, error) {
-	return s.scan(s.DB.QueryRowContext(ctx, `SELECT id,request_key,request_fingerprint,target_project_id,target_relative_path,review_mode,note_id,status,coalesce(frozen_sha256,''),coalesce(frozen_size,0) FROM direct_ops WHERE request_key=?`, key))
+	return s.scan(s.DB.QueryRowContext(ctx, `SELECT id,request_key,request_fingerprint,target_project_id,target_relative_path,review_mode,note_id,status,coalesce(frozen_sha256,''),coalesce(frozen_size,0),coalesce(error,'') FROM direct_ops WHERE request_key=?`, key))
 }
 func (s DirectStore) ByID(ctx context.Context, id string) (DirectOperation, error) {
-	return s.scan(s.DB.QueryRowContext(ctx, `SELECT id,request_key,request_fingerprint,target_project_id,target_relative_path,review_mode,note_id,status,coalesce(frozen_sha256,''),coalesce(frozen_size,0) FROM direct_ops WHERE id=?`, id))
+	return s.scan(s.DB.QueryRowContext(ctx, `SELECT id,request_key,request_fingerprint,target_project_id,target_relative_path,review_mode,note_id,status,coalesce(frozen_sha256,''),coalesce(frozen_size,0),coalesce(error,'') FROM direct_ops WHERE id=?`, id))
 }
 func (s DirectStore) scan(row *sql.Row) (o DirectOperation, err error) {
-	err = row.Scan(&o.ID, &o.RequestKey, &o.RequestFingerprint, &o.ProjectID, &o.RelativePath, &o.ReviewMode, &o.NoteID, &o.Status, &o.FrozenSHA, &o.FrozenSize)
+	err = row.Scan(&o.ID, &o.RequestKey, &o.RequestFingerprint, &o.ProjectID, &o.RelativePath, &o.ReviewMode, &o.NoteID, &o.Status, &o.FrozenSHA, &o.FrozenSize, &o.Error)
 	return
 }
 func (s DirectStore) Active(ctx context.Context) ([]DirectOperation, error) {

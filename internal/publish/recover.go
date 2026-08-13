@@ -10,7 +10,13 @@ func (m *Machine) RecoverAll(ctx context.Context) error {
 	}
 	for _, o := range ops {
 		if err = m.resume(ctx, o); err != nil {
-			return err
+			current, lookupErr := (store.DirectStore{DB: m.DB}).ByID(ctx, o.ID)
+			if lookupErr != nil {
+				return lookupErr
+			}
+			if current.Status != "failed" {
+				return err
+			}
 		}
 	}
 	return nil
