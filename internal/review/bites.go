@@ -82,11 +82,10 @@ func (w *BiteWorker) acquire(ctx context.Context) (leasedJob, bool, error) {
 		return leasedJob{}, false, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT id,note_id,source_sha256,status,lease_until,attempts FROM review_pending WHERE generator_version='bites-v1' AND status IN ('pending','leased') ORDER BY id`)
+	rows, err := tx.QueryContext(ctx, `SELECT id,note_id,source_sha256,status,lease_until,attempts FROM review_pending WHERE generator_version='bites-v1' AND status IN ('pending','leased') ORDER BY created_at,id`)
 	if err != nil {
 		return leasedJob{}, false, err
 	}
-	defer rows.Close()
 	now := w.Clock.Now().UTC()
 	var chosen leasedJob
 	var oldStatus string
@@ -113,8 +112,15 @@ func (w *BiteWorker) acquire(ctx context.Context) (leasedJob, bool, error) {
 			break
 		}
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return chosen, false, err
+	}
+	if err := rows.Close(); err != nil {
+		return chosen, false, err
+	}
 	if chosen.id == "" {
-		return chosen, false, rows.Err()
+		return chosen, false, nil
 	}
 	chosen.attempts++
 	chosen.until = now.Add(w.Lease).Format(time.RFC3339Nano)
@@ -216,7 +222,7 @@ func (w *BiteWorker) complete(ctx context.Context, j leasedJob, n noteSnapshot, 
 	}
 	now := w.Clock.Now().UTC().Format(time.RFC3339Nano)
 	for ordinal, b := range bites {
-		_, err = tx.ExecContext(ctx, `INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,answer,generation_id,ordinal,stage,due_at,interval_days,ease_factor,reps,lapses,last_reviewed_at,row_version,status,scheduler_version) VALUES(?,?,?,'bite',?,?,?,?,?,?,0,?,0,2.5,0,0,NULL,0,'active','sm2-lite-v1') ON CONFLICT(generation_id,ordinal) DO NOTHING`, uuid.NewString(), n.projectID, j.noteID, j.hash, n.revision, b.Prompt, b.Answer, j.id, ordinal, now)
+		_, err = tx.ExecContext(ctx, `INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,answer,generation_id,ordinal,stage,due_at,interval_days,ease_factor,reps,lapses,last_reviewed_at,row_version,status,scheduler_version) VALUES(?,?,?,'bite',?,?,?,?,?,?,0,?,0,2.5,0,0,NULL,0,'active','sm2-lite-v1')`, uuid.NewString(), n.projectID, j.noteID, j.hash, n.revision, b.Prompt, b.Answer, j.id, ordinal, now)
 		if err != nil {
 			return err
 		}
