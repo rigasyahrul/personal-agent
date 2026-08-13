@@ -20,6 +20,7 @@ type SessionStore struct {
 	DataDir string
 	Now     func() time.Time
 	Models  []config.ModelRef
+	Barrier MutBarrier
 }
 
 type CreateSessionInput struct {
@@ -27,6 +28,23 @@ type CreateSessionInput struct {
 }
 
 func (s *SessionStore) CreateProject(ctx context.Context, in CreateSessionInput) (domain.Session, error) {
+	var out domain.Session
+	err := s.withBarrier(func() error {
+		var e error
+		out, e = s.createProject(ctx, in)
+		return e
+	})
+	return out, err
+}
+
+func (s *SessionStore) withBarrier(fn func() error) error {
+	if s.Barrier == nil {
+		return fn()
+	}
+	return s.Barrier.Mutate(fn)
+}
+
+func (s *SessionStore) createProject(ctx context.Context, in CreateSessionInput) (domain.Session, error) {
 	var out domain.Session
 	if !s.modelConfigured(in.Provider, in.ModelID) {
 		return out, ErrValidation
@@ -99,6 +117,10 @@ func (s *SessionStore) Get(ctx context.Context, id string) (domain.Session, erro
 }
 
 func (s *SessionStore) Delete(ctx context.Context, id string) error {
+	return s.withBarrier(func() error { return s.delete(ctx, id) })
+}
+
+func (s *SessionStore) delete(ctx context.Context, id string) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err

@@ -39,10 +39,18 @@ type PublishInput struct {
 	ReviewMode                           domain.ReviewMode
 	NoteID                               string
 }
+
+// mutBarrier is the optional exclusive-snapshot gate used by backup.
+// Implemented by *backup.Barrier; kept local to avoid an import cycle.
+type mutBarrier interface {
+	Mutate(func() error) error
+}
+
 type Machine struct {
 	DB      *sql.DB
 	DataDir string
 	Clock   clock.Clock
+	Barrier mutBarrier
 	mu      sync.Mutex
 }
 
@@ -138,9 +146,20 @@ func (m *Machine) writeStage(kind, id string, body []byte) error {
 }
 
 func (m *Machine) Run(ctx context.Context, in PublishInput) (string, string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.run(ctx, in)
+	var status, noteID string
+	runLocked := func() error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		var err error
+		status, noteID, err = m.run(ctx, in)
+		return err
+	}
+	if m.Barrier != nil {
+		err := m.Barrier.Mutate(runLocked)
+		return status, noteID, err
+	}
+	err := runLocked()
+	return status, noteID, err
 }
 
 func opTable(kind string) string {

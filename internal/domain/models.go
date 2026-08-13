@@ -88,3 +88,16 @@ type AgentRun struct {
 	Error       *string    `json:"error"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
+
+// BackupRun is a durable snapshot attempt (local directory bundle ± optional upload).
+type BackupRun struct {
+	ID           string `json:"id"`
+	Status       string `json:"status"`
+	CutoffAt     string `json:"cutoff_at"`
+	StartedAt    string `json:"started_at"`
+	LocalPath    string `json:"local_path"`
+	ObjectKey    string `json:"object_key"`
+	ManifestHash string `json:"manifest_hash"`
+	CompletedAt  string `json:"completed_at"`
+	Error        string `json:"error"`
+}

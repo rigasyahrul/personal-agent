@@ -13,11 +13,17 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/layout"
 )
 
+// MutBarrier is implemented by *backup.Barrier (local to avoid import cycles).
+type MutBarrier interface {
+	Mutate(func() error) error
+}
+
 type ProjectStore struct {
 	db      *sql.DB
 	dataDir string
 	clock   clock.Clock
 	commit  func(*sql.Tx) error
+	Barrier MutBarrier
 }
 
 func NewProjectStore(db *sql.DB, dataDir string, c clock.Clock) *ProjectStore {
@@ -31,6 +37,23 @@ func (s *ProjectStore) ReadyNoteCount(ctx context.Context, projectID string) (in
 }
 
 func (s *ProjectStore) Create(ctx context.Context, name, vaultID string) (domain.Project, error) {
+	var p domain.Project
+	err := s.withBarrier(func() error {
+		var e error
+		p, e = s.create(ctx, name, vaultID)
+		return e
+	})
+	return p, err
+}
+
+func (s *ProjectStore) withBarrier(fn func() error) error {
+	if s.Barrier == nil {
+		return fn()
+	}
+	return s.Barrier.Mutate(fn)
+}
+
+func (s *ProjectStore) create(ctx context.Context, name, vaultID string) (domain.Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return domain.Project{}, ErrValidation

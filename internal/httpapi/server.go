@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rigasyahrul/personal-agent/internal/agent"
+	"github.com/rigasyahrul/personal-agent/internal/backup"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	"github.com/rigasyahrul/personal-agent/internal/publish"
@@ -23,6 +24,8 @@ type ServerDeps struct {
 	Publish        *publish.Machine
 	Models         []config.ModelRef
 	Provider       agent.Provider
+	Backup         *backup.Service
+	Barrier        *backup.Barrier
 }
 
 func New(deps ServerDeps) http.Handler {
@@ -37,10 +40,10 @@ func New(deps ServerDeps) http.Handler {
 		SecureCookies:  deps.SecureCookies,
 	})
 	SettingsRoutes(mux, deps.DB, deps.Clock)
-	ProjectRoutes(mux, deps.DB, deps.DataDir, deps.Clock)
+	ProjectRoutes(mux, deps.DB, deps.DataDir, deps.Clock, deps.Barrier)
 	NoteRoutes(mux, deps.DB, deps.DataDir, deps.Clock, deps.Publish)
 	now := func() time.Time { return deps.Clock.Now().UTC() }
-	sessions := &store.SessionStore{DB: deps.DB, DataDir: deps.DataDir, Now: now, Models: deps.Models}
+	sessions := &store.SessionStore{DB: deps.DB, DataDir: deps.DataDir, Now: now, Models: deps.Models, Barrier: deps.Barrier}
 	messages := &store.MessageStore{DB: deps.DB, Now: now}
 	runs := &store.RunStore{DB: deps.DB, Now: now}
 	runner := &agent.Runner{DB: deps.DB, DataDir: deps.DataDir, Provider: deps.Provider, Messages: messages, Runs: runs, Sessions: sessions, Clock: deps.Clock}

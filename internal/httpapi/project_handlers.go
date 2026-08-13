@@ -28,10 +28,12 @@ type projectHandlers struct {
 	clock    clock.Clock
 }
 
-func ProjectRoutes(mux *http.ServeMux, db *sql.DB, dataDir string, c clock.Clock) {
+func ProjectRoutes(mux *http.ServeMux, db *sql.DB, dataDir string, c clock.Clock, barrier store.MutBarrier) {
+	projects := store.NewProjectStore(db, dataDir, c)
+	projects.Barrier = barrier
 	h := projectHandlers{
 		vaults:   store.NewVaultStore(db, c),
-		projects: store.NewProjectStore(db, dataDir, c),
+		projects: projects,
 		clock:    c,
 	}
 	authenticated := func(next http.Handler) http.Handler { return requireAuthAt(db, c.Now, next) }

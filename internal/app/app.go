@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rigasyahrul/personal-agent/internal/agent"
+	"github.com/rigasyahrul/personal-agent/internal/backup"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	database "github.com/rigasyahrul/personal-agent/internal/db"
@@ -23,6 +24,8 @@ type App struct {
 	handler http.Handler
 	cancel  context.CancelFunc
 	workers sync.WaitGroup
+	Barrier *backup.Barrier
+	Backup  *backup.Service
 }
 
 func New(ctx context.Context, cfg config.Config) (*App, error) {
@@ -31,16 +34,20 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, err
 	}
 	realClock := clock.RealClock{}
-	machine := &publish.Machine{DB: db, DataDir: cfg.DataDir, Clock: realClock}
+	barrier := &backup.Barrier{}
+	machine := &publish.Machine{DB: db, DataDir: cfg.DataDir, Clock: realClock, Barrier: barrier}
 	if err := machine.RecoverAll(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("recover unfinished publications: %w", err)
 	}
+	backupSvc := backup.NewService(db, cfg.DataDir, barrier, realClock, nil)
 	provider := &agent.OpenAICompat{APIKey: cfg.OpenAIAPIKey, BaseURL: cfg.OpenAIBaseURL}
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	application := &App{
-		db:     db,
-		cancel: cancelWorkers,
+		db:      db,
+		cancel:  cancelWorkers,
+		Barrier: barrier,
+		Backup:  backupSvc,
 		handler: httpapi.New(httpapi.ServerDeps{
 			DB:             db,
 			DataDir:        cfg.DataDir,
@@ -51,6 +58,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 			Publish:        machine,
 			Models:         cfg.Models,
 			Provider:       provider,
+			Backup:         backupSvc,
+			Barrier:        barrier,
 		}),
 	}
 	biteWorker := &review.BiteWorker{
@@ -59,6 +68,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		Clock:     realClock,
 		Generator: agent.ProviderBiteGenerator{Provider: provider},
 		Lease:     time.Minute,
+		Barrier:   barrier,
 	}
 	application.workers.Add(1)
 	go func() {

@@ -39,12 +39,18 @@ func validateBites(in []Bite) ([]Bite, error) {
 
 var ErrLeaseLost = errors.New("review generation lease lost")
 
+// mutBarrier is implemented by *backup.Barrier (kept local to avoid import cycles).
+type mutBarrier interface {
+	Mutate(func() error) error
+}
+
 type BiteWorker struct {
 	DB        *sql.DB
 	DataDir   string
 	Clock     clock.Clock
 	Generator BiteGenerator
 	Lease     time.Duration
+	Barrier   mutBarrier
 }
 type leasedJob struct {
 	id, noteID, hash, until string
@@ -52,28 +58,42 @@ type leasedJob struct {
 }
 
 func (w *BiteWorker) LeaseAndRun(ctx context.Context) (bool, error) {
-	job, ok, err := w.acquire(ctx)
-	if err != nil || !ok {
-		return false, err
+	run := func() (bool, error) {
+		job, ok, err := w.acquire(ctx)
+		if err != nil || !ok {
+			return false, err
+		}
+		note, err := w.readNote(ctx, job.noteID, job.hash)
+		if err != nil {
+			return true, w.fail(ctx, job, err)
+		}
+		if w.Generator == nil {
+			return true, w.fail(ctx, job, errors.New("bite generator is nil"))
+		}
+		bites, err := w.Generator.Generate(ctx, string(note.body))
+		if err == nil {
+			bites, err = validateBites(bites)
+		}
+		if err != nil {
+			return true, w.fail(ctx, job, err)
+		}
+		if err = w.complete(ctx, job, note, bites); err != nil {
+			return true, err
+		}
+		return true, nil
 	}
-	note, err := w.readNote(ctx, job.noteID, job.hash)
-	if err != nil {
-		return true, w.fail(ctx, job, err)
+	if w.Barrier == nil {
+		return run()
 	}
-	if w.Generator == nil {
-		return true, w.fail(ctx, job, errors.New("bite generator is nil"))
+	var did bool
+	var err error
+	if berr := w.Barrier.Mutate(func() error {
+		did, err = run()
+		return err
+	}); berr != nil {
+		return did, berr
 	}
-	bites, err := w.Generator.Generate(ctx, string(note.body))
-	if err == nil {
-		bites, err = validateBites(bites)
-	}
-	if err != nil {
-		return true, w.fail(ctx, job, err)
-	}
-	if err = w.complete(ctx, job, note, bites); err != nil {
-		return true, err
-	}
-	return true, nil
+	return did, err
 }
 
 func (w *BiteWorker) acquire(ctx context.Context) (leasedJob, bool, error) {
