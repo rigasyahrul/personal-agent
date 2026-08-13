@@ -643,7 +643,7 @@ func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 	}
 	if o.ReviewMode == "whole" {
 		var count int
-		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM review_items WHERE project_id=? AND note_id=? AND kind='whole' AND source_sha256=? AND source_revision=1 AND status='active' AND scheduler_version='sm2-lite-v1'`, o.ProjectID, o.NoteID, o.FrozenSHA).Scan(&count)
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM review_items WHERE project_id=? AND note_id=? AND kind='whole' AND source_sha256=? AND source_revision=1 AND prompt='Review this note' AND stage=0 AND interval_days=0 AND ease_factor=2.5 AND reps=0 AND lapses=0 AND row_version=0 AND last_reviewed_at IS NULL AND due_at<=? AND status='active' AND scheduler_version='sm2-lite-v1'`, o.ProjectID, o.NoteID, o.FrozenSHA, now).Scan(&count)
 		if err != nil || count != 1 {
 			return fmt.Errorf("whole review reconciliation failed: count=%d: %w", count, err)
 		}

@@ -104,15 +104,23 @@ func TestWholeReviewItemStartsWithExactDurableState(t *testing.T) {
 }
 
 func TestWholeReviewConflictMustMatchExactReusableRow(t *testing.T) {
-	d, db, c := completedFixture(t, "whole")
-	if _, err := db.Exec(`UPDATE review_items SET scheduler_version='other' WHERE note_id='n1'; UPDATE direct_ops SET status='finalized' WHERE id='op1'`); err != nil {
-		t.Fatal(err)
+	updates := map[string]string{
+		"stage": `stage=1`, "interval": `interval_days=1`, "ease": `ease_factor=2.6`, "reps": `reps=1`,
+		"lapses": `lapses=1`, "row_version": `row_version=1`, "last_reviewed": `last_reviewed_at='2026-08-13T01:02:03Z'`,
+		"future_due": `due_at='2026-08-14T01:02:03Z'`, "scheduler": `scheduler_version='other'`,
 	}
-	err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).RecoverAll(context.Background())
-	if err == nil {
-		t.Fatal("mismatched active whole row was reused")
+	for name, update := range updates {
+		t.Run(name, func(t *testing.T) {
+			d, db, c := completedFixture(t, "whole")
+			if _, err := db.Exec(`UPDATE review_items SET ` + update + ` WHERE note_id='n1'; UPDATE direct_ops SET status='finalized' WHERE id='op1'`); err != nil {
+				t.Fatal(err)
+			}
+			if err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).RecoverAll(context.Background()); err == nil {
+				t.Fatal("mismatched active whole row was reused")
+			}
+			assertOpStatus(t, db, "op1", "finalized")
+		})
 	}
-	assertOpStatus(t, db, "op1", "finalized")
 }
 func input() publish.PublishInput {
 	return publish.PublishInput{OpID: "op1", RequestKey: "key1", RequestFingerprint: "fp1", Kind: "direct", Body: []byte("# One\n"), TargetProjectID: "p1", TargetRelPath: "guide/one.md", ReviewMode: domain.ReviewMode("none"), NoteID: "n1"}
@@ -475,6 +483,14 @@ func TestRecoverAllPromoteRejectsInvalidReviewEnqueuedState(t *testing.T) {
 		{name: "wrong_source_revision", update: `UPDATE review_items SET source_revision=2 WHERE note_id=?`},
 		{name: "non_active_status", update: `UPDATE review_items SET status='suspended' WHERE note_id=?`},
 		{name: "wrong_scheduler_version", update: `UPDATE review_items SET scheduler_version='other' WHERE note_id=?`},
+		{name: "nonzero_stage", update: `UPDATE review_items SET stage=1 WHERE note_id=?`},
+		{name: "nonzero_interval", update: `UPDATE review_items SET interval_days=1 WHERE note_id=?`},
+		{name: "wrong_ease", update: `UPDATE review_items SET ease_factor=2.6 WHERE note_id=?`},
+		{name: "nonzero_reps", update: `UPDATE review_items SET reps=1 WHERE note_id=?`},
+		{name: "nonzero_lapses", update: `UPDATE review_items SET lapses=1 WHERE note_id=?`},
+		{name: "nonzero_row_version", update: `UPDATE review_items SET row_version=1 WHERE note_id=?`},
+		{name: "last_reviewed", update: `UPDATE review_items SET last_reviewed_at='2026-08-13T01:02:03Z' WHERE note_id=?`},
+		{name: "future_due", update: `UPDATE review_items SET due_at='2026-08-14T01:02:03Z' WHERE note_id=?`},
 	} {
 		t.Run("whole/"+tc.name, func(t *testing.T) {
 			_, db, m, in, _ := preparePromoteRecovery(t, "review_enqueued", "whole")
