@@ -112,3 +112,25 @@ func TestNoteHandlersAndFolders(t *testing.T) {
 		t.Fatalf("integrity = %d %s", got.Code, got.Body.String())
 	}
 }
+
+func TestFailedNoteTreeHTTPIntegritySemantics(t *testing.T) {
+	db, dataDir := testutil.TempDB(t)
+	now := time.Now().UTC()
+	_, _ = db.Exec("INSERT INTO owner(id,password_hash,created_at,updated_at) VALUES(1,'x','x','x')")
+	_, _ = db.Exec("INSERT INTO auth_sessions(token_hash,csrf_token,expires_at,created_at) VALUES(?,?,?,'x')", auth.TokenHash(testSession), testCSRF, now.Add(time.Hour).Format(time.RFC3339Nano))
+	_, _ = db.Exec("INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x'); INSERT INTO notes(id,project_id,relative_path,status,revision,created_at,updated_at) VALUES('n1','p1','failed.md','failed',0,'x','x')")
+	source := layout.SourceDir(layout.ProjectRoot(dataDir, "", "p1"))
+	if err := os.MkdirAll(source, 0700); err != nil {
+		t.Fatal(err)
+	}
+	h := New(ServerDeps{DB: db, DataDir: dataDir, Clock: &clock.FakeClock{T: now}})
+	if got := projectAPIRequest(h, "GET", "/api/v1/projects/p1/tree", "", true, ""); got.Code != 200 {
+		t.Fatalf("no artifact = %d %s", got.Code, got.Body.String())
+	}
+	if err := os.WriteFile(filepath.Join(source, "failed.md"), []byte("artifact"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got := projectAPIRequest(h, "GET", "/api/v1/projects/p1/tree", "", true, ""); got.Code != 409 {
+		t.Fatalf("artifact = %d %s", got.Code, got.Body.String())
+	}
+}

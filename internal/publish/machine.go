@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
@@ -36,6 +37,7 @@ type Machine struct {
 	DB      *sql.DB
 	DataDir string
 	Clock   clock.Clock
+	mu      sync.Mutex
 }
 
 func validComponent(s string) bool {
@@ -94,6 +96,12 @@ func (m *Machine) writeStage(id string, body []byte) error {
 }
 
 func (m *Machine) Run(ctx context.Context, in PublishInput) (string, string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.run(ctx, in)
+}
+
+func (m *Machine) run(ctx context.Context, in PublishInput) (string, string, error) {
 	p, err := validate(in)
 	if err != nil {
 		return "", in.NoteID, err
@@ -141,7 +149,7 @@ func (m *Machine) Run(ctx context.Context, in PublishInput) (string, string, err
 		if race.RequestFingerprint != in.RequestFingerprint {
 			return race.Status, race.NoteID, ErrConflict
 		}
-		return m.Run(ctx, in)
+		return m.run(ctx, in)
 	}
 	if err = m.writeStage(in.OpID, in.Body); err != nil {
 		return "accepted", in.NoteID, err
@@ -160,6 +168,17 @@ func (m *Machine) Run(ctx context.Context, in PublishInput) (string, string, err
 	return o.Status, o.NoteID, nil
 }
 
+var publicationRank = map[string]int{
+	"accepted": 0, "frozen": 1, "path_reserved": 2, "published_fs": 3,
+	"finalized": 4, "review_enqueued": 5, "completed": 6,
+}
+
+func compatibleAtLeast(status, target string) bool {
+	got, ok := publicationRank[status]
+	want, targetOK := publicationRank[target]
+	return ok && targetOK && got >= want
+}
+
 func (m *Machine) advance(ctx context.Context, id, from, to string) error {
 	res, err := m.DB.ExecContext(ctx, `UPDATE direct_ops SET status=?,updated_at=? WHERE id=? AND status=?`, to, m.now(), id, from)
 	if err != nil {
@@ -176,7 +195,7 @@ func (m *Machine) advance(ctx context.Context, id, from, to string) error {
 	if err != nil {
 		return err
 	}
-	if o.Status == to {
+	if compatibleAtLeast(o.Status, to) {
 		return nil
 	}
 	return fmt.Errorf("operation transition %s to %s affected %d rows", from, to, n)
@@ -321,6 +340,14 @@ func (m *Machine) reserve(ctx context.Context, o store.DirectOperation) error {
 	if err != nil {
 		return err
 	}
+	if n == 0 {
+		_ = tx.Rollback()
+		current, reloadErr := (store.DirectStore{DB: m.DB}).ByID(ctx, o.ID)
+		if reloadErr == nil && compatibleAtLeast(current.Status, "path_reserved") {
+			return nil
+		}
+		return fmt.Errorf("reserve transition affected %d rows: %w", n, reloadErr)
+	}
 	if n != 1 {
 		return fmt.Errorf("reserve transition affected %d rows", n)
 	}
@@ -395,6 +422,15 @@ func (m *Machine) publish(ctx context.Context, o store.DirectOperation) error {
 	}
 	defer r.Close()
 	err = r.WriteFileNoReplace(o.RelativePath, b, 0600)
+	if errors.Is(err, fs.ErrExist) {
+		state, inspectErr := m.inspectDestination(ctx, o)
+		if inspectErr != nil {
+			return inspectErr
+		}
+		if state == destinationMatches {
+			return m.advance(ctx, o.ID, "path_reserved", "published_fs")
+		}
+	}
 	if errors.Is(err, fs.ErrExist) || errors.Is(err, fsroot.ErrUnsafe) || errors.Is(err, fsroot.ErrInvalidPath) {
 		if x := m.fail(ctx, o, fmt.Errorf("destination became an irrecoverable publication artifact: %w", err)); x != nil {
 			return x
@@ -444,7 +480,15 @@ func (m *Machine) finalize(ctx context.Context, o store.DirectOperation) error {
 		return err
 	}
 	n, err = res.RowsAffected()
-	if err != nil || n != 1 {
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		var status string
+		if err = tx.QueryRowContext(ctx, `SELECT status FROM direct_ops WHERE id=?`, o.ID).Scan(&status); err != nil || !compatibleAtLeast(status, "finalized") {
+			return fmt.Errorf("finalize transition affected %d rows: %w", n, err)
+		}
+	} else if n != 1 {
 		return fmt.Errorf("finalize transition affected %d rows: %w", n, err)
 	}
 	return tx.Commit()
@@ -457,19 +501,40 @@ func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 	defer tx.Rollback()
 	now := m.now()
 	if o.ReviewMode == "whole" {
-		_, err = tx.ExecContext(ctx, `INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,stage,due_at,interval_days,ease_factor,reps,lapses,row_version,status,scheduler_version) VALUES(?,?,?,'whole',?,1,'Review this note',0,?,0,2.5,0,0,1,'active','sm2-lite-v1') ON CONFLICT DO NOTHING`, uuid.NewString(), o.ProjectID, o.NoteID, o.FrozenSHA, now)
+		_, err = tx.ExecContext(ctx, `INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,stage,due_at,interval_days,ease_factor,reps,lapses,row_version,status,scheduler_version) VALUES(?,?,?,'whole',?,1,'Review this note',0,?,0,2.5,0,0,1,'active','sm2-lite-v1') ON CONFLICT(note_id,source_revision) WHERE kind='whole' AND status='active' DO NOTHING`, uuid.NewString(), o.ProjectID, o.NoteID, o.FrozenSHA, now)
 	} else if o.ReviewMode == "bites" {
-		_, err = tx.ExecContext(ctx, `INSERT INTO review_pending(id,note_id,source_sha256,generator_version,status,attempts,created_at,updated_at) VALUES(?,?,?,'bites-v1','pending',0,?,?) ON CONFLICT DO NOTHING`, uuid.NewString(), o.NoteID, o.FrozenSHA, now, now)
+		_, err = tx.ExecContext(ctx, `INSERT INTO review_pending(id,note_id,source_sha256,generator_version,status,attempts,created_at,updated_at) VALUES(?,?,?,'bites-v1','pending',0,?,?) ON CONFLICT(note_id,source_sha256,generator_version) DO NOTHING`, uuid.NewString(), o.NoteID, o.FrozenSHA, now, now)
 	}
 	if err != nil {
 		return err
+	}
+	if o.ReviewMode == "whole" {
+		var count int
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM review_items WHERE project_id=? AND note_id=? AND kind='whole' AND source_sha256=? AND source_revision=1 AND status='active' AND scheduler_version='sm2-lite-v1'`, o.ProjectID, o.NoteID, o.FrozenSHA).Scan(&count)
+		if err != nil || count != 1 {
+			return fmt.Errorf("whole review reconciliation failed: count=%d: %w", count, err)
+		}
+	} else if o.ReviewMode == "bites" {
+		var count int
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM review_pending WHERE note_id=? AND source_sha256=? AND generator_version='bites-v1'`, o.NoteID, o.FrozenSHA).Scan(&count)
+		if err != nil || count != 1 {
+			return fmt.Errorf("bites review reconciliation failed: count=%d: %w", count, err)
+		}
 	}
 	res, err := tx.ExecContext(ctx, `UPDATE direct_ops SET status='review_enqueued',updated_at=? WHERE id=? AND status='finalized'`, now, o.ID)
 	if err != nil {
 		return err
 	}
 	n, err := res.RowsAffected()
-	if err != nil || n != 1 {
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		var status string
+		if err = tx.QueryRowContext(ctx, `SELECT status FROM direct_ops WHERE id=?`, o.ID).Scan(&status); err != nil || !compatibleAtLeast(status, "review_enqueued") {
+			return fmt.Errorf("enqueue transition affected %d rows: %w", n, err)
+		}
+	} else if n != 1 {
 		return fmt.Errorf("enqueue transition affected %d rows: %w", n, err)
 	}
 	return tx.Commit()

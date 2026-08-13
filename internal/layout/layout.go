@@ -8,6 +8,8 @@ import (
 
 type SessionHome string
 
+var mkdirProjectChild = os.Mkdir
+
 func ProjectRoot(dataDir, vaultID, projectID string) string {
 	if vaultID == "" {
 		return filepath.Join(dataDir, "files", "global", "projects", projectID)
@@ -32,10 +34,23 @@ func SessionWorkspace(dataDir string, home SessionHome, vaultID, projectID, sess
 
 func EnsureProjectDirs(dataDir, vaultID, projectID string) error {
 	root := ProjectRoot(dataDir, vaultID, projectID)
+	if err := os.MkdirAll(filepath.Dir(root), 0700); err != nil {
+		return fmt.Errorf("create project parent: %w", err)
+	}
+	if err := os.Mkdir(root, 0700); err != nil {
+		return fmt.Errorf("create fresh project root: %w", err)
+	}
+	complete := false
+	defer func() {
+		if !complete {
+			_ = os.RemoveAll(root)
+		}
+	}()
 	for _, name := range []string{"source", "memory", "soul"} {
-		if err := os.MkdirAll(filepath.Join(root, name), 0700); err != nil {
+		if err := mkdirProjectChild(filepath.Join(root, name), 0700); err != nil {
 			return fmt.Errorf("create project %s: %w", name, err)
 		}
 	}
+	complete = true
 	return nil
 }

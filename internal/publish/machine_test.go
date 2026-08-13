@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -30,6 +31,64 @@ func fixture(t *testing.T) (string, *sql.DB, *clock.FakeClock) {
 		t.Fatal(err)
 	}
 	return d, db, &clock.FakeClock{T: now}
+}
+
+func TestConcurrentSameKeyRetriesConverge(t *testing.T) {
+	d, db, c := fixture(t)
+	m := publish.Machine{DB: db, DataDir: d, Clock: c}
+	const callers = 16
+	start := make(chan struct{})
+	type result struct {
+		status, note string
+		err          error
+	}
+	results := make(chan result, callers)
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			in := input()
+			in.ReviewMode = "whole"
+			s, n, err := m.Run(context.Background(), in)
+			results <- result{s, n, err}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	for got := range results {
+		if got.err != nil || got.status != "completed" || got.note != "n1" {
+			t.Errorf("result=%+v", got)
+		}
+	}
+	for table, where := range map[string]string{"direct_ops": "request_key='key1'", "notes": "id='n1'"} {
+		var n int
+		if err := db.QueryRow("SELECT count(*) FROM " + table + " WHERE " + where).Scan(&n); err != nil || n != 1 {
+			t.Fatalf("%s=%d err=%v", table, n, err)
+		}
+	}
+	var reviews int
+	if err := db.QueryRow(`SELECT count(*) FROM review_items WHERE note_id='n1'`).Scan(&reviews); err != nil || reviews != 1 {
+		t.Fatalf("reviews=%d err=%v", reviews, err)
+	}
+	b, err := os.ReadFile(filepath.Join(layout.SourceDir(layout.ProjectRoot(d, "v1", "p1")), "guide", "one.md"))
+	if err != nil || string(b) != "# One\n" {
+		t.Fatalf("body=%q err=%v", b, err)
+	}
+}
+
+func TestWholeReviewConflictMustMatchExactReusableRow(t *testing.T) {
+	d, db, c := completedFixture(t, "whole")
+	if _, err := db.Exec(`UPDATE review_items SET scheduler_version='other' WHERE note_id='n1'; UPDATE direct_ops SET status='finalized' WHERE id='op1'`); err != nil {
+		t.Fatal(err)
+	}
+	err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).RecoverAll(context.Background())
+	if err == nil {
+		t.Fatal("mismatched active whole row was reused")
+	}
+	assertOpStatus(t, db, "op1", "finalized")
 }
 func input() publish.PublishInput {
 	return publish.PublishInput{OpID: "op1", RequestKey: "key1", RequestFingerprint: "fp1", Kind: "direct", Body: []byte("# One\n"), TargetProjectID: "p1", TargetRelPath: "guide/one.md", ReviewMode: domain.ReviewMode("none"), NoteID: "n1"}
@@ -109,6 +168,17 @@ func TestReviewModesAndRecoveryDeduplicate(t *testing.T) {
 			// Replay both durable boundaries rather than recovering a completed no-op.
 			if _, err := db.Exec(`UPDATE direct_ops SET status='finalized' WHERE id='op1'`); err != nil {
 				t.Fatal(err)
+			}
+			if mode == "bites" {
+				if _, err := db.Exec(`UPDATE review_pending SET status='completed' WHERE note_id='n1'`); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := db.Exec(`UPDATE direct_ops SET status='finalized' WHERE id='op1'`); err != nil {
+					t.Fatal(err)
+				}
+				if err := m.RecoverAll(context.Background()); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := m.RecoverAll(context.Background()); err != nil {
 				t.Fatal(err)

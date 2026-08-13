@@ -72,6 +72,34 @@ func TestNoteTreeRejectsUnsafeAndUnindexedNodes(t *testing.T) {
 	}
 }
 
+func TestNoteTreeTreatsFailedRowsAsTerminalMetadata(t *testing.T) {
+	for _, artifact := range []bool{false, true} {
+		t.Run(fmt.Sprintf("artifact=%v", artifact), func(t *testing.T) {
+			db, d := testutil.TempDB(t)
+			if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x'); INSERT INTO notes(id,project_id,relative_path,status,revision,created_at,updated_at) VALUES('n1','p1','failed.md','failed',0,'x','x')`); err != nil {
+				t.Fatal(err)
+			}
+			source := layout.SourceDir(layout.ProjectRoot(d, "", "p1"))
+			if err := os.MkdirAll(source, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if artifact {
+				if err := os.WriteFile(filepath.Join(source, "failed.md"), []byte("artifact"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			tree, err := store.NewNoteStore(db, d).Tree(context.Background(), "p1")
+			if artifact {
+				if !errors.Is(err, store.ErrIntegrity) {
+					t.Fatalf("artifact error = %v", err)
+				}
+			} else if err != nil || len(tree) != 0 {
+				t.Fatalf("tree=%+v err=%v", tree, err)
+			}
+		})
+	}
+}
+
 func TestNoteGetRejectsSymlinkedNoteParent(t *testing.T) {
 	db, d := testutil.TempDB(t)
 	if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x')`); err != nil {

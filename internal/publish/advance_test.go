@@ -19,7 +19,13 @@ func TestAdvanceReconcilesAlreadyAtTargetAndRejectsUnexpectedState(t *testing.T)
 	if err := m.advance(context.Background(), "o", "path_reserved", "published_fs"); err != nil {
 		t.Fatalf("already target: %v", err)
 	}
+	if err := m.advance(context.Background(), "o", "frozen", "path_reserved"); err != nil {
+		t.Fatalf("later compatible state rejected: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE direct_ops SET status='failed' WHERE id='o'`); err != nil {
+		t.Fatal(err)
+	}
 	if err := m.advance(context.Background(), "o", "frozen", "path_reserved"); err == nil {
-		t.Fatal("unexpected state accepted")
+		t.Fatal("failed state accepted")
 	}
 }

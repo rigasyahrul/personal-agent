@@ -1,8 +1,9 @@
 package fsroot
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"math"
@@ -161,15 +162,32 @@ func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) er
 			return err
 		}
 	}
-	tmp := filepath.ToSlash(filepath.Join(dir, fmt.Sprintf(".publish-%d-%d", os.Getpid(), unix.Gettid())))
-	tfd, err := unix.Openat(r.fd, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, uint32(perm.Perm()))
+	parentFD := r.fd
+	var err error
+	if dir != "" {
+		parentFD, err = unix.Openat2(r.fd, dir, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS})
+		if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.EXDEV) || errors.Is(err, unix.ENOTDIR) {
+			return ErrUnsafe
+		}
+		if err != nil {
+			return err
+		}
+		defer unix.Close(parentFD)
+	}
+	final := filepath.Base(name)
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return err
+	}
+	tmp := ".publish-" + hex.EncodeToString(random)
+	tfd, err := unix.Openat(parentFD, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, uint32(perm.Perm()))
 	if err != nil {
 		return err
 	}
 	remove := true
 	defer func() {
 		if remove {
-			_ = unix.Unlinkat(r.fd, tmp, 0)
+			_ = unix.Unlinkat(parentFD, tmp, 0)
 		}
 	}()
 	f := os.NewFile(uintptr(tfd), tmp)
@@ -182,28 +200,18 @@ func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) er
 	if err != nil {
 		return err
 	}
-	err = unix.Renameat2(r.fd, tmp, r.fd, name, unix.RENAME_NOREPLACE)
+	err = unix.Renameat2(parentFD, tmp, parentFD, final, unix.RENAME_NOREPLACE)
 	if errors.Is(err, unix.EEXIST) {
 		return fs.ErrExist
 	}
-	if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.ENOTDIR) {
+	if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.EXDEV) || errors.Is(err, unix.ENOTDIR) {
 		return ErrUnsafe
 	}
 	if err != nil {
 		return err
 	}
 	remove = false
-	dfd, err := unix.Openat(r.fd, func() string {
-		if dir == "" {
-			return "."
-		}
-		return dir
-	}(), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return err
-	}
-	defer unix.Close(dfd)
-	return unix.Fsync(dfd)
+	return unix.Fsync(parentFD)
 }
 
 func (r *Root) Walk(fn func(path string, info fs.FileInfo) error) error {

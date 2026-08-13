@@ -83,6 +83,9 @@ func (s *NoteStore) Tree(ctx context.Context, projectID string) ([]TreeEntry, er
 			pending[p] = true
 			continue
 		}
+		if status == "failed" {
+			continue
+		}
 		if status != "ready" || !hash.Valid || !size.Valid || size.Int64 < 0 || size.Int64 > paths.MaxMarkdownBytes {
 			return nil, ErrIntegrity
 		}

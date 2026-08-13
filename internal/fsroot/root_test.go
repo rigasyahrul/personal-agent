@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/rigasyahrul/personal-agent/internal/fsroot"
@@ -34,6 +35,52 @@ func TestRootRejectsSymlinksAndNonRegularFiles(t *testing.T) {
 	}
 	if _, err = r.ReadFile("../note.md", 1024); !errors.Is(err, fsroot.ErrInvalidPath) {
 		t.Fatalf("invalid path: %v", err)
+	}
+}
+
+func TestWriteFileNoReplaceConcurrentWriters(t *testing.T) {
+	dir := t.TempDir()
+	r, err := fsroot.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	const writers = 12
+	start := make(chan struct{})
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- r.WriteFileNoReplace("deep/note.md", []byte("complete"), 0600)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	success, exists := 0, 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			success++
+		case errors.Is(err, fs.ErrExist):
+			exists++
+		default:
+			t.Errorf("write: %v", err)
+		}
+	}
+	if success != 1 || exists != writers-1 {
+		t.Fatalf("success=%d exists=%d", success, exists)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "deep", "note.md"))
+	if err != nil || string(b) != "complete" {
+		t.Fatalf("body=%q err=%v", b, err)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "deep"))
+	if err != nil || len(entries) != 1 || entries[0].Name() != "note.md" {
+		t.Fatalf("entries=%v err=%v", entries, err)
 	}
 }
 

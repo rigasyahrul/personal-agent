@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"strings"
 
 	"github.com/rigasyahrul/personal-agent/internal/clock"
@@ -16,6 +17,7 @@ type ProjectStore struct {
 	db      *sql.DB
 	dataDir string
 	clock   clock.Clock
+	commit  func(*sql.Tx) error
 }
 
 func NewProjectStore(db *sql.DB, dataDir string, c clock.Clock) *ProjectStore {
@@ -56,7 +58,12 @@ func (s *ProjectStore) Create(ctx context.Context, name, vaultID string) (domain
 	if err = layout.EnsureProjectDirs(s.dataDir, vaultID, p.ID); err != nil {
 		return domain.Project{}, err
 	}
-	if err = tx.Commit(); err != nil {
+	commit := s.commit
+	if commit == nil {
+		commit = (*sql.Tx).Commit
+	}
+	if err = commit(tx); err != nil {
+		_ = os.RemoveAll(layout.ProjectRoot(s.dataDir, vaultID, p.ID))
 		return domain.Project{}, err
 	}
 	return p, nil
