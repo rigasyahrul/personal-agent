@@ -2,9 +2,11 @@ package store_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,6 +54,47 @@ func TestSessionStoreCreateProjectAndList(t *testing.T) {
 	listed, err := ss.ListByProject(context.Background(), "p1")
 	if err != nil || len(listed) != 1 || listed[0].ID != got.ID {
 		t.Fatalf("list: %#v %v", listed, err)
+	}
+}
+
+type cancelAfterSessionCommitContext struct {
+	context.Context
+	db   interface{ QueryRow(string, ...any) *sql.Row }
+	done chan struct{}
+	once sync.Once
+}
+
+func (c *cancelAfterSessionCommitContext) Done() <-chan struct{} {
+	var count int
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&count); err == nil && count > 0 {
+		c.once.Do(func() { close(c.done) })
+	}
+	return c.done
+}
+
+func (c *cancelAfterSessionCommitContext) Err() error {
+	select {
+	case <-c.done:
+		return context.Canceled
+	default:
+		return nil
+	}
+}
+
+func TestSessionStoreCreateProjectReturnsCommittedSessionWhenContextCanceledAfterCommit(t *testing.T) {
+	dataDir := t.TempDir()
+	ss := seedProject(t, dataDir)
+	observer := testutil.OpenDB(t, dataDir)
+	ctx := &cancelAfterSessionCommitContext{Context: context.Background(), db: observer, done: make(chan struct{})}
+
+	got, err := ss.CreateProject(ctx, store.CreateSessionInput{
+		ProjectID: "p1", Title: "Learn", Provider: "openai", ModelID: "gpt-test", ModelParametersJSON: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject returned an error after durable commit: %v", err)
+	}
+	if got.ID == "" || got.ProjectID == nil || *got.ProjectID != "p1" {
+		t.Fatalf("wrong committed session: %#v", got)
 	}
 }
 

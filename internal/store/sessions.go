@@ -45,6 +45,16 @@ func (s *SessionStore) CreateProject(ctx context.Context, in CreateSessionInput)
 
 	now := s.Now().UTC()
 	id := ids.NewID()
+	projectID := in.ProjectID
+	out = domain.Session{
+		ID: id, Home: layout.SessionHome("project"), ProjectID: &projectID, Status: "active",
+		Provider: in.Provider, ModelID: in.ModelID, ModelParametersJSON: in.ModelParametersJSON,
+		ToolGrantsJSON: in.ToolGrantsJSON, Title: in.Title, CreatedAt: now, UpdatedAt: now,
+	}
+	if vaultID.Valid {
+		vault := vaultID.String
+		out.VaultID = &vault
+	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return out, err
@@ -65,8 +75,7 @@ func (s *SessionStore) CreateProject(ctx context.Context, in CreateSessionInput)
 		_ = os.RemoveAll(workspace)
 		return out, err
 	}
-	err = scanSession(s.DB.QueryRowContext(ctx, sessionSelect+` WHERE id=?`, id), &out)
-	return out, err
+	return out, nil
 }
 
 func (s *SessionStore) modelConfigured(provider, modelID string) bool {
