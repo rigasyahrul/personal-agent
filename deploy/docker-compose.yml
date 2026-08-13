@@ -6,7 +6,7 @@ services:
     environment:
       PA_DATA_DIR: /data
       PA_ADDR: :8080
-      PA_SECURE_COOKIES: ${PA_SECURE_COOKIES:-true}
+      PA_SECURE_COOKIES: ${PA_SECURE_COOKIES:-false}
       BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set BOOTSTRAP_TOKEN}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
@@ -14,7 +14,7 @@ services:
     volumes:
       - pa-data:/data
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     restart: unless-stopped
 
   caddy:

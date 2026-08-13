@@ -26,7 +26,7 @@ Compose persists application state in the `pa-data` volume mounted at `/data`. I
 
 Model configuration uses `OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, and `PA_MODELS`, a comma-separated list of `provider:model_id` pairs. Keep API keys and the bootstrap token out of source control.
 
-For local plain HTTP, set `PA_SECURE_COOKIES=false`; this is unsafe on an untrusted network. For a real domain, set `PA_DOMAIN`, leave secure cookies enabled, and start the Caddy TLS reverse proxy:
+The template defaults to `PA_SECURE_COOKIES=false` so login works over local plain HTTP; Compose publishes the app only on `127.0.0.1`. This mode is unsafe on an untrusted network. For a real domain, set `PA_DOMAIN`, set `PA_SECURE_COOKIES=true`, and start the Caddy TLS reverse proxy:
 
 ```sh
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml --profile domain up --build

@@ -6,11 +6,9 @@ cd "$repo_root"
 
 echo "==> Checking Go toolchain"
 required="1.24.0"
-current="$(/usr/local/go/bin/go version 2>/dev/null | sed -n 's/.*go\([0-9.]*\).*/\1/p' || true)"
-if [[ "$(id -u)" -eq 0 ]]; then
-  root=()
-else
-  root=(sudo -n)
+current=""
+if command -v go >/dev/null 2>&1; then
+  current="$(go version 2>/dev/null | sed -n 's/.*go\([0-9.]*\).*/\1/p' || true)"
 fi
 if [[ -z "$current" ]] || [[ "$(printf '%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]]; then
   case "$(uname -m)" in
@@ -20,12 +18,22 @@ if [[ -z "$current" ]] || [[ "$(printf '%s\n' "$required" "$current" | sort -V |
   esac
   echo "==> Installing Go $required"
   curl -fsSLo /tmp/go.tgz "https://go.dev/dl/go${required}.linux-${go_arch}.tar.gz"
-  "${root[@]}" rm -rf /usr/local/go
-  "${root[@]}" tar -C /usr/local -xzf /tmp/go.tgz
+
+  install_parent=/usr/local
+  privilege=()
+  if [[ "$(id -u)" -ne 0 ]] && [[ ! -w "$install_parent" ]]; then
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      privilege=(sudo -n)
+    else
+      install_parent="$HOME/.local"
+      mkdir -p "$install_parent"
+    fi
+  fi
+  "${privilege[@]}" rm -rf "$install_parent/go"
+  "${privilege[@]}" tar -C "$install_parent" -xzf /tmp/go.tgz
   rm -f /tmp/go.tgz
+  export PATH="$install_parent/go/bin:$PATH"
 fi
-printf '%s\n' 'export PATH="/usr/local/go/bin:$PATH"' | "${root[@]}" tee /etc/profile.d/personal-agent-go.sh >/dev/null
-export PATH="/usr/local/go/bin:$PATH"
 go version
 
 if [[ -f go.mod ]]; then
