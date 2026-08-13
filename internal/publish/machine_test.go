@@ -130,8 +130,7 @@ func TestDirectCreateIsIdempotentAndNeverOverwrites(t *testing.T) {
 func TestDirectValidation(t *testing.T) {
 	d, db, c := fixture(t)
 	m := publish.Machine{DB: db, DataDir: d, Clock: c}
-	cases := []publish.PublishInput{input()}
-	cases[0].Kind = "promote"
+	var cases []publish.PublishInput
 	for _, p := range []string{"../x.md", "x.MD", "x.txt", "memory/x.md", "soul/x.md"} {
 		in := input()
 		in.OpID += p
@@ -152,6 +151,83 @@ func TestDirectValidation(t *testing.T) {
 		if _, _, err := m.Run(context.Background(), in); !errors.Is(err, publish.ErrInvalid) {
 			t.Errorf("accepted %#v: %v", in, err)
 		}
+	}
+}
+
+func promoteFixture(t *testing.T) (string, *sql.DB, *clock.FakeClock, publish.PublishInput) {
+	t.Helper()
+	d, db, c := fixture(t)
+	_, err := db.Exec(`INSERT INTO sessions(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at) VALUES('s1','project','v1','p1','active','p','m','{}','{}','S','x','x')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := layout.SessionWorkspace(d, "project", "v1", "p1", "s1")
+	if err = os.MkdirAll(workspace, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(workspace, "draft.md"), []byte("# Frozen\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	in := publish.PublishInput{OpID: "promote-op", RequestKey: "promote-key", RequestFingerprint: "promote-fp", Kind: "promote", SessionID: "s1", WorkspacePath: "draft.md", TargetProjectID: "p1", TargetRelPath: "guides/frozen.md", ReviewMode: "whole", NoteID: "promote-note"}
+	return d, db, c, in
+}
+
+func TestPromotePublishesOnceAndRejectsChangedFingerprint(t *testing.T) {
+	d, db, c, in := promoteFixture(t)
+	m := publish.Machine{DB: db, DataDir: d, Clock: c}
+	status, note, err := m.Run(context.Background(), in)
+	if err != nil || status != "completed" || note != in.NoteID {
+		t.Fatalf("first run=(%q,%q,%v)", status, note, err)
+	}
+	body, err := os.ReadFile(filepath.Join(layout.SourceDir(layout.ProjectRoot(d, "v1", "p1")), "guides", "frozen.md"))
+	if err != nil || string(body) != "# Frozen\n" {
+		t.Fatalf("body=%q err=%v", body, err)
+	}
+	status, note, err = m.Run(context.Background(), in)
+	if err != nil || status != "completed" || note != in.NoteID {
+		t.Fatalf("retry=(%q,%q,%v)", status, note, err)
+	}
+	for table, where := range map[string]string{"promote_ops": "id='promote-op'", "notes": "id='promote-note'", "review_items": "note_id='promote-note'"} {
+		var count int
+		if err = db.QueryRow("SELECT count(*) FROM " + table + " WHERE " + where).Scan(&count); err != nil || count != 1 {
+			t.Fatalf("%s count=%d err=%v", table, count, err)
+		}
+	}
+	changed := in
+	changed.RequestFingerprint = "changed"
+	_, _, err = m.Run(context.Background(), changed)
+	var conflict *publish.ConflictError
+	if !errors.As(err, &conflict) || conflict.Code != "idempotency_key_reused" {
+		t.Fatalf("changed fingerprint error=%v", err)
+	}
+}
+
+func TestPromoteRejectsAnotherProjectAndExistingDestination(t *testing.T) {
+	d, db, c, in := promoteFixture(t)
+	m := publish.Machine{DB: db, DataDir: d, Clock: c}
+	_, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p2','Other','x','x')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := in
+	other.TargetProjectID = "p2"
+	if _, _, err = m.Run(context.Background(), other); err == nil || !strings.Contains(err.Error(), "session project is the only promote target") {
+		t.Fatalf("cross-project error=%v", err)
+	}
+	destination := filepath.Join(layout.SourceDir(layout.ProjectRoot(d, "v1", "p1")), "guides", "frozen.md")
+	if err = os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(destination, []byte("keep me"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = m.Run(context.Background(), in)
+	var conflict *publish.ConflictError
+	if !errors.As(err, &conflict) || conflict.Code != "destination_exists" {
+		t.Fatalf("destination error=%v", err)
+	}
+	if body, readErr := os.ReadFile(destination); readErr != nil || string(body) != "keep me" {
+		t.Fatalf("destination=%q err=%v", body, readErr)
 	}
 }
 

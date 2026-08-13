@@ -23,6 +23,11 @@ import (
 var ErrConflict = errors.New("publication conflict")
 var ErrInvalid = errors.New("invalid publication")
 
+type ConflictError struct{ Code string }
+
+func (e *ConflictError) Error() string { return e.Code }
+func (e *ConflictError) Unwrap() error { return ErrConflict }
+
 type PublishInput struct {
 	OpID, RequestKey, RequestFingerprint string
 	Kind                                 string
@@ -44,7 +49,7 @@ func validComponent(s string) bool {
 	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, `/\`) && !strings.ContainsRune(s, 0)
 }
 func validate(in PublishInput) (string, error) {
-	if in.Kind != "direct" || !validComponent(in.OpID) || strings.TrimSpace(in.RequestKey) == "" || strings.TrimSpace(in.RequestFingerprint) == "" || strings.TrimSpace(in.NoteID) == "" || strings.TrimSpace(in.TargetProjectID) == "" || len(in.Body) > pathcheck.MaxMarkdownBytes {
+	if (in.Kind != "direct" && in.Kind != "promote") || !validComponent(in.OpID) || strings.TrimSpace(in.RequestKey) == "" || strings.TrimSpace(in.RequestFingerprint) == "" || strings.TrimSpace(in.NoteID) == "" || strings.TrimSpace(in.TargetProjectID) == "" || (in.Kind == "direct" && len(in.Body) > pathcheck.MaxMarkdownBytes) {
 		return "", ErrInvalid
 	}
 	p, err := pathcheck.ValidateRelPath(in.TargetRelPath)
@@ -55,16 +60,24 @@ func validate(in PublishInput) (string, error) {
 	if top == "memory" || top == "soul" || (in.ReviewMode != "none" && in.ReviewMode != "whole" && in.ReviewMode != "bites") {
 		return "", ErrInvalid
 	}
+	if in.Kind == "promote" {
+		if !validComponent(in.SessionID) {
+			return "", ErrInvalid
+		}
+		if _, err := pathcheck.ValidateRelPath(in.WorkspacePath); err != nil || strings.Contains(in.WorkspacePath, `\`) || path.Ext(in.WorkspacePath) != ".md" {
+			return "", ErrInvalid
+		}
+	}
 	return p, nil
 }
 func (m *Machine) now() string {
 	return m.Clock.Now().UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
 }
-func stageName(id string) string { return "staging/direct/" + id + "/body.md" }
-func digest(b []byte) string     { return fmt.Sprintf("%x", sha256.Sum256(b)) }
+func stageName(kind, id string) string { return "staging/" + kind + "/" + id + "/body.md" }
+func digest(b []byte) string           { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 
 func (m *Machine) dataRoot() (*fsroot.Root, error) { return fsroot.Open(m.DataDir) }
-func (m *Machine) readStage(id string) ([]byte, error) {
+func (m *Machine) readStage(kind, id string) ([]byte, error) {
 	if !validComponent(id) {
 		return nil, ErrInvalid
 	}
@@ -73,9 +86,9 @@ func (m *Machine) readStage(id string) ([]byte, error) {
 		return nil, err
 	}
 	defer r.Close()
-	return r.ReadFile(stageName(id), pathcheck.MaxMarkdownBytes)
+	return r.ReadFile(stageName(kind, id), pathcheck.MaxMarkdownBytes)
 }
-func (m *Machine) writeStage(id string, body []byte) error {
+func (m *Machine) writeStage(kind, id string, body []byte) error {
 	if !validComponent(id) {
 		return ErrInvalid
 	}
@@ -84,9 +97,9 @@ func (m *Machine) writeStage(id string, body []byte) error {
 		return err
 	}
 	defer r.Close()
-	err = r.WriteFileNoReplace(stageName(id), body, 0600)
+	err = r.WriteFileNoReplace(stageName(kind, id), body, 0600)
 	if errors.Is(err, fs.ErrExist) {
-		old, readErr := r.ReadFile(stageName(id), pathcheck.MaxMarkdownBytes)
+		old, readErr := r.ReadFile(stageName(kind, id), pathcheck.MaxMarkdownBytes)
 		if readErr == nil && string(old) == string(body) {
 			return nil
 		}
@@ -101,10 +114,35 @@ func (m *Machine) Run(ctx context.Context, in PublishInput) (string, string, err
 	return m.run(ctx, in)
 }
 
+func opTable(kind string) string {
+	if kind == "promote" {
+		return "promote_ops"
+	}
+	return "direct_ops"
+}
+
+func (m *Machine) operationByID(ctx context.Context, kind, id string) (store.DirectOperation, error) {
+	if kind == "promote" {
+		return (store.PromoteStore{DB: m.DB}).ByID(ctx, id)
+	}
+	return (store.DirectStore{DB: m.DB}).ByID(ctx, id)
+}
+
+func (m *Machine) operationAny(ctx context.Context, id string) (store.DirectOperation, error) {
+	o, err := (store.DirectStore{DB: m.DB}).ByID(ctx, id)
+	if store.IsNoRows(err) {
+		return (store.PromoteStore{DB: m.DB}).ByID(ctx, id)
+	}
+	return o, err
+}
+
 func (m *Machine) run(ctx context.Context, in PublishInput) (string, string, error) {
 	p, err := validate(in)
 	if err != nil {
 		return "", in.NoteID, err
+	}
+	if in.Kind == "promote" {
+		return m.runPromote(ctx, in, p)
 	}
 	// Validate the project and canonical rooted vault before creating any artifact.
 	probe := store.DirectOperation{ProjectID: in.TargetProjectID}
@@ -123,7 +161,7 @@ func (m *Machine) run(ctx context.Context, in PublishInput) (string, string, err
 			return old.Status, old.NoteID, ErrConflict
 		}
 		if old.Status == "accepted" {
-			if err = m.writeStage(old.ID, in.Body); err != nil {
+			if err = m.writeStage("direct", old.ID, in.Body); err != nil {
 				return old.Status, old.NoteID, err
 			}
 		}
@@ -151,7 +189,7 @@ func (m *Machine) run(ctx context.Context, in PublishInput) (string, string, err
 		}
 		return m.run(ctx, in)
 	}
-	if err = m.writeStage(in.OpID, in.Body); err != nil {
+	if err = m.writeStage("direct", in.OpID, in.Body); err != nil {
 		return "accepted", in.NoteID, err
 	}
 	o, err := ds.ByID(ctx, in.OpID)
@@ -168,6 +206,64 @@ func (m *Machine) run(ctx context.Context, in PublishInput) (string, string, err
 	return o.Status, o.NoteID, nil
 }
 
+func (m *Machine) runPromote(ctx context.Context, in PublishInput, targetPath string) (string, string, error) {
+	ps := store.PromoteStore{DB: m.DB}
+	old, err := ps.ByKey(ctx, in.RequestKey)
+	if err == nil {
+		if old.RequestFingerprint != in.RequestFingerprint {
+			return old.Status, old.NoteID, &ConflictError{Code: "idempotency_key_reused"}
+		}
+		if old.Status == "failed" {
+			return old.Status, old.NoteID, &ConflictError{Code: "destination_exists"}
+		}
+		if err = m.resume(ctx, old); err != nil {
+			return old.Status, old.NoteID, err
+		}
+		old, err = ps.ByID(ctx, old.ID)
+		return old.Status, old.NoteID, err
+	}
+	if !store.IsNoRows(err) {
+		return "", in.NoteID, err
+	}
+	var home, status, projectID string
+	var vault sql.NullString
+	if err = m.DB.QueryRowContext(ctx, `SELECT home,status,project_id,vault_id FROM sessions WHERE id=?`, in.SessionID).Scan(&home, &status, &projectID, &vault); err != nil {
+		return "", in.NoteID, err
+	}
+	if status != "active" || home != "project" || projectID != in.TargetProjectID {
+		return "", in.NoteID, fmt.Errorf("session project is the only promote target")
+	}
+	workspace, err := fsroot.Open(layout.SessionWorkspace(m.DataDir, layout.SessionHome(home), vault.String, projectID, in.SessionID))
+	if err != nil {
+		return "", in.NoteID, err
+	}
+	body, err := workspace.ReadFile(in.WorkspacePath, pathcheck.MaxMarkdownBytes)
+	_ = workspace.Close()
+	if err != nil {
+		return "", in.NoteID, err
+	}
+	now := m.now()
+	_, err = m.DB.ExecContext(ctx, `INSERT INTO promote_ops(id,request_key,request_fingerprint,session_id,workspace_path,target_project_id,target_relative_path,review_mode,note_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'accepted',?,?)`, in.OpID, in.RequestKey, in.RequestFingerprint, in.SessionID, in.WorkspacePath, in.TargetProjectID, targetPath, in.ReviewMode, in.NoteID, now, now)
+	if err != nil {
+		return "", in.NoteID, err
+	}
+	if err = m.writeStage("promote", in.OpID, body); err != nil {
+		return "accepted", in.NoteID, err
+	}
+	o, err := ps.ByID(ctx, in.OpID)
+	if err == nil {
+		err = m.resume(ctx, o)
+	}
+	if err != nil {
+		if errors.Is(err, ErrConflict) {
+			return o.Status, o.NoteID, &ConflictError{Code: "destination_exists"}
+		}
+		return o.Status, o.NoteID, err
+	}
+	o, err = ps.ByID(ctx, in.OpID)
+	return o.Status, o.NoteID, err
+}
+
 var publicationRank = map[string]int{
 	"accepted": 0, "frozen": 1, "path_reserved": 2, "published_fs": 3,
 	"finalized": 4, "review_enqueued": 5, "completed": 6,
@@ -180,7 +276,11 @@ func compatibleAtLeast(status, target string) bool {
 }
 
 func (m *Machine) advance(ctx context.Context, id, from, to string) error {
-	res, err := m.DB.ExecContext(ctx, `UPDATE direct_ops SET status=?,updated_at=? WHERE id=? AND status=?`, to, m.now(), id, from)
+	o, err := m.operationAny(ctx, id)
+	if err != nil {
+		return err
+	}
+	res, err := m.DB.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET status=?,updated_at=? WHERE id=? AND status=?`, opTable(o.Kind)), to, m.now(), id, from)
 	if err != nil {
 		return err
 	}
@@ -191,7 +291,7 @@ func (m *Machine) advance(ctx context.Context, id, from, to string) error {
 	if n == 1 {
 		return nil
 	}
-	o, err := (store.DirectStore{DB: m.DB}).ByID(ctx, id)
+	o, err = m.operationByID(ctx, o.Kind, id)
 	if err != nil {
 		return err
 	}
@@ -206,7 +306,7 @@ func (m *Machine) fail(ctx context.Context, o store.DirectOperation, cause error
 		return err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `UPDATE direct_ops SET status='failed',error=?,updated_at=? WHERE id=? AND status NOT IN ('completed','failed')`, cause.Error(), m.now(), o.ID)
+	res, err := tx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET status='failed',error=?,updated_at=? WHERE id=? AND status NOT IN ('completed','failed')`, opTable(o.Kind)), cause.Error(), m.now(), o.ID)
 	if err != nil {
 		return err
 	}
@@ -216,7 +316,7 @@ func (m *Machine) fail(ctx context.Context, o store.DirectOperation, cause error
 	}
 	if n == 0 {
 		var status string
-		if err = tx.QueryRowContext(ctx, `SELECT status FROM direct_ops WHERE id=?`, o.ID).Scan(&status); err != nil || status != "failed" {
+		if err = tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT status FROM %s WHERE id=?`, opTable(o.Kind)), o.ID).Scan(&status); err != nil || status != "failed" {
 			return fmt.Errorf("failed transition: %w", err)
 		}
 	}
@@ -245,14 +345,14 @@ func (m *Machine) resume(ctx context.Context, o store.DirectOperation) error {
 	for {
 		switch o.Status {
 		case "accepted":
-			b, err := m.readStage(o.ID)
+			b, err := m.readStage(o.Kind, o.ID)
 			if err != nil {
 				if x := m.fail(ctx, o, fmt.Errorf("staging unavailable: %w", err)); x != nil {
 					return x
 				}
 				return ErrConflict
 			}
-			res, err := m.DB.ExecContext(ctx, `UPDATE direct_ops SET status='frozen',frozen_sha256=?,frozen_size=?,updated_at=? WHERE id=? AND status='accepted'`, digest(b), len(b), m.now(), o.ID)
+			res, err := m.DB.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET status='frozen',frozen_sha256=?,frozen_size=?,updated_at=? WHERE id=? AND status='accepted'`, opTable(o.Kind)), digest(b), len(b), m.now(), o.ID)
 			if err != nil {
 				return err
 			}
@@ -296,7 +396,7 @@ func (m *Machine) resume(ctx context.Context, o store.DirectOperation) error {
 			return fmt.Errorf("unknown status %q", o.Status)
 		}
 		var err error
-		o, err = (store.DirectStore{DB: m.DB}).ByID(ctx, o.ID)
+		o, err = m.operationByID(ctx, o.Kind, o.ID)
 		if err != nil {
 			return err
 		}
@@ -310,7 +410,11 @@ func (m *Machine) reserve(ctx context.Context, o store.DirectOperation) error {
 	}
 	defer tx.Rollback()
 	now := m.now()
-	_, err = tx.ExecContext(ctx, `INSERT INTO notes(id,project_id,relative_path,status,revision,created_at,updated_at) VALUES(?,?,?,'pending',0,?,?) ON CONFLICT(id) DO NOTHING`, o.NoteID, o.ProjectID, o.RelativePath, now, now)
+	if o.Kind == "promote" {
+		_, err = tx.ExecContext(ctx, `INSERT INTO notes(id,project_id,relative_path,status,origin_session_id,origin_workspace_path,revision,created_at,updated_at) VALUES(?,?,?,'pending',?,?,0,?,?) ON CONFLICT(id) DO NOTHING`, o.NoteID, o.ProjectID, o.RelativePath, o.SessionID, o.WorkspacePath, now, now)
+	} else {
+		_, err = tx.ExecContext(ctx, `INSERT INTO notes(id,project_id,relative_path,status,revision,created_at,updated_at) VALUES(?,?,?,'pending',0,?,?) ON CONFLICT(id) DO NOTHING`, o.NoteID, o.ProjectID, o.RelativePath, now, now)
+	}
 	if err != nil {
 		var conflictingID string
 		lookupErr := tx.QueryRowContext(ctx, `SELECT id FROM notes WHERE project_id=? AND relative_path=?`, o.ProjectID, o.RelativePath).Scan(&conflictingID)
@@ -332,7 +436,7 @@ func (m *Machine) reserve(ctx context.Context, o store.DirectOperation) error {
 		}
 		return ErrConflict
 	}
-	res, err := tx.ExecContext(ctx, `UPDATE direct_ops SET status='path_reserved',updated_at=? WHERE id=? AND status='frozen'`, now, o.ID)
+	res, err := tx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET status='path_reserved',updated_at=? WHERE id=? AND status='frozen'`, opTable(o.Kind)), now, o.ID)
 	if err != nil {
 		return err
 	}
@@ -342,7 +446,7 @@ func (m *Machine) reserve(ctx context.Context, o store.DirectOperation) error {
 	}
 	if n == 0 {
 		_ = tx.Rollback()
-		current, reloadErr := (store.DirectStore{DB: m.DB}).ByID(ctx, o.ID)
+		current, reloadErr := m.operationByID(ctx, o.Kind, o.ID)
 		if reloadErr == nil && compatibleAtLeast(current.Status, "path_reserved") {
 			return nil
 		}
@@ -408,7 +512,7 @@ func (m *Machine) publish(ctx context.Context, o store.DirectOperation) error {
 		}
 		return ErrConflict
 	}
-	b, err := m.readStage(o.ID)
+	b, err := m.readStage(o.Kind, o.ID)
 	if err != nil || digest(b) != o.FrozenSHA || int64(len(b)) != o.FrozenSize {
 		cause := fmt.Errorf("frozen staging unavailable or mismatched")
 		if x := m.fail(ctx, o, cause); x != nil {
@@ -475,7 +579,7 @@ func (m *Machine) finalize(ctx context.Context, o store.DirectOperation) error {
 			return fmt.Errorf("note finalization reconciliation failed: %w", err)
 		}
 	}
-	res, err = tx.ExecContext(ctx, `UPDATE direct_ops SET status='finalized',updated_at=? WHERE id=? AND status='published_fs'`, now, o.ID)
+	res, err = tx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET status='finalized',updated_at=? WHERE id=? AND status='published_fs'`, opTable(o.Kind)), now, o.ID)
 	if err != nil {
 		return err
 	}
@@ -485,7 +589,7 @@ func (m *Machine) finalize(ctx context.Context, o store.DirectOperation) error {
 	}
 	if n == 0 {
 		var status string
-		if err = tx.QueryRowContext(ctx, `SELECT status FROM direct_ops WHERE id=?`, o.ID).Scan(&status); err != nil || !compatibleAtLeast(status, "finalized") {
+		if err = tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT status FROM %s WHERE id=?`, opTable(o.Kind)), o.ID).Scan(&status); err != nil || !compatibleAtLeast(status, "finalized") {
 			return fmt.Errorf("finalize transition affected %d rows: %w", n, err)
 		}
 	} else if n != 1 {
@@ -521,7 +625,7 @@ func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 			return fmt.Errorf("bites review reconciliation failed: count=%d: %w", count, err)
 		}
 	}
-	res, err := tx.ExecContext(ctx, `UPDATE direct_ops SET status='review_enqueued',updated_at=? WHERE id=? AND status='finalized'`, now, o.ID)
+	res, err := tx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET status='review_enqueued',updated_at=? WHERE id=? AND status='finalized'`, opTable(o.Kind)), now, o.ID)
 	if err != nil {
 		return err
 	}
@@ -531,7 +635,7 @@ func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 	}
 	if n == 0 {
 		var status string
-		if err = tx.QueryRowContext(ctx, `SELECT status FROM direct_ops WHERE id=?`, o.ID).Scan(&status); err != nil || !compatibleAtLeast(status, "review_enqueued") {
+		if err = tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT status FROM %s WHERE id=?`, opTable(o.Kind)), o.ID).Scan(&status); err != nil || !compatibleAtLeast(status, "review_enqueued") {
 			return fmt.Errorf("enqueue transition affected %d rows: %w", n, err)
 		}
 	} else if n != 1 {
