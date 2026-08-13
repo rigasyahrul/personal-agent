@@ -114,8 +114,12 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 		}
 		return err
 	}
+	workspace := layout.SessionWorkspace(s.DataDir, home, nullableText(vaultID), nullableText(projectID), id)
 	if status == "terminal" {
-		return tx.Commit()
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		return os.RemoveAll(workspace)
 	}
 
 	now := s.Now().UTC()
@@ -133,7 +137,6 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	workspace := layout.SessionWorkspace(s.DataDir, home, nullableText(vaultID), nullableText(projectID), id)
 	return os.RemoveAll(workspace)
 }
 

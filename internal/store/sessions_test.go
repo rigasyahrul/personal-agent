@@ -175,3 +175,77 @@ func TestSessionDeleteRemovesOnlyWorkspace(t *testing.T) {
 		t.Fatalf("terminal delete should be idempotent: %v", err)
 	}
 }
+
+func TestSessionDeleteRetriesWorkspaceCleanupAfterTombstone(t *testing.T) {
+	dataDir := t.TempDir()
+	ss := seedProject(t, dataDir)
+	session, err := ss.CreateProject(context.Background(), store.CreateSessionInput{
+		ProjectID: "p1", Provider: "openai", ModelID: "gpt-test", ModelParametersJSON: `{}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := layout.SessionWorkspace(dataDir, session.Home, "v1", "p1", session.ID)
+	projectRoot := layout.ProjectRoot(dataDir, "v1", "p1")
+	savedRoot := projectRoot + ".saved"
+	if err := os.Rename(projectRoot, savedRoot); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(projectRoot, []byte("blocks workspace traversal"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ss.Delete(context.Background(), session.ID); err == nil {
+		t.Fatal("Delete succeeded despite failed workspace cleanup")
+	}
+	got, err := ss.Get(context.Background(), session.ID)
+	if err != nil || got.Status != "terminal" || got.DeletedAt == nil {
+		t.Fatalf("session was not tombstoned before cleanup: %#v, %v", got, err)
+	}
+	if err := os.Remove(projectRoot); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(savedRoot, projectRoot); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ss.Delete(context.Background(), session.ID); err != nil {
+		t.Fatalf("retry Delete: %v", err)
+	}
+	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
+		t.Fatalf("workspace remains after retry: %v", err)
+	}
+}
+
+func TestSessionDeleteConcurrentCallsConverge(t *testing.T) {
+	dataDir := t.TempDir()
+	ss := seedProject(t, dataDir)
+	session, err := ss.CreateProject(context.Background(), store.CreateSessionInput{
+		ProjectID: "p1", Provider: "openai", ModelID: "gpt-test", ModelParametersJSON: `{}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := layout.SessionWorkspace(dataDir, session.Home, "v1", "p1", session.ID)
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			errs <- ss.Delete(context.Background(), session.ID)
+		}()
+	}
+	close(start)
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent Delete: %v", err)
+		}
+	}
+	got, err := ss.Get(context.Background(), session.ID)
+	if err != nil || got.Status != "terminal" || got.DeletedAt == nil {
+		t.Fatalf("session not tombstoned: %#v, %v", got, err)
+	}
+	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
+		t.Fatalf("workspace remains: %v", err)
+	}
+}
