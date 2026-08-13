@@ -334,3 +334,113 @@ func unsealTree(t *testing.T, root string) {
 		return nil
 	})
 }
+
+func TestRestoreDrillFindsKnownNote(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	db, err := dbopen.Open(ctx, filepath.Join(dataDir, "db", "personal-agent.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	body := []byte("# restore me\n")
+	sum := sha256.Sum256(body)
+	source := layout.SourceDir(layout.ProjectRoot(dataDir, "", "p1"))
+	if err := os.MkdirAll(source, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "known.md"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','Known','2026-08-12T10:00:00Z','2026-08-12T10:00:00Z');
+INSERT INTO notes(id,project_id,relative_path,content_sha256,byte_size,status,revision,created_at,updated_at)
+VALUES('n1','p1','known.md',?,?,'ready',1,'2026-08-12T10:00:00Z','2026-08-12T10:00:00Z')`,
+		hex.EncodeToString(sum[:]), len(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := backup.NewService(db, dataDir, &backup.Barrier{}, &clock.FakeClock{T: time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC)}, nil)
+	run, err := svc.Run(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { unsealTree(t, run.LocalPath) })
+
+	restoreDir := t.TempDir()
+	restoreBundle(t, run.LocalPath, restoreDir)
+
+	// Canonical restore layout: db/personal-agent.sqlite + files/**
+	restored, err := dbopen.Open(ctx, filepath.Join(restoreDir, "db", "personal-agent.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restored.Close()
+	var path, hash string
+	if err := restored.QueryRow(`SELECT relative_path,content_sha256 FROM notes WHERE id='n1' AND status='ready'`).Scan(&path, &hash); err != nil {
+		t.Fatal(err)
+	}
+	restoredBody, err := os.ReadFile(filepath.Join(restoreDir, "files", "global", "projects", "p1", "source", filepath.FromSlash(path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := sha256.Sum256(restoredBody)
+	if hash != hex.EncodeToString(got[:]) || string(restoredBody) != string(body) {
+		t.Fatal("restored note failed integrity check")
+	}
+}
+
+// restoreBundle validates manifest checksums and materializes a fresh PA_DATA_DIR layout.
+func restoreBundle(t *testing.T, bundleDir, restoreDir string) {
+	t.Helper()
+	mb, err := os.ReadFile(filepath.Join(bundleDir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m testManifest
+	if err := json.Unmarshal(mb, &m); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range m.Files {
+		clean := filepath.Clean("/" + name)
+		if strings.Contains(name, `\`) || strings.HasPrefix(name, "/") || strings.HasPrefix(clean, "/..") || name != strings.TrimPrefix(clean, "/") {
+			// reject absolute / parent paths (canonical relative only)
+			if filepath.IsAbs(name) || strings.HasPrefix(filepath.Clean(name), "..") || strings.Contains(name, "..") {
+				t.Fatalf("unsafe manifest name %q", name)
+			}
+		}
+		if filepath.IsAbs(name) || strings.Contains(filepath.ToSlash(name), "..") {
+			t.Fatalf("unsafe manifest name %q", name)
+		}
+		src := filepath.Join(bundleDir, filepath.FromSlash(name))
+		// Ensure still under bundleDir
+		if !strings.HasPrefix(src, bundleDir) {
+			t.Fatalf("path escape %q", name)
+		}
+		b, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(b)
+		if hex.EncodeToString(sum[:]) != want {
+			t.Fatalf("checksum mismatch for %s", name)
+		}
+		var dst string
+		switch {
+		case name == "database.sqlite":
+			dst = filepath.Join(restoreDir, "db", "personal-agent.sqlite")
+		case strings.HasPrefix(name, "files/") || strings.HasPrefix(name, "staging/"):
+			dst = filepath.Join(restoreDir, filepath.FromSlash(name))
+		default:
+			t.Fatalf("unexpected payload %q", name)
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dst, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Drop stale wal/shm if any were copied (should not be in bundle).
+	_ = os.Remove(filepath.Join(restoreDir, "db", "personal-agent.sqlite-wal"))
+	_ = os.Remove(filepath.Join(restoreDir, "db", "personal-agent.sqlite-shm"))
+}
