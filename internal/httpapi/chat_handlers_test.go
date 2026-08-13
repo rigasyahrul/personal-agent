@@ -68,10 +68,16 @@ func TestChatAPIValidationAuthAndRunMappings(t *testing.T) {
 	if got := apiRequest(t, h, "POST", path, map[string]string{"content": "x", "request_key": "k"}, nil, "bad").Code; got != http.StatusUnauthorized {
 		t.Fatalf("anonymous post=%d", got)
 	}
-	for _, body := range []string{`{"content":" ","request_key":"k"}`, `{"content":"x","request_key":" \t"}`, `{"content":"x","request_key":"k"}{"content":"y","request_key":"z"}`} {
-		if got := rawAPIRequest(t, h, "POST", path, body, cookies, "csrf").Code; got != http.StatusBadRequest {
-			t.Fatalf("invalid message %q=%d", body, got)
-		}
+	for name, body := range map[string]string{
+		"whitespace content":     `{"content":" ","request_key":"k"}`,
+		"whitespace request key": `{"content":"x","request_key":" \t"}`,
+		"trailing JSON value":    `{"content":"x","request_key":"k"}{"content":"y","request_key":"z"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := rawAPIRequest(t, h, "POST", path, body, cookies, "csrf").Code; got != http.StatusBadRequest {
+				t.Fatalf("invalid message %q=%d", body, got)
+			}
+		})
 	}
 	if _, err := db.Exec(`INSERT INTO agent_runs(id,session_id,request_key,status,created_at) VALUES('busy-run',?,?,'queued','1970-01-01T00:00:00Z')`, s.ID, "other-key"); err != nil {
 		t.Fatal(err)

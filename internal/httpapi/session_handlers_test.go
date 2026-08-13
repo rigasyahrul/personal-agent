@@ -128,7 +128,7 @@ func TestSessionAPICreateValidation(t *testing.T) {
 			t.Fatalf("invalid %#v=%d", body, got)
 		}
 	}
-	trailing := `{"title":"x","provider":"openai","model_id":"m"}{"title":"y","provider":"openai","model_id":"m"}`
+	trailing := `{"title":"valid first object","provider":"openai","model_id":"m"}{"title":"second object","provider":"openai","model_id":"m"}`
 	if got := rawAPIRequest(t, h, "POST", path, trailing, cookies, "csrf").Code; got != 400 {
 		t.Fatalf("trailing JSON=%d", got)
 	}
