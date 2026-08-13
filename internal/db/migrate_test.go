@@ -27,6 +27,10 @@ func TestOpenMigratesAllTablesAndWAL(t *testing.T) {
 			t.Fatalf("table %s: count = %d, err = %v", name, n, err)
 		}
 	}
+	var indexes int
+	if err := d.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='index' AND name='agent_runs_one_active'").Scan(&indexes); err != nil || indexes != 1 {
+		t.Fatalf("agent_runs_one_active: count = %d, err = %v", indexes, err)
+	}
 }
 
 func TestOpenMigrationIsIdempotent(t *testing.T) {
