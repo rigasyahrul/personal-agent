@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {projectCard} from './home.js'
 import {projectOverview} from './project.js'
-import {directPayload, noteViewer, treeRows} from './notes.js'
+import {bodyWithinByteLimit, directPayload, nextPublicationKey, noteViewer, publicationDestination, treeRows} from './notes.js'
 import {parseRoute} from '../router.js'
 
 test('project card includes counts and vault badge', () => {
@@ -30,13 +30,50 @@ test('router prioritizes note detail and decodes encoded segments', () => {
   assert.deepEqual(parseRoute('#settings'), {name: 'settings'})
 })
 
+test('router falls back for malformed encoding and surplus segments', () => {
+  assert.deepEqual(parseRoute('#/projects/%E0%A4%A'), {name: 'home'})
+  assert.deepEqual(parseRoute('#/projects/p1/notes/n1/extra'), {name: 'home'})
+  assert.deepEqual(parseRoute('#/projects/p1/extra'), {name: 'home'})
+})
+
 test('dynamic project, path, and note values are escaped', () => {
-  const attack = '<img src=x onerror=alert(1)>'
+  const attack = `"><img src=x onerror='alert(1)'>`
   assert.doesNotMatch(projectCard({id: attack, name: attack, vault_name: attack}), /<img/)
   assert.doesNotMatch(projectOverview({id: attack, name: attack}), /<img/)
   assert.doesNotMatch(treeRows(attack, [{kind: 'folder', path: attack}]), /<img/)
   assert.doesNotMatch(noteViewer({relative_path: attack, body: attack}), /<img/)
   assert.match(noteViewer({relative_path: 'x.md', body: attack}), /&lt;img/)
+})
+
+test('publication retries reuse a key only for the exact payload', () => {
+  const first = nextPublicationKey(null, directPayload('a.md', '# A', 'whole'), () => 'key-1')
+  const retry = nextPublicationKey(first, directPayload('a.md', '# A', 'whole'), () => 'key-2')
+  const changed = nextPublicationKey(retry, directPayload('a.md', '# B', 'whole'), () => 'key-3')
+  assert.equal(retry.key, 'key-1')
+  assert.equal(changed.key, 'key-3')
+})
+
+test('body byte validation accepts the boundary and rejects multibyte overflow', () => {
+  assert.equal(bodyWithinByteLimit('a'.repeat(1048576)), true)
+  assert.equal(bodyWithinByteLimit(`${'a'.repeat(1048575)}é`), false)
+})
+
+test('publication destination requires a note id', () => {
+  assert.equal(publicationDestination('p1', {note_id: `n'\"><x>`}), '#/projects/p1/notes/n%27%22%3E%3Cx%3E')
+  assert.equal(publicationDestination('p1', {status: 'completed'}), null)
+})
+
+test('render generation gate rejects stale work', async () => {
+  const {renderGenerationIsCurrent} = await import('../app.js')
+  let current = 1
+  let rendered = ''
+  const oldRender = Promise.resolve().then(() => {
+    if (renderGenerationIsCurrent(1, current)) rendered = 'old'
+  })
+  current = 2
+  if (renderGenerationIsCurrent(2, current)) rendered = 'new'
+  await oldRender
+  assert.equal(rendered, 'new')
 })
 
 test('direct note form constraints are present', async () => {
