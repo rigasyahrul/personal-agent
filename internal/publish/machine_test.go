@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -105,6 +106,16 @@ func TestReviewModesAndRecoveryDeduplicate(t *testing.T) {
 			if _, _, err := m.Run(context.Background(), in); err != nil {
 				t.Fatal(err)
 			}
+			// Replay both durable boundaries rather than recovering a completed no-op.
+			if _, err := db.Exec(`UPDATE direct_ops SET status='finalized' WHERE id='op1'`); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.RecoverAll(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`UPDATE direct_ops SET status='review_enqueued' WHERE id='op1'`); err != nil {
+				t.Fatal(err)
+			}
 			if err := m.RecoverAll(context.Background()); err != nil {
 				t.Fatal(err)
 			}
@@ -115,6 +126,10 @@ func TestReviewModesAndRecoveryDeduplicate(t *testing.T) {
 			var n int
 			if err := db.QueryRow("SELECT count(*) FROM " + table + " WHERE note_id='n1'").Scan(&n); err != nil || n != 1 {
 				t.Fatalf("count=%d err=%v", n, err)
+			}
+			var status string
+			if err := db.QueryRow(`SELECT status FROM direct_ops WHERE id='op1'`).Scan(&status); err != nil || status != "completed" {
+				t.Fatalf("status=%q err=%v", status, err)
 			}
 		})
 	}
@@ -165,6 +180,211 @@ func TestAcceptedRecoveryMissingStageFailsAndContinues(t *testing.T) {
 	}
 	if failedStatus != "failed" || failedError == "" || nextStatus != "completed" {
 		t.Fatalf("missing=(%s,%q) next=%s", failedStatus, failedError, nextStatus)
+	}
+}
+
+func TestRecoveryStateMatrix(t *testing.T) {
+	t.Run("accepted valid stage and frozen valid immutable stage complete", func(t *testing.T) {
+		for _, state := range []string{"accepted", "frozen"} {
+			t.Run(state, func(t *testing.T) {
+				d, db, c := fixture(t)
+				now := c.Now().Format(time.RFC3339Nano)
+				sha := ""
+				size := any(nil)
+				if state == "frozen" {
+					sha = "230d8358dc8e8890b4c58deeb62912ee2f20357ae92a5cc861b98e68fe31acb5"
+					size = 4
+				}
+				_, err := db.Exec(`INSERT INTO direct_ops(id,request_key,request_fingerprint,target_project_id,target_relative_path,review_mode,note_id,frozen_sha256,frozen_size,status,created_at,updated_at) VALUES('op1','key1','fp1','p1','one.md','none','n1',?,?,?, ?,?)`, sha, size, state, now, now)
+				if err != nil {
+					t.Fatal(err)
+				}
+				stage := filepath.Join(d, "staging", "direct", "op1")
+				if err = os.MkdirAll(stage, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err = os.WriteFile(filepath.Join(stage, "body.md"), []byte("body"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				m := publish.Machine{DB: db, DataDir: d, Clock: c}
+				if err = m.RecoverAll(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				assertOpStatus(t, db, "op1", "completed")
+			})
+		}
+	})
+
+	t.Run("path reserved matching destination without stage completes", func(t *testing.T) {
+		d, db, c := completedFixture(t, "none")
+		if _, err := db.Exec(`UPDATE notes SET status='pending',content_sha256=NULL,byte_size=NULL,revision=0; UPDATE direct_ops SET status='path_reserved'`); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.RemoveAll(filepath.Join(d, "staging")); err != nil {
+			t.Fatal(err)
+		}
+		if err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).RecoverAll(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		assertOpStatus(t, db, "op1", "completed")
+	})
+
+	for _, state := range []string{"path_reserved", "published_fs"} {
+		for _, artifact := range []string{"missing", "mismatch", "symlink", "symlink_parent", "directory", "fifo"} {
+			if state == "path_reserved" && artifact == "missing" {
+				continue
+			}
+			t.Run(state+"_"+artifact+" fails artifact and continues", func(t *testing.T) {
+				d, db, c := completedFixture(t, "none")
+				dst := filepath.Join(layout.SourceDir(layout.ProjectRoot(d, "v1", "p1")), "guide", "one.md")
+				if err := os.Remove(dst); err != nil {
+					t.Fatal(err)
+				}
+				switch artifact {
+				case "mismatch":
+					if err := os.WriteFile(dst, []byte("original"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				case "symlink":
+					if err := os.Symlink("elsewhere", dst); err != nil {
+						t.Fatal(err)
+					}
+				case "symlink_parent":
+					if err := os.Remove(filepath.Dir(dst)); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.Symlink("elsewhere", filepath.Dir(dst)); err != nil {
+						t.Fatal(err)
+					}
+				case "directory":
+					if err := os.Mkdir(dst, 0700); err != nil {
+						t.Fatal(err)
+					}
+				case "fifo":
+					if err := syscall.Mkfifo(dst, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := db.Exec(`UPDATE notes SET status='pending',content_sha256=NULL,byte_size=NULL,revision=0 WHERE id='n1'; UPDATE direct_ops SET status=? WHERE id='op1'`, state); err != nil {
+					t.Fatal(err)
+				}
+				seedAccepted(t, db, d, c, "next")
+				m := publish.Machine{DB: db, DataDir: d, Clock: c}
+				if err := m.RecoverAll(context.Background()); err != nil {
+					t.Fatalf("startup wedged: %v", err)
+				}
+				assertOpStatus(t, db, "op1", "failed")
+				assertOpStatus(t, db, "next", "completed")
+				var noteStatus string
+				if err := db.QueryRow(`SELECT status FROM notes WHERE id='n1'`).Scan(&noteStatus); err != nil || noteStatus != "failed" {
+					t.Fatalf("note=%q err=%v", noteStatus, err)
+				}
+				if artifact == "mismatch" {
+					b, err := os.ReadFile(dst)
+					if err != nil || string(b) != "original" {
+						t.Fatalf("artifact changed: %q %v", b, err)
+					}
+				}
+			})
+		}
+	}
+
+	t.Run("published fs valid completes and terminal failed is skipped", func(t *testing.T) {
+		d, db, c := completedFixture(t, "none")
+		if _, err := db.Exec(`UPDATE notes SET status='pending',content_sha256=NULL,byte_size=NULL,revision=0; UPDATE direct_ops SET status='published_fs'`); err != nil {
+			t.Fatal(err)
+		}
+		if err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).RecoverAll(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		assertOpStatus(t, db, "op1", "completed")
+		if _, err := db.Exec(`UPDATE direct_ops SET status='failed',error='keep me' WHERE id='op1'`); err != nil {
+			t.Fatal(err)
+		}
+		if err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).RecoverAll(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		var got string
+		if err := db.QueryRow(`SELECT error FROM direct_ops WHERE id='op1'`).Scan(&got); err != nil || got != "keep me" {
+			t.Fatalf("error=%q err=%v", got, err)
+		}
+	})
+}
+
+func TestAcceptedRecoveryUnsafeStagingFailsAndContinues(t *testing.T) {
+	for _, unsafe := range []string{"component", "final"} {
+		t.Run(unsafe, func(t *testing.T) {
+			d, db, c := fixture(t)
+			seedAccepted(t, db, d, c, "bad")
+			seedAccepted(t, db, d, c, "next")
+			bad := filepath.Join(d, "staging", "direct", "bad")
+			if err := os.Remove(filepath.Join(bad, "body.md")); err != nil {
+				t.Fatal(err)
+			}
+			if unsafe == "final" {
+				if err := os.Symlink("target", filepath.Join(bad, "body.md")); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.RemoveAll(bad); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join(d, "elsewhere"), bad); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).RecoverAll(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			assertOpStatus(t, db, "bad", "failed")
+			assertOpStatus(t, db, "next", "completed")
+		})
+	}
+}
+
+func TestDatabaseFailureIsNotConflictOrTerminalized(t *testing.T) {
+	d, db, c := fixture(t)
+	seedAccepted(t, db, d, c, "blocked")
+	if _, err := db.Exec(`CREATE TRIGGER fail_direct_update BEFORE UPDATE ON direct_ops BEGIN SELECT RAISE(ABORT,'injected database failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	m := publish.Machine{DB: db, DataDir: d, Clock: c}
+	err := m.RecoverAll(context.Background())
+	if err == nil || errors.Is(err, publish.ErrConflict) {
+		t.Fatalf("got %v", err)
+	}
+	assertOpStatus(t, db, "blocked", "accepted")
+}
+
+func completedFixture(t *testing.T, mode domain.ReviewMode) (string, *sql.DB, *clock.FakeClock) {
+	t.Helper()
+	d, db, c := fixture(t)
+	in := input()
+	in.ReviewMode = mode
+	if _, _, err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).Run(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	return d, db, c
+}
+func seedAccepted(t *testing.T, db *sql.DB, d string, c *clock.FakeClock, id string) {
+	t.Helper()
+	now := c.Now().Format(time.RFC3339Nano)
+	if _, err := db.Exec(`INSERT INTO direct_ops(id,request_key,request_fingerprint,target_project_id,target_relative_path,review_mode,note_id,status,created_at,updated_at) VALUES(?,?,?,?,?,'none',?,'accepted',?,?)`, id, id, id, "p1", id+".md", "n"+id, now, now); err != nil {
+		t.Fatal(err)
+	}
+	stage := filepath.Join(d, "staging", "direct", id)
+	if err := os.MkdirAll(stage, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stage, "body.md"), []byte(id), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+func assertOpStatus(t *testing.T, db *sql.DB, id, want string) {
+	t.Helper()
+	var got string
+	if err := db.QueryRow(`SELECT status FROM direct_ops WHERE id=?`, id).Scan(&got); err != nil || got != want {
+		t.Fatalf("op %s status=%q want=%q err=%v", id, got, want, err)
 	}
 }
 

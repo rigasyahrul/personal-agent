@@ -333,28 +333,53 @@ func (m *Machine) root(ctx context.Context, o store.DirectOperation) (*fsroot.Ro
 	}
 	return fsroot.Open(layout.SourceDir(layout.ProjectRoot(m.DataDir, vault.String, o.ProjectID)))
 }
-func (m *Machine) destinationMatches(ctx context.Context, o store.DirectOperation) (bool, error) {
+
+type destinationState uint8
+
+const (
+	destinationMissing destinationState = iota
+	destinationMatches
+	destinationMismatch
+	destinationUnsafe
+)
+
+// inspectDestination keeps database/root lookup failures separate from durable
+// source-tree artifacts. Only the latter are safe to terminalize during startup.
+func (m *Machine) inspectDestination(ctx context.Context, o store.DirectOperation) (destinationState, error) {
 	r, err := m.root(ctx, o)
 	if err != nil {
-		return false, err
+		return destinationMissing, err
 	}
 	defer r.Close()
 	b, err := r.ReadFile(o.RelativePath, pathcheck.MaxMarkdownBytes)
 	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
+		return destinationMissing, nil
+	}
+	if errors.Is(err, fsroot.ErrUnsafe) || errors.Is(err, fsroot.ErrInvalidPath) {
+		return destinationUnsafe, nil
 	}
 	if err != nil {
-		return false, err
+		return destinationMissing, err
 	}
-	return digest(b) == o.FrozenSHA && int64(len(b)) == o.FrozenSize, nil
+	if digest(b) == o.FrozenSHA && int64(len(b)) == o.FrozenSize {
+		return destinationMatches, nil
+	}
+	return destinationMismatch, nil
 }
 func (m *Machine) publish(ctx context.Context, o store.DirectOperation) error {
-	match, err := m.destinationMatches(ctx, o)
-	if err == nil && match {
+	state, err := m.inspectDestination(ctx, o)
+	if err != nil {
+		return err
+	}
+	if state == destinationMatches {
 		return m.advance(ctx, o.ID, "path_reserved", "published_fs")
 	}
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+	if state == destinationMismatch || state == destinationUnsafe {
+		cause := fmt.Errorf("destination is an irrecoverable publication artifact")
+		if x := m.fail(ctx, o, cause); x != nil {
+			return x
+		}
+		return ErrConflict
 	}
 	b, err := m.readStage(o.ID)
 	if err != nil || digest(b) != o.FrozenSHA || int64(len(b)) != o.FrozenSize {
@@ -370,8 +395,8 @@ func (m *Machine) publish(ctx context.Context, o store.DirectOperation) error {
 	}
 	defer r.Close()
 	err = r.WriteFileNoReplace(o.RelativePath, b, 0600)
-	if errors.Is(err, fs.ErrExist) {
-		if x := m.fail(ctx, o, fmt.Errorf("destination exists with different content")); x != nil {
+	if errors.Is(err, fs.ErrExist) || errors.Is(err, fsroot.ErrUnsafe) || errors.Is(err, fsroot.ErrInvalidPath) {
+		if x := m.fail(ctx, o, fmt.Errorf("destination became an irrecoverable publication artifact: %w", err)); x != nil {
 			return x
 		}
 		return ErrConflict
@@ -382,12 +407,12 @@ func (m *Machine) publish(ctx context.Context, o store.DirectOperation) error {
 	return m.advance(ctx, o.ID, "path_reserved", "published_fs")
 }
 func (m *Machine) finalize(ctx context.Context, o store.DirectOperation) error {
-	match, err := m.destinationMatches(ctx, o)
+	state, err := m.inspectDestination(ctx, o)
 	if err != nil {
 		return err
 	}
-	if !match {
-		if x := m.fail(ctx, o, fmt.Errorf("published destination mismatched")); x != nil {
+	if state != destinationMatches {
+		if x := m.fail(ctx, o, fmt.Errorf("published destination is missing, mismatched, or unsafe")); x != nil {
 			return x
 		}
 		return ErrConflict
