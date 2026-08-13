@@ -34,6 +34,10 @@ func (r *Runner) Start(ctx context.Context, sessionID, requestKey, userMessage s
 		return runID, cause
 	}
 
+	session, err := r.Sessions.Get(ctx, sessionID)
+	if err != nil {
+		return fail(err)
+	}
 	run := runID
 	if err := r.Messages.Append(ctx, domain.Message{SessionID: sessionID, RunID: &run, Role: domain.MessageRoleUser,
 		Content: userMessage, Status: domain.MessageStatusComplete, CreatedAt: r.now()}); err != nil {
@@ -42,15 +46,11 @@ func (r *Runner) Start(ctx context.Context, sessionID, requestKey, userMessage s
 	if err := r.Runs.MarkRunning(ctx, runID); err != nil {
 		return fail(err)
 	}
-	session, err := r.Sessions.Get(ctx, sessionID)
-	if err != nil {
-		return fail(err)
-	}
 	if err := r.execute(ctx, runID, session); err != nil {
 		return fail(err)
 	}
 	if err := r.Runs.MarkDone(ctx, runID, domain.AgentRunStatusCompleted, ""); err != nil {
-		return runID, err
+		return fail(err)
 	}
 	return runID, nil
 }
@@ -63,6 +63,9 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 	parameters := make(map[string]any)
 	if err := json.Unmarshal([]byte(session.ModelParametersJSON), &parameters); err != nil {
 		return fmt.Errorf("decode model parameters: %w", err)
+	}
+	if parameters == nil {
+		return errors.New("decode model parameters: expected JSON object")
 	}
 	for _, fixed := range []string{"model", "messages", "tools"} {
 		delete(parameters, fixed)

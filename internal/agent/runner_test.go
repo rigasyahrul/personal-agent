@@ -80,6 +80,7 @@ func TestRunnerFailuresTerminalizeAdmittedRun(t *testing.T) {
 		provider   Provider
 	}{
 		{name: "bad model JSON", parameters: `[]`, provider: &fakeProvider{}},
+		{name: "null model JSON", parameters: `null`, provider: &fakeProvider{}},
 		{name: "nil provider", parameters: `{}`},
 		{name: "provider", parameters: `{}`, provider: &fakeProvider{err: errors.New("offline")}},
 	} {
@@ -98,6 +99,87 @@ func TestRunnerFailuresTerminalizeAdmittedRun(t *testing.T) {
 				t.Fatalf("history = %#v, %v", history, listErr)
 			}
 		})
+	}
+}
+
+type completionFailingRuns struct {
+	RunStore
+	completionErr error
+	failureErr    error
+	failedCalls   int
+}
+
+func (s *completionFailingRuns) MarkDone(ctx context.Context, runID, status, message string) error {
+	if status == domain.AgentRunStatusCompleted {
+		return s.completionErr
+	}
+	if status == domain.AgentRunStatusFailed {
+		s.failedCalls++
+		if s.failureErr != nil {
+			return s.failureErr
+		}
+	}
+	return s.RunStore.MarkDone(ctx, runID, status, message)
+}
+
+func TestRunnerCompletionFailureAttemptsFailureTerminalization(t *testing.T) {
+	runner, sessionID, runs, _ := seededRunner(t, `{}`, &fakeProvider{})
+	completionErr := errors.New("complete failed")
+	wrapped := &completionFailingRuns{RunStore: runner.Runs, completionErr: completionErr}
+	runner.Runs = wrapped
+
+	runID, err := runner.Start(context.Background(), sessionID, "request", "question")
+	if !errors.Is(err, completionErr) {
+		t.Fatalf("Start error = %v, want completion error", err)
+	}
+	if wrapped.failedCalls != 1 {
+		t.Fatalf("failed MarkDone calls = %d, want 1", wrapped.failedCalls)
+	}
+	run, lookupErr := runs.ByID(context.Background(), runID)
+	if lookupErr != nil || run.Status != domain.AgentRunStatusFailed {
+		t.Fatalf("run = %#v, %v", run, lookupErr)
+	}
+}
+
+func TestRunnerCompletionFailureJoinsFailureTerminalizationError(t *testing.T) {
+	runner, sessionID, _, _ := seededRunner(t, `{}`, &fakeProvider{})
+	completionErr := errors.New("complete failed")
+	failureErr := errors.New("failure terminalization failed")
+	wrapped := &completionFailingRuns{RunStore: runner.Runs, completionErr: completionErr, failureErr: failureErr}
+	runner.Runs = wrapped
+
+	_, err := runner.Start(context.Background(), sessionID, "request", "question")
+	if !errors.Is(err, completionErr) || !errors.Is(err, failureErr) {
+		t.Fatalf("Start error = %v, want joined completion and terminalization errors", err)
+	}
+	if wrapped.failedCalls != 1 {
+		t.Fatalf("failed MarkDone calls = %d, want 1", wrapped.failedCalls)
+	}
+}
+
+type failingSessionReader struct{ err error }
+
+func (s failingSessionReader) Get(context.Context, string) (domain.Session, error) {
+	return domain.Session{}, s.err
+}
+
+func TestRunnerSessionReadFailurePrecedesMessagesAndProvider(t *testing.T) {
+	provider := &fakeProvider{}
+	runner, sessionID, runs, _ := seededRunner(t, `{}`, provider)
+	messages := &failingMessages{failAppend: -1}
+	runner.Messages = messages
+	runner.Sessions = failingSessionReader{err: errors.New("session read failed")}
+
+	runID, err := runner.Start(context.Background(), sessionID, "request", "question")
+	if err == nil {
+		t.Fatal("Start succeeded")
+	}
+	if len(messages.items) != 0 || provider.calls != 0 {
+		t.Fatalf("messages/provider calls = %d/%d, want 0/0", len(messages.items), provider.calls)
+	}
+	run, lookupErr := runs.ByID(context.Background(), runID)
+	if lookupErr != nil || run.Status != domain.AgentRunStatusFailed {
+		t.Fatalf("run = %#v, %v", run, lookupErr)
 	}
 }
 
