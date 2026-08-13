@@ -8,6 +8,15 @@ import (
 
 type ReviewMode string
 
+type Rating string
+
+const (
+	RatingAgain Rating = "again"
+	RatingHard  Rating = "hard"
+	RatingGood  Rating = "good"
+	RatingEasy  Rating = "easy"
+)
+
 type Vault struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
