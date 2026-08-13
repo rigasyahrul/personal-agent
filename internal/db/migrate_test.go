@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestOpenMigratesAllTablesAndWAL(t *testing.T) {
@@ -61,6 +62,34 @@ func TestSessionScopeCheck(t *testing.T) {
 	_, err = d.Exec(`INSERT INTO sessions(id,home,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at) VALUES('s','project','active','p','m','{}','{}','t','x','x')`)
 	if err == nil {
 		t.Fatal("invalid project scope accepted")
+	}
+}
+
+func TestSessionScopeAndImmutableModel(t *testing.T) {
+	d, err := Open(context.Background(), filepath.Join(t.TempDir(), "db", "personal-agent.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	now := time.Now().UTC()
+	if _, err := d.Exec(`INSERT INTO vaults(id,name,created_at,updated_at) VALUES('v','V',?,?);
+		INSERT INTO projects(id,vault_id,name,created_at,updated_at) VALUES('p','v','P',?,?)`, now, now, now, now); err != nil {
+		t.Fatal(err)
+	}
+	bad := []string{
+		`INSERT INTO sessions(id,home,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at) VALUES('s1','project','active','p','m','{}','{}','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+		`INSERT INTO sessions(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at) VALUES('s2','project','wrong','p','active','p','m','{}','{}','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+	}
+	for _, query := range bad {
+		if _, err := d.Exec(query); err == nil {
+			t.Fatalf("accepted invalid scope: %s", query)
+		}
+	}
+	if _, err := d.Exec(`INSERT INTO sessions(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at) VALUES('ok','project','v','p','active','p','m','{}','{}','',?,?)`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`UPDATE sessions SET model_id='other' WHERE id='ok'`); err == nil {
+		t.Fatal("model mutation accepted")
 	}
 }
 

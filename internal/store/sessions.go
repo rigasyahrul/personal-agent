@@ -89,6 +89,61 @@ func (s *SessionStore) modelConfigured(provider, modelID string) bool {
 
 const sessionSelect = `SELECT id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at,deleted_at FROM sessions`
 
+func (s *SessionStore) Get(ctx context.Context, id string) (domain.Session, error) {
+	var out domain.Session
+	err := scanSession(s.DB.QueryRowContext(ctx, sessionSelect+` WHERE id=?`, id), &out)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, ErrNotFound
+	}
+	return out, err
+}
+
+func (s *SessionStore) Delete(ctx context.Context, id string) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var home layout.SessionHome
+	var vaultID, projectID sql.NullString
+	var status string
+	if err := tx.QueryRowContext(ctx, `SELECT home,vault_id,project_id,status FROM sessions WHERE id=?`, id).Scan(&home, &vaultID, &projectID, &status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if status == "terminal" {
+		return tx.Commit()
+	}
+
+	now := s.Now().UTC()
+	result, err := tx.ExecContext(ctx, `UPDATE sessions SET status='terminal',deleted_at=?,updated_at=? WHERE id=? AND status='active'`, formatTime(now), formatTime(now), id)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows != 1 {
+		return ErrSessionBusy
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	workspace := layout.SessionWorkspace(s.DataDir, home, nullableText(vaultID), nullableText(projectID), id)
+	return os.RemoveAll(workspace)
+}
+
+func nullableText(value sql.NullString) string {
+	if value.Valid {
+		return value.String
+	}
+	return ""
+}
+
 func (s *SessionStore) ListByProject(ctx context.Context, projectID string) ([]domain.Session, error) {
 	rows, err := s.DB.QueryContext(ctx, sessionSelect+` WHERE project_id=? ORDER BY created_at DESC,id`, projectID)
 	if err != nil {
