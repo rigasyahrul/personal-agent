@@ -213,21 +213,24 @@ func TestOperationStatusMatrix(t *testing.T) {
 
 func TestOperationStatusRejectsInconsistentDurableState(t *testing.T) {
 	tests := []struct {
-		name, status, note string
-		generation         bool
+		name, status, note, generationSHA, generatorVersion string
 	}{
-		{"path_reserved_missing_note", "path_reserved", "", false},
-		{"path_reserved_wrong_note", "path_reserved", "ready", false},
-		{"published_fs_missing_note", "published_fs", "", false},
-		{"published_fs_wrong_note", "published_fs", "ready", false},
-		{"finalized_missing_note", "finalized", "", false},
-		{"finalized_wrong_note", "finalized", "pending", false},
-		{"review_enqueued_missing_note", "review_enqueued", "", false},
-		{"review_enqueued_wrong_note", "review_enqueued", "pending", true},
-		{"completed_missing_note", "completed", "", false},
-		{"completed_wrong_note", "completed", "pending", true},
-		{"review_enqueued_missing_generation", "review_enqueued", "ready", false},
-		{"completed_missing_generation", "completed", "ready", false},
+		{"path_reserved_missing_note", "path_reserved", "", "", ""},
+		{"path_reserved_wrong_note", "path_reserved", "ready", "", ""},
+		{"published_fs_missing_note", "published_fs", "", "", ""},
+		{"published_fs_wrong_note", "published_fs", "ready", "", ""},
+		{"finalized_missing_note", "finalized", "", "", ""},
+		{"finalized_wrong_note", "finalized", "pending", "", ""},
+		{"review_enqueued_missing_note", "review_enqueued", "", "", ""},
+		{"review_enqueued_wrong_note", "review_enqueued", "pending", "sha", "bites-v1"},
+		{"completed_missing_note", "completed", "", "", ""},
+		{"completed_wrong_note", "completed", "pending", "sha", "bites-v1"},
+		{"review_enqueued_missing_generation", "review_enqueued", "ready", "", ""},
+		{"review_enqueued_wrong_sha", "review_enqueued", "ready", "unrelated-sha", "bites-v1"},
+		{"review_enqueued_wrong_generator", "review_enqueued", "ready", "sha", "bites-v2"},
+		{"completed_missing_generation", "completed", "ready", "", ""},
+		{"completed_wrong_sha", "completed", "ready", "unrelated-sha", "bites-v1"},
+		{"completed_wrong_generator", "completed", "ready", "sha", "bites-v2"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -241,8 +244,8 @@ func TestOperationStatusRejectsInconsistentDurableState(t *testing.T) {
 			if _, err := f.db.Exec(`INSERT INTO promote_ops(id,request_key,request_fingerprint,session_id,workspace_path,target_project_id,target_relative_path,review_mode,note_id,frozen_sha256,frozen_size,status,created_at,updated_at) VALUES('op','key','fp','s1','draft.md','p1','n.md','bites','n','sha',1,?,?,?)`, tc.status, stamp, stamp); err != nil {
 				t.Fatal(err)
 			}
-			if tc.generation {
-				if _, err := f.db.Exec(`INSERT INTO review_pending(id,note_id,source_sha256,generator_version,status,created_at,updated_at) VALUES('rp','n','sha','bites-v1','pending',?,?)`, stamp, stamp); err != nil {
+			if tc.generationSHA != "" {
+				if _, err := f.db.Exec(`INSERT INTO review_pending(id,note_id,source_sha256,generator_version,status,created_at,updated_at) VALUES('rp','n',?,?,'pending',?,?)`, tc.generationSHA, tc.generatorVersion, stamp, stamp); err != nil {
 					t.Fatal(err)
 				}
 			}
