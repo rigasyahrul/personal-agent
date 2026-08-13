@@ -49,7 +49,7 @@ export function createSessionsPage({
           .then(created => current(generation) ? openChat(created) : undefined)
           .catch(createError => { if (current(generation)) { listError = createError.message; renderList() } })
       }
-      root.querySelectorAll('[data-session]').forEach(button => { button.onclick = () => { void openChat(sessions.find(item => item.id === button.dataset.session)).catch(openError => { if (current(generation)) { listError = openError.message; renderList() } }) } })
+      root.querySelectorAll('[data-session]').forEach(button => { button.onclick = () => { void openChat(sessions.find(item => item.id === button.dataset.session)).catch(openError => { if (!destroyed && isCurrent()) { listError = openError.message; renderList() } }) } })
     }
     renderList()
   }

@@ -9,7 +9,10 @@ class Root {
     this.html = value
     this.chatForm = value.includes('data-chat') ? {elements: {message: {value: this.chatForm?.elements.message.value || ''}}} : null
     this.newForm = value.includes('data-new') ? {elements: {title: {value: ''}, model: {value: '0'}, workspace_files: {checked: false}}} : null
-    this.back = value.includes('data-back') ? {addEventListener: (_, handler) => { this.back.onclick = handler }} : null
+    this.back = value.includes('data-back') ? {
+      listeners: new Map(),
+      addEventListener: (type, handler) => { this.back.listeners.set(type, handler) },
+    } : null
     this.sendButton = value.includes('data-chat') ? {disabled: /<button disabled>Send<\/button>/.test(value)} : null
     this.sessionButtons = [...value.matchAll(/data-session="([^"]+)"/g)].map(match => ({dataset: {session: match[1]}}))
   }
@@ -184,24 +187,63 @@ test('pending send cannot leak into a newly opened session', async () => {
   assert.doesNotMatch(root.textContent, /old failure|old draft/)
 })
 
-test('real create and navigation handlers consume failures and show create errors inline', async () => {
+test('real create and navigation handlers consume failures and show errors inline', async () => {
   const unhandled = []
   const listener = reason => unhandled.push(reason)
   process.on('unhandledRejection', listener)
-  const root = new Root()
-  const api = async (path, options = {}) => {
-    if (path === '/api/v1/models') return {models: [{provider: 'p', model_id: 'm'}]}
-    if (options.method === 'POST') throw new Error('cannot create')
-    return [{id: 's', title: 'Session', provider: 'p', model_id: 'm'}]
+  try {
+    const root = new Root()
+    let cannotList = false
+    let cannotOpen = true
+    let intervalAttempt = deferred()
+    const api = async (path, options = {}) => {
+      if (options.method === 'POST') throw new Error('cannot create')
+      if (cannotList && (path === '/api/v1/models' || path === '/api/v1/projects/p/sessions')) throw new Error('cannot list')
+      if (path === '/api/v1/models') return {models: [{provider: 'p', model_id: 'm'}]}
+      if (path === '/api/v1/projects/p/sessions') return [{id: 's', title: 'Session', provider: 'p', model_id: 'm'}]
+      if (path.endsWith('/messages')) return []
+      if (path.endsWith('/runs/current')) return null
+      throw new Error(`unexpected request: ${path}`)
+    }
+    const page = createSessionsPage({
+      root,
+      api,
+      projectID: 'p',
+      setInterval: () => {
+        intervalAttempt.resolve()
+        if (cannotOpen) throw new Error('cannot open')
+        return 1
+      },
+      clearInterval() {},
+    })
+    await page.list()
+
+    root.newForm.onsubmit({preventDefault() {}})
+    await new Promise(resolve => setImmediate(resolve))
+    assert.match(root.textContent, /cannot create/)
+
+    root.sessionButtons[0].onclick()
+    await intervalAttempt.promise
+    await new Promise(resolve => setImmediate(resolve))
+    assert.match(root.textContent, /Sessions.*cannot open/s)
+    assert.equal(root.sessionButtons.length, 1, 'open failure re-renders the sessions list')
+    assert.deepEqual(unhandled, [])
+
+    cannotOpen = false
+    intervalAttempt = deferred()
+    root.sessionButtons[0].onclick()
+    await intervalAttempt.promise
+    await new Promise(resolve => setImmediate(resolve))
+    assert.ok(root.back, 'a successful open renders a back element')
+    const backClick = root.back.listeners.get('click')
+    assert.equal(typeof backClick, 'function', 'production registered the back click listener')
+
+    cannotList = true
+    backClick({preventDefault() {}})
+    await new Promise(resolve => setImmediate(resolve))
+    assert.match(root.textContent, /cannot list/)
+    assert.deepEqual(unhandled, [])
+  } finally {
+    process.off('unhandledRejection', listener)
   }
-  const page = createSessionsPage({root, api, projectID: 'p', setInterval: () => 1, clearInterval() {}})
-  await page.list()
-  root.newForm.onsubmit({preventDefault() {}})
-  await new Promise(resolve => setImmediate(resolve))
-  assert.match(root.textContent, /cannot create/)
-  root.sessionButtons[0].onclick()
-  root.back?.onclick?.()
-  await new Promise(resolve => setImmediate(resolve))
-  process.off('unhandledRejection', listener)
-  assert.deepEqual(unhandled, [])
 })
