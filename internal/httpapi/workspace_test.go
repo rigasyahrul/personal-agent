@@ -46,6 +46,9 @@ func TestWorkspaceTreeAndFileRead(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "drafts", "note.txt"), []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(workspace, "empty.txt"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	tree := apiRequest(t, h, http.MethodGet, "/api/v1/sessions/"+session.ID+"/workspace/tree", nil, cookies, "wrong-csrf")
 	if tree.Code != http.StatusOK {
@@ -61,8 +64,17 @@ func TestWorkspaceTreeAndFileRead(t *testing.T) {
 	if err := json.Unmarshal(tree.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if len(payload.Entries) != 2 || payload.Entries[0].Path != "drafts" || payload.Entries[0].Kind != "directory" || payload.Entries[1].Path != "drafts/note.txt" || payload.Entries[1].Size != 5 {
+	if len(payload.Entries) != 3 || payload.Entries[0].Path != "drafts" || payload.Entries[0].Kind != "directory" || payload.Entries[1].Path != "drafts/note.txt" || payload.Entries[1].Size != 5 {
 		t.Fatalf("entries = %#v", payload.Entries)
+	}
+	var raw struct {
+		Entries []map[string]any `json:"entries"`
+	}
+	if err := json.Unmarshal(tree.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if size, ok := raw.Entries[2]["size"]; !ok || size != float64(0) {
+		t.Fatalf("zero-byte entry size = %#v (present %t); entry = %#v", size, ok, raw.Entries[2])
 	}
 
 	file := apiRequest(t, h, http.MethodGet, "/api/v1/sessions/"+session.ID+"/workspace/file?path="+url.QueryEscape("drafts/note.txt"), nil, cookies, "")

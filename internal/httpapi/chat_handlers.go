@@ -24,6 +24,12 @@ type chatHandlers struct {
 
 var errWorkspaceFilesDisabled = errors.New("workspace files disabled")
 
+type workspaceEntry struct {
+	Path string `json:"path"`
+	Kind string `json:"kind"`
+	Size int64  `json:"size"`
+}
+
 func (h *chatHandlers) workspaceRoot(r *http.Request) (*fsroot.Root, error) {
 	session, err := h.sessions.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -68,7 +74,7 @@ func (h *chatHandlers) workspaceTree(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, "unsafe_workspace_tree")
 		return
 	}
-	visible := make([]fsroot.Entry, 0, len(entries))
+	visible := make([]workspaceEntry, 0, len(entries))
 	for _, entry := range entries {
 		hiddenTemp := false
 		for _, component := range strings.Split(entry.Path, "/") {
@@ -78,7 +84,11 @@ func (h *chatHandlers) workspaceTree(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !hiddenTemp {
-			visible = append(visible, entry)
+			visible = append(visible, workspaceEntry{
+				Path: entry.Path,
+				Kind: entry.Kind,
+				Size: entry.Size,
+			})
 		}
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{"entries": visible})
