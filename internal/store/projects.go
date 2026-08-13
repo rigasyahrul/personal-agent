@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 
 	"github.com/rigasyahrul/personal-agent/internal/clock"
@@ -24,7 +25,7 @@ func NewProjectStore(db *sql.DB, dataDir string, c clock.Clock) *ProjectStore {
 func (s *ProjectStore) Create(ctx context.Context, name, vaultID string) (domain.Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return domain.Project{}, ErrInvalid
+		return domain.Project{}, ErrValidation
 	}
 	if vaultID != "" {
 		var exists bool
@@ -32,7 +33,7 @@ func (s *ProjectStore) Create(ctx context.Context, name, vaultID string) (domain
 			return domain.Project{}, err
 		}
 		if !exists {
-			return domain.Project{}, ErrInvalid
+			return domain.Project{}, ErrValidation
 		}
 	}
 
@@ -74,7 +75,11 @@ func scanProject(row interface{ Scan(...any) error }) (domain.Project, error) {
 }
 
 func (s *ProjectStore) Get(ctx context.Context, id string) (domain.Project, error) {
-	return scanProject(s.db.QueryRowContext(ctx, `SELECT id,vault_id,name,created_at,updated_at FROM projects WHERE id=?`, id))
+	p, err := scanProject(s.db.QueryRowContext(ctx, `SELECT id,vault_id,name,created_at,updated_at FROM projects WHERE id=?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Project{}, ErrNotFound
+	}
+	return p, err
 }
 
 func (s *ProjectStore) List(ctx context.Context) ([]domain.Project, error) {

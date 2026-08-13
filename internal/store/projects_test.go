@@ -64,15 +64,44 @@ func TestStoresRejectBlankNamesAndUnknownVault(t *testing.T) {
 	c := &clock.FakeClock{T: time.Now()}
 	ctx := context.Background()
 
-	if _, err := store.NewVaultStore(database, c).Create(ctx, " \t"); !errors.Is(err, store.ErrInvalid) {
+	if _, err := store.NewVaultStore(database, c).Create(ctx, " \t"); !errors.Is(err, store.ErrValidation) {
 		t.Fatalf("blank vault error = %v", err)
 	}
 	ps := store.NewProjectStore(database, dataDir, c)
-	if _, err := ps.Create(ctx, " ", ""); !errors.Is(err, store.ErrInvalid) {
+	if _, err := ps.Create(ctx, " ", ""); !errors.Is(err, store.ErrValidation) {
 		t.Fatalf("blank project error = %v", err)
 	}
-	if _, err := ps.Create(ctx, "Bad", "missing"); !errors.Is(err, store.ErrInvalid) {
+	if _, err := ps.Create(ctx, "Bad", "missing"); !errors.Is(err, store.ErrValidation) {
 		t.Fatalf("unknown vault error = %v", err)
+	}
+}
+
+func TestProjectGetMissingReturnsNotFound(t *testing.T) {
+	database, dataDir := testutil.TempDB(t)
+	ps := store.NewProjectStore(database, dataDir, &clock.FakeClock{T: time.Now()})
+
+	if _, err := ps.Get(context.Background(), "missing"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("Get() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestProjectCreateRollsBackWhenDirectoryCreationFails(t *testing.T) {
+	database, _ := testutil.TempDB(t)
+	blockedDataDir := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockedDataDir, []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ps := store.NewProjectStore(database, blockedDataDir, &clock.FakeClock{T: time.Now()})
+
+	if _, err := ps.Create(context.Background(), "Cannot persist", ""); err == nil {
+		t.Fatal("Create() error = nil, want directory creation failure")
+	}
+	var count int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("persisted project rows = %d, want 0", count)
 	}
 }
 

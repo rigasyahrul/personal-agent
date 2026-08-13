@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strings"
 	"time"
 
@@ -11,8 +10,6 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/ids"
 )
-
-var ErrInvalid = errors.New("invalid input")
 
 type VaultStore struct {
 	db    *sql.DB
@@ -26,7 +23,7 @@ func NewVaultStore(db *sql.DB, c clock.Clock) *VaultStore {
 func (s *VaultStore) Create(ctx context.Context, name string) (domain.Vault, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return domain.Vault{}, ErrInvalid
+		return domain.Vault{}, ErrValidation
 	}
 	now := s.clock.Now().UTC()
 	v := domain.Vault{ID: ids.NewID(), Name: name, CreatedAt: now, UpdatedAt: now}
