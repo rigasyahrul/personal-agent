@@ -37,6 +37,7 @@ export function createSessionsPage({
   let timer = null
   let sending = false
   let error = ''
+  let operationError = ''
   let destroyed = false
   let chatGeneration = 0
   let messages = []
@@ -55,6 +56,7 @@ export function createSessionsPage({
     stopPolling()
     closePromoteDialog()
     session = null
+    operationError = ''
     const generation = ++chatGeneration
     const [configured, sessions] = await Promise.all([
       api('/api/v1/models'),
@@ -96,7 +98,7 @@ export function createSessionsPage({
   function renderChat(preserveDraft = true) {
     const draft = preserveDraft ? root.querySelector('[name=message]')?.value || '' : ''
     const workspace = workspaceEnabled(session) ? '<aside data-workspace-panel></aside>' : ''
-    root.innerHTML = `<div class="session-layout"><section class="sessions-chat"><button type="button" data-back>Sessions</button><div class="page-heading"><h2>${esc(session.title)}</h2><span class="model-badge">${esc(session.provider)}:${esc(session.model_id)}</span></div><div data-operation-statuses></div><ol class="messages">${[...messages].sort((a, b) => a.sequence - b.sequence).map(message => `<li class="message message-${esc(message.role)}"><strong>${esc(message.role)}</strong><p>${esc(message.content)}</p></li>`).join('')}</ol><p class="run-status" role="status" aria-live="polite">${run ? `Run: ${esc(run.status)}` : 'Idle'}</p><p class="error" role="alert">${esc(error)}</p><form data-chat><label>Message<textarea name="message" required></textarea></label><button ${sending || run ? 'disabled' : ''}>Send</button></form></section>${workspace}</div>`
+    root.innerHTML = `<div class="session-layout"><section class="sessions-chat"><button type="button" data-back>Sessions</button><div class="page-heading"><h2>${esc(session.title)}</h2><span class="model-badge">${esc(session.provider)}:${esc(session.model_id)}</span></div><div data-operation-statuses></div><ol class="messages">${[...messages].sort((a, b) => a.sequence - b.sequence).map(message => `<li class="message message-${esc(message.role)}"><strong>${esc(message.role)}</strong><p>${esc(message.content)}</p></li>`).join('')}</ol><p class="run-status" role="status" aria-live="polite">${run ? `Run: ${esc(run.status)}` : 'Idle'}</p><p class="error" role="alert" data-chat-alert>${esc(chatErrorText())}</p><form data-chat><label>Message<textarea name="message" required></textarea></label><button ${sending || run ? 'disabled' : ''}>Send</button></form></section>${workspace}</div>`
     const input = root.querySelector('[name=message]')
     if (input) input.value = draft
     root.querySelector('[data-back]')?.addEventListener('click', () => { void list().catch(listError => { if (!destroyed && isCurrent()) root.innerHTML = `<p class="error" role="alert">${esc(listError.message)}</p>` }) })
@@ -104,9 +106,11 @@ export function createSessionsPage({
     renderOperations()
   }
 
+  function chatErrorText(){return [operationError,error].filter(Boolean).join(' — ')}
+  function updateChatAlert(){const alert=root.querySelector('[data-chat-alert]');if(alert)alert.textContent=chatErrorText()}
   function renderOperations(){const host=root.querySelector('[data-operation-statuses]');if(!host||!document?.createElement)return;host.replaceChildren(...operations.map(id=>operationResults.has(id)?operationBadge(operationResults.get(id),op=>retryCards(op),{retryDisabled:retryingPending.has(operationResults.get(id).pending_id)}):document.createTextNode('Promoting…')))}
   function saveOperations(){try{storage?.setItem(operationStorageKey(session.id),JSON.stringify(operations))}catch{}}
-  async function pollOperations(){if(!session||destroyed)return;operationPollQueued=true;if(operationPollPromise)return operationPollPromise;operationPollPromise=(async()=>{while(operationPollQueued){operationPollQueued=false;const id=session?.id,generation=chatGeneration;if(!id)continue;const active=operations.filter(operationID=>{const value=operationResults.get(operationID);return !value||!['Ready','Promote failed — Retry','Cards failed — Retry cards'].includes(value.badge)});let failed=false;await Promise.all(active.map(async operationID=>{try{const value=await getOperation(operationID);if(current(generation)&&session?.id===id)operationResults.set(operationID,value)}catch(reason){if(current(generation)&&session?.id===id){error=reason.message;failed=true}}}));if(current(generation)&&session?.id===id){if(failed)renderChat();else renderOperations()}}})().finally(()=>{operationPollPromise=null});return operationPollPromise}
+  async function pollOperations(){if(!session||destroyed)return;operationPollQueued=true;if(operationPollPromise)return operationPollPromise;operationPollPromise=(async()=>{while(operationPollQueued){operationPollQueued=false;const id=session?.id,generation=chatGeneration;if(!id)continue;const active=operations.filter(operationID=>{const value=operationResults.get(operationID);return !value||!['Ready','Promote failed — Retry','Cards failed — Retry cards'].includes(value.badge)});let failed=false,nextOperationError='';await Promise.all(active.map(async operationID=>{try{const value=await getOperation(operationID);if(current(generation)&&session?.id===id)operationResults.set(operationID,value)}catch(reason){if(current(generation)&&session?.id===id){nextOperationError=reason.message;failed=true}}}));if(current(generation)&&session?.id===id){operationError=failed?nextOperationError:'';updateChatAlert();renderOperations()}}})().finally(()=>{operationPollPromise=null});return operationPollPromise}
   async function retryCards(op){const pendingID=op?.pending_id;if(!op?.retry_cards||!pendingID||retryingPending.has(pendingID))return;const generation=chatGeneration,id=session?.id;retryingPending.add(pendingID);renderOperations();try{await retryPending(pendingID);if(current(generation)&&session?.id===id)operationResults.delete(op.operation_id)}catch(reason){if(current(generation)&&session?.id===id){error=reason.message;renderChat()}}finally{retryingPending.delete(pendingID);if(current(generation)&&session?.id===id){renderOperations();await pollOperations()}}}
 
   function closePromoteDialog(){const dialog=promoteDialog;promoteDialog=null;if(!dialog)return;try{if(dialog.open)dialog.close()}catch{}dialog.remove?.()}
@@ -197,6 +201,7 @@ export function createSessionsPage({
     destroyed = false
     session = value
     error = ''
+    operationError = ''
     pollFailed = false
     messages = []
     run = null
@@ -209,6 +214,6 @@ export function createSessionsPage({
   }
 
   function stopPolling() { if (timer !== null) clearInterval(timer); timer = null }
-  function destroy() { destroyed = true; ++chatGeneration; stopPolling(); closePromoteDialog();retryingPending.clear();operationPollQueued=false;session = null }
+  function destroy() { destroyed = true; ++chatGeneration; stopPolling(); closePromoteDialog();retryingPending.clear();operationPollQueued=false;error='';operationError='';session = null }
   return {list, openChat, poll, destroy}
 }

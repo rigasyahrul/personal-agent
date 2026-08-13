@@ -20,6 +20,7 @@ class Root {
     this.sendButton = value.includes('data-chat') ? {disabled: /<button disabled>Send<\/button>/.test(value)} : null
     this.workspace = value.includes('data-workspace-panel') ? {} : null
     this.operationHost = value.includes('data-operation-statuses') ? new TestElement('div') : null
+    this.chatAlert = value.includes('data-chat-alert') ? new TestElement('p') : null
     this.sessionButtons = [...value.matchAll(/data-session="([^"]+)"/g)].map(match => ({dataset: {session: match[1]}}))
   }
   get innerHTML() { return this.html }
@@ -32,6 +33,7 @@ class Root {
     if (selector === 'form[data-chat] button') return this.sendButton
     if (selector === '[data-workspace-panel]') return this.workspace
     if (selector === '[data-operation-statuses]') return this.operationHost
+    if (selector === '[data-chat-alert]') return this.chatAlert
     return null
   }
   querySelectorAll(selector) { return selector === '[data-session]' ? this.sessionButtons : [] }
@@ -401,16 +403,30 @@ test('retry cards actual rendered clicks deduplicate, survive rerender, recover 
     await page.openChat({id:'s',title:'S',provider:'p',model_id:'m'});await new Promise(resolve=>setImmediate(resolve));let button=findText(root.operationHost,'Retry cards');assert.ok(button)
     button.click();button.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(retries,1);await page.poll();button=findText(root.operationHost,'Retry cards');assert.equal(button.disabled,true)
     retryGates[0].reject(new Error('retry failed'));await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));assert.match(root.textContent,/retry failed/);button=findText(root.operationHost,'Retry cards');assert.equal(button.disabled,false)
-    button.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(retries,2);retryGates[1].resolve();await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));assert.ok(polls>=2);assert.equal(findText(root.operationHost,'Retry cards'),undefined);assert.deepEqual(unhandled,[])
+    button.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(retries,2);retryGates[1].resolve();await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));assert.ok(polls>=2);assert.equal(findText(root.operationHost,'Retry cards'),undefined);assert.equal(root.chatAlert.textContent,'retry failed','successful operation status preserves the ordinary retry error');assert.deepEqual(unhandled,[])
   }finally{process.off('unhandledRejection',listener)}
 })
 
 test('operation polling contains rejection, retries, coalesces one follow-up, and ignores switched session',async()=>{
   const root=new Root(),first=deferred(),second=deferred();let calls=0,fail=true
   const page=createSessionsPage({root,document:new TestDocument(),storage:{getItem:key=>key.endsWith(':old')?'["op"]':'[]'},projectID:'p',api:async path=>path.endsWith('/messages')?[]:null,getOperation:async()=>{calls++;if(calls===1)return first.promise;if(fail){fail=false;throw new Error('operation down')}return second.promise},setInterval:()=>1,clearInterval(){}})
-  const opening=page.openChat({id:'old',title:'Old',provider:'p',model_id:'m'});await new Promise(resolve=>setImmediate(resolve));page.poll();page.poll();page.poll();first.resolve({operation_id:'op',badge:'Promoting…'});await opening;await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,2,'many triggers queue only one follow-up operation cycle');await new Promise(resolve=>setImmediate(resolve));assert.match(root.textContent,/operation down/)
+  const opening=page.openChat({id:'old',title:'Old',provider:'p',model_id:'m'});await new Promise(resolve=>setImmediate(resolve));page.poll();page.poll();page.poll();first.resolve({operation_id:'op',badge:'Promoting…'});await opening;await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,2,'many triggers queue only one follow-up operation cycle');await new Promise(resolve=>setImmediate(resolve));assert.match(root.chatAlert.textContent,/operation down/)
   const retry=page.poll();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,3);const switched=page.openChat({id:'new',title:'New',provider:'p',model_id:'m'});second.resolve({operation_id:'op',badge:'Ready'});await Promise.all([retry,switched]);await new Promise(resolve=>setImmediate(resolve));assert.match(root.textContent,/New/);assert.equal(findText(root.operationHost,'Ready'),undefined);assert.doesNotMatch(root.textContent,/operation down/)
   page.destroy();await new Promise(resolve=>setImmediate(resolve));assert.equal(findText(root.operationHost,'Ready'),undefined)
+})
+
+test('operation failure updates the existing alert without replacing a populated workspace, then success clears it and renders the badge',async()=>{
+  const unhandled=[],listener=reason=>unhandled.push(reason);process.on('unhandledRejection',listener)
+  try{
+    const root=new Root(),document=new TestDocument();let save,operationCalls=0
+    const renderWorkspace=async value=>{const panel=new TestElement('section');panel.querySelector=selector=>selector==='[data-promote]'?panel.children[0]||null:null;value.container.querySelector=selector=>selector==='.workspace-panel'?panel:null;value.onFileSelected({path:'draft.md',kind:'file'});save=panel.children[0]}
+    const page=createSessionsPage({root,document,dialogHost:document.body,storage:{getItem:()=> '["op"]',setItem(){}},projectID:'p',renderWorkspace,workspaceAPI:{},api:async path=>path==='/api/v1/projects/p'?{name:'P'}:path.endsWith('/messages')?[]:null,promote:async()=>({operation_id:'op'}),getOperation:async()=>{operationCalls++;if(operationCalls===1)throw new Error('operation unavailable');return{operation_id:'op',badge:'Ready'}},setInterval:()=>1,clearInterval(){}})
+    await page.openChat({id:'s',title:'S',provider:'p',model_id:'m',tool_grants:{workspace_files:true}});await new Promise(resolve=>setImmediate(resolve))
+    const workspace=root.workspace,alert=root.chatAlert,renders=root.renders.length
+    assert.ok(save);assert.equal(alert.textContent,'operation unavailable');assert.equal(root.workspace,workspace);assert.equal(root.renders.length,renders)
+    save.click();await new Promise(resolve=>setImmediate(resolve));await document.body.children[0].querySelector('form').onsubmit({preventDefault(){}})
+    assert.equal(root.chatAlert,alert);assert.equal(alert.textContent,'');assert.equal(root.workspace,workspace);assert.equal(root.renders.length,renders);assert.ok(findText(root.operationHost,'Ready'));assert.deepEqual(unhandled,[])
+  }finally{process.off('unhandledRejection',listener)}
 })
 
 test('changed promote form payload receives a new idempotency key after unchanged retry',async()=>{
