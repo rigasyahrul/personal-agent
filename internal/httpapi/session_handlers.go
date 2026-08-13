@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	"github.com/rigasyahrul/personal-agent/internal/store"
@@ -43,6 +45,14 @@ func (h *sessionHandlers) modelsList(w http.ResponseWriter, _ *http.Request) {
 
 func (h *sessionHandlers) projectSessions(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("id")
+	if err := h.projectExists(r, projectID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			apiError(w, http.StatusNotFound, "project_not_found")
+			return
+		}
+		internalError(w)
+		return
+	}
 	if r.Method == http.MethodGet {
 		out, err := h.sessions.ListByProject(r.Context(), projectID)
 		if err != nil {
@@ -52,24 +62,17 @@ func (h *sessionHandlers) projectSessions(w http.ResponseWriter, r *http.Request
 		jsonResponse(w, http.StatusOK, out)
 		return
 	}
-	var exists int
-	if err := h.sessions.DB.QueryRowContext(r.Context(), `SELECT 1 FROM projects WHERE id=?`, projectID).Scan(&exists); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			apiError(w, http.StatusNotFound, "project_not_found")
-			return
-		}
-		internalError(w)
-		return
-	}
 	if len(h.models) == 0 {
 		apiError(w, http.StatusServiceUnavailable, "no_models_configured")
 		return
 	}
 	var in sessionCreateRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&in); err != nil {
+	if err := decodeStrictJSON(r, &in); err != nil {
 		apiError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	if strings.TrimSpace(in.Title) == "" {
+		apiError(w, http.StatusBadRequest, "invalid_title")
 		return
 	}
 	if in.Home != "" && in.Home != "project" {
@@ -112,6 +115,27 @@ func (h *sessionHandlers) projectSessions(w http.ResponseWriter, r *http.Request
 		return
 	}
 	jsonResponse(w, http.StatusCreated, out)
+}
+
+func (h *sessionHandlers) projectExists(r *http.Request, projectID string) error {
+	var exists int
+	return h.sessions.DB.QueryRowContext(r.Context(), `SELECT 1 FROM projects WHERE id=?`, projectID).Scan(&exists)
+}
+
+func decodeStrictJSON(r *http.Request, dst any) error {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
 }
 
 func (h *sessionHandlers) session(w http.ResponseWriter, r *http.Request) {

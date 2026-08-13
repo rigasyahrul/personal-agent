@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -27,13 +28,11 @@ func (p *failingProvider) Chat(context.Context, agent.ChatRequest) (agent.ChatRe
 
 func TestChatAPIProviderFailureIsSafeIdempotentAndHistoryReadable(t *testing.T) {
 	p := &failingProvider{}
-	h, pid, cookies := sessionAPIServer(t, []config.ModelRef{{Provider: "openai", ModelID: "m"}})
-	// Rebuild with provider while retaining the helper's database is intentionally avoided by
-	// obtaining its concrete dependencies through a dedicated setup below.
-	_ = pid
-	_ = h
-	h, pid, cookies = chatAPIServer(t, p)
-	created := apiRequest(t, h, "POST", "/api/v1/projects/"+pid+"/sessions", map[string]string{"provider": "openai", "model_id": "m"}, cookies, "csrf")
+	h, _, pid, cookies := chatAPIServer(t, p)
+	created := apiRequest(t, h, "POST", "/api/v1/projects/"+pid+"/sessions", map[string]string{"title": "x", "provider": "openai", "model_id": "m"}, cookies, "csrf")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create=%d %s", created.Code, created.Body.String())
+	}
 	var s domain.Session
 	if err := json.Unmarshal(created.Body.Bytes(), &s); err != nil {
 		t.Fatal(err)
@@ -50,14 +49,76 @@ func TestChatAPIProviderFailureIsSafeIdempotentAndHistoryReadable(t *testing.T) 
 	}
 }
 
-func chatAPIServer(t *testing.T, provider agent.Provider) (http.Handler, string, []*http.Cookie) {
+func TestChatAPIValidationAuthAndRunMappings(t *testing.T) {
+	h, db, pid, cookies := chatAPIServer(t, &failingProvider{})
+	create := func(title string) domain.Session {
+		t.Helper()
+		res := apiRequest(t, h, "POST", "/api/v1/projects/"+pid+"/sessions", map[string]string{"title": title, "provider": "openai", "model_id": "m"}, cookies, "csrf")
+		if res.Code != http.StatusCreated {
+			t.Fatalf("create %s=%d %s", title, res.Code, res.Body.String())
+		}
+		var s domain.Session
+		if err := json.Unmarshal(res.Body.Bytes(), &s); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	s := create("active")
+	path := "/api/v1/sessions/" + s.ID + "/messages"
+	if got := apiRequest(t, h, "POST", path, map[string]string{"content": "x", "request_key": "k"}, nil, "bad").Code; got != http.StatusUnauthorized {
+		t.Fatalf("anonymous post=%d", got)
+	}
+	for _, body := range []string{`{"content":" ","request_key":"k"}`, `{"content":"x","request_key":" \t"}`, `{"content":"x","request_key":"k"}{"content":"y","request_key":"z"}`} {
+		if got := rawAPIRequest(t, h, "POST", path, body, cookies, "csrf").Code; got != http.StatusBadRequest {
+			t.Fatalf("invalid message %q=%d", body, got)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO agent_runs(id,session_id,request_key,status,created_at) VALUES('busy-run',?,?,'queued','1970-01-01T00:00:00Z')`, s.ID, "other-key"); err != nil {
+		t.Fatal(err)
+	}
+	if got := apiRequest(t, h, "POST", path, map[string]string{"content": "x", "request_key": "fresh"}, cookies, "csrf").Code; got != http.StatusConflict {
+		t.Fatalf("busy=%d", got)
+	}
+
+	terminal := create("terminal")
+	if got := apiRequest(t, h, "DELETE", "/api/v1/sessions/"+terminal.ID, nil, cookies, "csrf").Code; got != http.StatusNoContent {
+		t.Fatalf("delete terminal fixture=%d", got)
+	}
+	if got := apiRequest(t, h, "POST", "/api/v1/sessions/"+terminal.ID+"/messages", map[string]string{"content": "x", "request_key": "fresh-terminal"}, cookies, "csrf").Code; got != http.StatusConflict {
+		t.Fatalf("terminal=%d", got)
+	}
+	for _, suffix := range []string{"/messages", "/runs/current"} {
+		if got := apiRequest(t, h, "GET", "/api/v1/sessions/missing"+suffix, nil, cookies, "").Code; got != http.StatusNotFound {
+			t.Fatalf("missing %s=%d", suffix, got)
+		}
+	}
+	if got := apiRequest(t, h, "POST", "/api/v1/sessions/missing/messages", map[string]string{"content": "x", "request_key": "missing"}, cookies, "csrf").Code; got != http.StatusNotFound {
+		t.Fatalf("post missing session=%d", got)
+	}
+	none := create("none")
+	current := apiRequest(t, h, "GET", "/api/v1/sessions/"+none.ID+"/runs/current", nil, cookies, "")
+	if current.Code != http.StatusNoContent || current.Body.Len() != 0 {
+		t.Fatalf("no current=%d body=%q", current.Code, current.Body.String())
+	}
+}
+
+func chatAPIServer(t *testing.T, provider agent.Provider) (http.Handler, *sql.DB, string, []*http.Cookie) {
 	t.Helper()
 	// Shared setup variant allows exercising the injected provider.
 	db, dir := testutil.TempDB(t)
 	now := time.Unix(1000, 0).UTC()
-	_, _ = db.Exec(`INSERT INTO owner(id,password_hash,created_at,updated_at) VALUES(1,'x',?,?)`, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
-	_, _ = db.Exec(`INSERT INTO auth_sessions(token_hash,csrf_token,expires_at,created_at) VALUES(?,?,?,?)`, auth.TokenHash("token"), "csrf", now.Add(time.Hour).Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
-	_, _ = db.Exec(`INSERT INTO vaults(id,name,created_at,updated_at) VALUES('v','v',?,?)`, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
-	_, _ = db.Exec(`INSERT INTO projects(id,vault_id,name,created_at,updated_at) VALUES('p','v','p',?,?)`, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
-	return New(ServerDeps{DB: db, DataDir: dir, Clock: &clock.FakeClock{T: now}, Models: []config.ModelRef{{Provider: "openai", ModelID: "m"}}, Provider: provider}), "p", []*http.Cookie{{Name: "pa_session", Value: "token"}, {Name: "pa_csrf", Value: "csrf"}}
+	for _, seed := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO owner(id,password_hash,created_at,updated_at) VALUES(1,'x',?,?)`, []any{now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)}},
+		{`INSERT INTO auth_sessions(token_hash,csrf_token,expires_at,created_at) VALUES(?,?,?,?)`, []any{auth.TokenHash("token"), "csrf", now.Add(time.Hour).Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)}},
+		{`INSERT INTO vaults(id,name,created_at,updated_at) VALUES('v','v',?,?)`, []any{now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)}},
+		{`INSERT INTO projects(id,vault_id,name,created_at,updated_at) VALUES('p','v','p',?,?)`, []any{now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)}},
+	} {
+		if _, err := db.Exec(seed.query, seed.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return New(ServerDeps{DB: db, DataDir: dir, Clock: &clock.FakeClock{T: now}, Models: []config.ModelRef{{Provider: "openai", ModelID: "m"}}, Provider: provider}), db, "p", []*http.Cookie{{Name: "pa_session", Value: "token"}, {Name: "pa_csrf", Value: "csrf"}}
 }

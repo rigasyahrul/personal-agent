@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -39,9 +38,7 @@ func (h *chatHandlers) messagesRoute(w http.ResponseWriter, r *http.Request) {
 		Content    string `json:"content"`
 		RequestKey string `json:"request_key"`
 	}
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&in) != nil || strings.TrimSpace(in.Content) == "" || strings.TrimSpace(in.RequestKey) == "" {
+	if decodeStrictJSON(r, &in) != nil || strings.TrimSpace(in.Content) == "" || strings.TrimSpace(in.RequestKey) == "" {
 		apiError(w, 400, "invalid_message")
 		return
 	}

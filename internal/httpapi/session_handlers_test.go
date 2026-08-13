@@ -12,6 +12,7 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
+	"github.com/rigasyahrul/personal-agent/internal/store"
 	"github.com/rigasyahrul/personal-agent/internal/testutil"
 )
 
@@ -44,6 +45,20 @@ func apiRequest(t *testing.T, h http.Handler, method, path string, body any, coo
 		}
 	}
 	r := httptest.NewRequest(method, path, &b)
+	for _, c := range cookies {
+		r.AddCookie(c)
+	}
+	if csrf != "" {
+		r.Header.Set("X-CSRF-Token", csrf)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
+func rawAPIRequest(t *testing.T, h http.Handler, method, path, body string, cookies []*http.Cookie, csrf string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 	for _, c := range cookies {
 		r.AddCookie(c)
 	}
@@ -108,12 +123,43 @@ func TestSessionAPICreateValidation(t *testing.T) {
 	}
 	h, pid, cookies = sessionAPIServer(t, []config.ModelRef{{Provider: "openai", ModelID: "m"}})
 	path = "/api/v1/projects/" + pid + "/sessions"
-	for _, body := range []any{map[string]any{"home": "vault", "provider": "openai", "model_id": "m"}, map[string]any{"provider": "openai", "model_id": "other"}, map[string]any{"provider": "openai", "model_id": "m", "tool_grants": map[string]bool{"other": true}}, "bad"} {
+	for _, body := range []any{map[string]any{"home": "vault", "title": "x", "provider": "openai", "model_id": "m"}, map[string]any{"title": "x", "provider": "openai", "model_id": "other"}, map[string]any{"title": "x", "provider": "openai", "model_id": "m", "tool_grants": map[string]bool{"other": true}}, map[string]any{"title": " \t", "provider": "openai", "model_id": "m"}, "bad"} {
 		if got := apiRequest(t, h, "POST", path, body, cookies, "csrf").Code; got != 400 {
 			t.Fatalf("invalid %#v=%d", body, got)
 		}
 	}
+	trailing := `{"title":"x","provider":"openai","model_id":"m"}{"title":"y","provider":"openai","model_id":"m"}`
+	if got := rawAPIRequest(t, h, "POST", path, trailing, cookies, "csrf").Code; got != 400 {
+		t.Fatalf("trailing JSON=%d", got)
+	}
 	if got := apiRequest(t, h, "POST", "/api/v1/projects/missing/sessions", valid, cookies, "csrf").Code; got != 404 {
 		t.Fatalf("missing project=%d", got)
+	}
+	if got := apiRequest(t, h, "GET", "/api/v1/projects/missing/sessions", nil, cookies, "").Code; got != 404 {
+		t.Fatalf("list missing project=%d", got)
+	}
+}
+
+func TestSessionAPIDeleteAuthenticatesBeforeCSRF(t *testing.T) {
+	h, _, _ := sessionAPIServer(t, []config.ModelRef{{Provider: "openai", ModelID: "m"}})
+	if got := apiRequest(t, h, "DELETE", "/api/v1/sessions/missing", nil, nil, "bad").Code; got != http.StatusUnauthorized {
+		t.Fatalf("anonymous delete=%d", got)
+	}
+}
+
+func TestProjectSessionsDatabaseFailureIsInternalError(t *testing.T) {
+	db, dir := testutil.TempDB(t)
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	h := &sessionHandlers{sessions: &store.SessionStore{DB: db, DataDir: dir}}
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		r := httptest.NewRequest(method, "/api/v1/projects/p/sessions", nil)
+		r.SetPathValue("id", "p")
+		w := httptest.NewRecorder()
+		h.projectSessions(w, r)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("%s database failure=%d", method, w.Code)
+		}
 	}
 }
