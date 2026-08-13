@@ -1,6 +1,7 @@
 package fsroot_test
 
 import (
+	"bytes"
 	"errors"
 	"io/fs"
 	"os"
@@ -329,16 +330,34 @@ func TestWriteFileAtomicCommitFailurePreservesOldRegularFileAndCleansTemps(t *te
 		t.Fatal(err)
 	}
 	defer r.Close()
-	if err := os.Chmod(dir, 0500); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
 
-	if err := r.WriteFileAtomic("note.md", []byte("replacement"), 0600); err == nil {
+	removed := make(chan error, 1)
+	go func() {
+		for {
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				removed <- err
+				return
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), ".pa-write-") {
+					removed <- os.Remove(filepath.Join(dir, entry.Name()))
+					return
+				}
+			}
+			runtime.Gosched()
+		}
+	}()
+
+	writeErr := r.WriteFileAtomic("note.md", make([]byte, 1<<20), 0600)
+	if removeErr := <-removed; removeErr != nil {
+		t.Fatal(removeErr)
+	}
+	if writeErr == nil {
 		t.Fatal("write unexpectedly succeeded")
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "note.md"))
-	if err != nil || string(got) != string(old) {
+	if err != nil || !bytes.Equal(got, old) {
 		t.Fatalf("old file = %q, %v", got, err)
 	}
 	entries, err := os.ReadDir(dir)
