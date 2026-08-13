@@ -216,6 +216,15 @@ func (m *Machine) runPromote(ctx context.Context, in PublishInput, targetPath st
 		if old.Status == "failed" {
 			return old.Status, old.NoteID, &ConflictError{Code: "destination_exists"}
 		}
+		if old.Status == "accepted" {
+			body, loadErr := m.loadPromoteBody(ctx, in)
+			if loadErr != nil {
+				return old.Status, old.NoteID, loadErr
+			}
+			if err = m.writeStage("promote", old.ID, body); err != nil {
+				return old.Status, old.NoteID, err
+			}
+		}
 		if err = m.resume(ctx, old); err != nil {
 			return old.Status, old.NoteID, err
 		}
@@ -225,27 +234,30 @@ func (m *Machine) runPromote(ctx context.Context, in PublishInput, targetPath st
 	if !store.IsNoRows(err) {
 		return "", in.NoteID, err
 	}
-	var home, status, projectID string
-	var vault sql.NullString
-	if err = m.DB.QueryRowContext(ctx, `SELECT home,status,project_id,vault_id FROM sessions WHERE id=?`, in.SessionID).Scan(&home, &status, &projectID, &vault); err != nil {
-		return "", in.NoteID, err
-	}
-	if status != "active" || home != "project" || projectID != in.TargetProjectID {
-		return "", in.NoteID, fmt.Errorf("session project is the only promote target")
-	}
-	workspace, err := fsroot.Open(layout.SessionWorkspace(m.DataDir, layout.SessionHome(home), vault.String, projectID, in.SessionID))
-	if err != nil {
-		return "", in.NoteID, err
-	}
-	body, err := workspace.ReadFile(in.WorkspacePath, pathcheck.MaxMarkdownBytes)
-	_ = workspace.Close()
+	body, err := m.loadPromoteBody(ctx, in)
 	if err != nil {
 		return "", in.NoteID, err
 	}
 	now := m.now()
 	_, err = m.DB.ExecContext(ctx, `INSERT INTO promote_ops(id,request_key,request_fingerprint,session_id,workspace_path,target_project_id,target_relative_path,review_mode,note_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'accepted',?,?)`, in.OpID, in.RequestKey, in.RequestFingerprint, in.SessionID, in.WorkspacePath, in.TargetProjectID, targetPath, in.ReviewMode, in.NoteID, now, now)
 	if err != nil {
-		return "", in.NoteID, err
+		race, lookupErr := ps.ByKey(ctx, in.RequestKey)
+		if lookupErr != nil {
+			return "", in.NoteID, err
+		}
+		if race.RequestFingerprint != in.RequestFingerprint {
+			return race.Status, race.NoteID, &ConflictError{Code: "idempotency_key_reused"}
+		}
+		if race.Status == "accepted" {
+			if err = m.writeStage("promote", race.ID, body); err != nil {
+				return race.Status, race.NoteID, err
+			}
+		}
+		if err = m.resume(ctx, race); err != nil {
+			return race.Status, race.NoteID, err
+		}
+		race, err = ps.ByID(ctx, race.ID)
+		return race.Status, race.NoteID, err
 	}
 	if err = m.writeStage("promote", in.OpID, body); err != nil {
 		return "accepted", in.NoteID, err
@@ -262,6 +274,23 @@ func (m *Machine) runPromote(ctx context.Context, in PublishInput, targetPath st
 	}
 	o, err = ps.ByID(ctx, in.OpID)
 	return o.Status, o.NoteID, err
+}
+
+func (m *Machine) loadPromoteBody(ctx context.Context, in PublishInput) ([]byte, error) {
+	var home, status, projectID string
+	var vault sql.NullString
+	if err := m.DB.QueryRowContext(ctx, `SELECT home,status,project_id,vault_id FROM sessions WHERE id=?`, in.SessionID).Scan(&home, &status, &projectID, &vault); err != nil {
+		return nil, err
+	}
+	if status != "active" || home != "project" || projectID != in.TargetProjectID {
+		return nil, fmt.Errorf("session project is the only promote target")
+	}
+	workspace, err := fsroot.Open(layout.SessionWorkspace(m.DataDir, layout.SessionHome(home), vault.String, projectID, in.SessionID))
+	if err != nil {
+		return nil, err
+	}
+	defer workspace.Close()
+	return workspace.ReadFile(in.WorkspacePath, pathcheck.MaxMarkdownBytes)
 }
 
 var publicationRank = map[string]int{

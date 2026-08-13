@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -199,6 +200,52 @@ func TestPromotePublishesOnceAndRejectsChangedFingerprint(t *testing.T) {
 	var conflict *publish.ConflictError
 	if !errors.As(err, &conflict) || conflict.Code != "idempotency_key_reused" {
 		t.Fatalf("changed fingerprint error=%v", err)
+	}
+}
+
+func TestConcurrentPromoteSameKeyRetriesAcrossMachinesConverge(t *testing.T) {
+	d, db, c, base := promoteFixture(t)
+	const callers = 16
+	start := make(chan struct{})
+	type result struct {
+		status, note string
+		err          error
+	}
+	results := make(chan result, callers)
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			in := base
+			in.OpID = fmt.Sprintf("promote-op-%d", i)
+			in.NoteID = fmt.Sprintf("promote-note-%d", i)
+			m := publish.Machine{DB: db, DataDir: d, Clock: c}
+			<-start
+			status, note, err := m.Run(context.Background(), in)
+			results <- result{status: status, note: note, err: err}
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+
+	var originalNote string
+	for got := range results {
+		if got.err != nil || got.status != "completed" {
+			t.Errorf("result=%+v", got)
+		}
+		if originalNote == "" {
+			originalNote = got.note
+		} else if got.note != originalNote {
+			t.Errorf("note=%q, want original %q", got.note, originalNote)
+		}
+	}
+	for table, where := range map[string]string{"promote_ops": "request_key='promote-key'", "notes": "relative_path='guides/frozen.md'", "review_items": "note_id='" + originalNote + "'"} {
+		var count int
+		if err := db.QueryRow("SELECT count(*) FROM " + table + " WHERE " + where).Scan(&count); err != nil || count != 1 {
+			t.Errorf("%s count=%d err=%v", table, count, err)
+		}
 	}
 }
 
