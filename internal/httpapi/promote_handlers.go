@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"strings"
 
@@ -93,7 +94,7 @@ func (h promoteHandlers) create(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusConflict, map[string]string{"code": code})
 		return
 	}
-	if errors.Is(runErr, sql.ErrNoRows) {
+	if errors.Is(runErr, sql.ErrNoRows) || errors.Is(runErr, fs.ErrNotExist) {
 		jsonResponse(w, http.StatusNotFound, map[string]string{"code": "source_not_found"})
 		return
 	}
@@ -136,6 +137,33 @@ func (h promoteHandlers) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dto := operationStatusDTO{OperationID: op.ID, NoteID: op.NoteID, PublicationStatus: op.Status}
+	var noteStatus string
+	noteErr := h.db.QueryRowContext(r.Context(), `SELECT status FROM notes WHERE id=?`, op.NoteID).Scan(&noteStatus)
+	if noteErr == nil {
+		dto.NoteStatus = &noteStatus
+	} else if !errors.Is(noteErr, sql.ErrNoRows) {
+		internalError(w)
+		return
+	}
+
+	var pending *store.ReviewPending
+	if op.ReviewMode == "bites" && op.FrozenSHA != "" {
+		p, pendingErr := store.ReviewPendingForPublication(r.Context(), h.db, op.NoteID, op.FrozenSHA)
+		if pendingErr == nil {
+			pending = &p
+			dto.PendingID, dto.PendingStatus = &p.ID, &p.Status
+			dto.RetryCards = p.Status == "failed"
+		} else if !errors.Is(pendingErr, sql.ErrNoRows) {
+			internalError(w)
+			return
+		}
+	}
+
+	requiresNote := op.Status == "path_reserved" || op.Status == "published_fs" || op.Status == "finalized" || op.Status == "review_enqueued" || op.Status == "completed"
+	if requiresNote && dto.NoteStatus == nil || (op.Status == "path_reserved" || op.Status == "published_fs") && noteStatus != "pending" || (op.Status == "finalized" || op.Status == "review_enqueued" || op.Status == "completed") && noteStatus != "ready" || op.ReviewMode == "bites" && (op.Status == "review_enqueued" || op.Status == "completed") && pending == nil {
+		internalError(w)
+		return
+	}
 	if op.Status == "failed" {
 		dto.Badge = "Promote failed — Retry"
 		jsonResponse(w, http.StatusOK, dto)
@@ -146,23 +174,7 @@ func (h promoteHandlers) status(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, dto)
 		return
 	}
-	var noteStatus string
-	if err := h.db.QueryRowContext(r.Context(), `SELECT status FROM notes WHERE id=?`, op.NoteID).Scan(&noteStatus); err != nil {
-		internalError(w)
-		return
-	}
-	dto.NoteStatus = &noteStatus
-	if noteStatus != "ready" {
-		internalError(w)
-		return
-	}
 	if op.ReviewMode == "bites" {
-		pending, err := store.ReviewPendingForPublication(r.Context(), h.db, op.NoteID, op.FrozenSHA)
-		if err != nil {
-			internalError(w)
-			return
-		}
-		dto.PendingID, dto.PendingStatus = &pending.ID, &pending.Status
 		switch pending.Status {
 		case "pending", "leased":
 			dto.Badge = "Note saved; cards pending…"
