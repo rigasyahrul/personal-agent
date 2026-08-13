@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rigasyahrul/personal-agent/internal/agent/tools"
@@ -125,6 +126,16 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 		if len(response.ToolCalls) == 0 {
 			return r.Messages.Append(ctx, domain.Message{SessionID: session.ID, RunID: &run, Role: domain.MessageRoleAssistant,
 				Content: response.Content, Status: domain.MessageStatusComplete, CreatedAt: r.now()})
+		}
+		callIDs := make(map[string]struct{}, len(response.ToolCalls))
+		for _, call := range response.ToolCalls {
+			if strings.TrimSpace(call.ID) == "" {
+				return errors.New("provider returned an invalid tool call ID")
+			}
+			if _, exists := callIDs[call.ID]; exists {
+				return errors.New("provider returned duplicate tool call IDs")
+			}
+			callIDs[call.ID] = struct{}{}
 		}
 		if workspace == nil {
 			return errors.New("provider returned a tool call without a workspace grant")

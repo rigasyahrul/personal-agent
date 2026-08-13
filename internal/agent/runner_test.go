@@ -139,6 +139,46 @@ func TestRunnerRejectsHostileAndUnknownToolArgumentsSafely(t *testing.T) {
 	}
 }
 
+func TestRunnerRejectsInvalidToolCallIDsBeforePersistenceOrExecution(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		calls []ToolCall
+	}{
+		{name: "empty", calls: []ToolCall{{ID: "", Name: "write_file", Arguments: `{"path":"empty.txt","content":"bad"}`}}},
+		{name: "whitespace", calls: []ToolCall{{ID: " \t\n", Name: "write_file", Arguments: `{"path":"whitespace.txt","content":"bad"}`}}},
+		{name: "duplicate", calls: []ToolCall{
+			{ID: "same", Name: "write_file", Arguments: `{"path":"first.txt","content":"bad"}`},
+			{ID: "same", Name: "write_file", Arguments: `{"path":"second.txt","content":"bad"}`},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &scriptedProvider{responses: []ChatResponse{{ToolCalls: tc.calls}}}
+			runner, sessionID, runs, messages := toolRunner(t, provider, true)
+
+			runID, err := runner.Start(context.Background(), sessionID, "invalid-"+tc.name, "try invalid calls")
+			if err == nil {
+				t.Fatal("Start succeeded")
+			}
+			run, lookupErr := runs.ByID(context.Background(), runID)
+			if lookupErr != nil || run.Status != domain.AgentRunStatusFailed {
+				t.Fatalf("run = %#v, %v", run, lookupErr)
+			}
+			if len(provider.requests) != 1 {
+				t.Fatalf("provider calls = %d, want 1", len(provider.requests))
+			}
+			history, listErr := messages.List(context.Background(), sessionID)
+			if listErr != nil || len(history) != 1 || history[0].Role != domain.MessageRoleUser {
+				t.Fatalf("history = %#v, %v", history, listErr)
+			}
+			workspace := filepath.Join(runner.DataDir, "files", "global", "sessions", sessionID)
+			entries, readErr := os.ReadDir(workspace)
+			if readErr != nil || len(entries) != 0 {
+				t.Fatalf("workspace entries = %#v, %v", entries, readErr)
+			}
+		})
+	}
+}
+
 func TestRunnerToolRoundLimitTerminalizesRun(t *testing.T) {
 	responses := make([]ChatResponse, 8)
 	for i := range responses {
