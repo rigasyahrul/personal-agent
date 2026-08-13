@@ -344,66 +344,151 @@ func TestRecoverAfterPublishedFileBeforeFinalization(t *testing.T) {
 	}
 }
 
-func TestRecoverAllConvergesPromoteAfterFilesystemPublish(t *testing.T) {
+func preparePromoteRecovery(t *testing.T, status string, mode domain.ReviewMode) (string, *sql.DB, publish.Machine, publish.PublishInput, string) {
+	t.Helper()
 	d, db, c, in := promoteFixture(t)
-	m := publish.Machine{DB: db, DataDir: d, Clock: c}
-	if _, _, err := m.Run(context.Background(), in); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`UPDATE notes SET status='pending',content_sha256=NULL,byte_size=NULL,revision=0 WHERE id=?`, in.NoteID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`UPDATE promote_ops SET status='published_fs' WHERE id=?`, in.OpID); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(layout.SessionWorkspace(d, "project", "v1", "p1", "s1"), "draft.md"), []byte("changed workspace"), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := m.RecoverAll(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if err := m.RecoverAll(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	var opStatus, noteStatus string
-	if err := db.QueryRow(`SELECT o.status,n.status FROM promote_ops o JOIN notes n ON n.id=o.note_id WHERE o.id=?`, in.OpID).Scan(&opStatus, &noteStatus); err != nil {
-		t.Fatal(err)
-	}
-	if opStatus != "completed" || noteStatus != "ready" {
-		t.Fatalf("op=%q note=%q", opStatus, noteStatus)
-	}
-	var reviews int
-	if err := db.QueryRow(`SELECT count(*) FROM review_items WHERE note_id=?`, in.NoteID).Scan(&reviews); err != nil || reviews != 1 {
-		t.Fatalf("reviews=%d err=%v", reviews, err)
-	}
-}
-
-func TestRecoverAllPromotePublishedDestinationMismatchFailsSafely(t *testing.T) {
-	d, db, c, in := promoteFixture(t)
+	in.ReviewMode = mode
 	m := publish.Machine{DB: db, DataDir: d, Clock: c}
 	if _, _, err := m.Run(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}
 	destination := filepath.Join(layout.SourceDir(layout.ProjectRoot(d, "v1", "p1")), filepath.FromSlash(in.TargetRelPath))
-	if err := os.WriteFile(destination, []byte("tampered"), 0600); err != nil {
+	if status != "review_enqueued" {
+		if _, err := db.Exec(`DELETE FROM review_items WHERE note_id=?; DELETE FROM review_pending WHERE note_id=?`, in.NoteID, in.NoteID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	switch status {
+	case "accepted", "frozen":
+		if _, err := db.Exec(`DELETE FROM notes WHERE id=?`, in.NoteID); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(destination); err != nil {
+			t.Fatal(err)
+		}
+	case "path_reserved", "published_fs":
+		if _, err := db.Exec(`UPDATE notes SET status='pending',content_sha256=NULL,byte_size=NULL,revision=0 WHERE id=?`, in.NoteID); err != nil {
+			t.Fatal(err)
+		}
+		if status == "path_reserved" {
+			if err := os.Remove(destination); err != nil {
+				t.Fatal(err)
+			}
+		}
+	case "finalized", "review_enqueued":
+		// The completed baseline already has the required ready Note and file.
+	default:
+		t.Fatalf("unsupported status %q", status)
+	}
+	if status != "accepted" {
+		workspace := filepath.Join(layout.SessionWorkspace(d, "project", "v1", "p1", "s1"), "draft.md")
+		if err := os.WriteFile(workspace, []byte("changed workspace"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`UPDATE promote_ops SET status=? WHERE id=?`, status, in.OpID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`UPDATE promote_ops SET status='finalized' WHERE id=?`, in.OpID); err != nil {
-		t.Fatal(err)
-	}
+	return d, db, m, in, destination
+}
 
-	err := m.RecoverAll(context.Background())
-	if err == nil {
-		t.Fatal("expected startup recovery failure")
+func TestRecoverAllPromoteCrashStateMatrix(t *testing.T) {
+	for _, status := range []string{"accepted", "frozen", "path_reserved", "published_fs", "finalized", "review_enqueued"} {
+		t.Run(status, func(t *testing.T) {
+			_, db, m, in, destination := preparePromoteRecovery(t, status, "whole")
+			if err := m.RecoverAll(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.RecoverAll(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			var opStatus, noteStatus string
+			if err := db.QueryRow(`SELECT o.status,n.status FROM promote_ops o JOIN notes n ON n.id=o.note_id WHERE o.id=?`, in.OpID).Scan(&opStatus, &noteStatus); err != nil {
+				t.Fatal(err)
+			}
+			if opStatus != "completed" || noteStatus != "ready" {
+				t.Fatalf("op=%q note=%q", opStatus, noteStatus)
+			}
+			body, err := os.ReadFile(destination)
+			if err != nil || string(body) != "# Frozen\n" {
+				t.Fatalf("destination=%q err=%v", body, err)
+			}
+			var reviews int
+			if err := db.QueryRow(`SELECT count(*) FROM review_items WHERE note_id=? AND kind='whole'`, in.NoteID).Scan(&reviews); err != nil || reviews != 1 {
+				t.Fatalf("whole reviews=%d err=%v", reviews, err)
+			}
+		})
 	}
-	var status string
-	if err := db.QueryRow(`SELECT status FROM promote_ops WHERE id=?`, in.OpID).Scan(&status); err != nil || status != "finalized" {
-		t.Fatalf("status=%q err=%v", status, err)
+}
+
+func TestRecoverAllPromoteBitesDeduplicatesPendingGeneration(t *testing.T) {
+	for _, status := range []string{"finalized", "review_enqueued"} {
+		t.Run(status, func(t *testing.T) {
+			_, db, m, in, _ := preparePromoteRecovery(t, status, "bites")
+			if err := m.RecoverAll(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.RecoverAll(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			var opStatus, noteStatus string
+			if err := db.QueryRow(`SELECT o.status,n.status FROM promote_ops o JOIN notes n ON n.id=o.note_id WHERE o.id=?`, in.OpID).Scan(&opStatus, &noteStatus); err != nil || opStatus != "completed" || noteStatus != "ready" {
+				t.Fatalf("op=%q note=%q err=%v", opStatus, noteStatus, err)
+			}
+			var pending int
+			if err := db.QueryRow(`SELECT count(*) FROM review_pending WHERE note_id=? AND generator_version='bites-v1' AND status='pending'`, in.NoteID).Scan(&pending); err != nil || pending != 1 {
+				t.Fatalf("pending generations=%d err=%v", pending, err)
+			}
+		})
 	}
-	body, readErr := os.ReadFile(destination)
-	if readErr != nil || string(body) != "tampered" {
-		t.Fatalf("destination=%q err=%v", body, readErr)
+}
+
+func TestRecoverAllPromoteRejectsInvalidReviewEnqueuedState(t *testing.T) {
+	for _, mode := range []domain.ReviewMode{"whole", "bites"} {
+		t.Run(string(mode), func(t *testing.T) {
+			_, db, m, in, _ := preparePromoteRecovery(t, "review_enqueued", mode)
+			if _, err := db.Exec(`DELETE FROM review_items WHERE note_id=?; DELETE FROM review_pending WHERE note_id=?`, in.NoteID, in.NoteID); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.RecoverAll(context.Background()); err == nil {
+				t.Fatal("expected invalid review_enqueued state to fail recovery")
+			}
+			var status string
+			if err := db.QueryRow(`SELECT status FROM promote_ops WHERE id=?`, in.OpID).Scan(&status); err != nil || status != "review_enqueued" {
+				t.Fatalf("status=%q err=%v", status, err)
+			}
+		})
+	}
+}
+
+func TestRecoverAllPromotePublishedDestinationReconciliation(t *testing.T) {
+	for _, status := range []string{"published_fs", "finalized", "review_enqueued"} {
+		for _, damage := range []string{"missing", "hash_mismatch", "size_mismatch"} {
+			t.Run(status+"/"+damage, func(t *testing.T) {
+				_, db, m, in, destination := preparePromoteRecovery(t, status, "whole")
+				switch damage {
+				case "missing":
+					if err := os.Remove(destination); err != nil {
+						t.Fatal(err)
+					}
+				case "hash_mismatch":
+					if err := os.WriteFile(destination, []byte("# Change\n"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				case "size_mismatch":
+					if err := os.WriteFile(destination, []byte("tampered and longer"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := m.RecoverAll(context.Background()); err == nil {
+					t.Fatal("expected reconciliation failure")
+				}
+				var got string
+				if err := db.QueryRow(`SELECT status FROM promote_ops WHERE id=?`, in.OpID).Scan(&got); err != nil || got != status {
+					t.Fatalf("status=%q want=%q err=%v", got, status, err)
+				}
+			})
+		}
 	}
 }
 

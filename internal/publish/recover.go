@@ -44,6 +44,19 @@ func (m *Machine) recover(ctx context.Context, o store.DirectOperation) error {
 		if state != destinationMatches {
 			return fmt.Errorf("published destination is missing, mismatched, or unsafe")
 		}
+		if o.Status == "review_enqueued" && o.ReviewMode != "none" {
+			query := `SELECT count(*) FROM review_items WHERE note_id=? AND kind='whole' AND source_sha256=?`
+			if o.ReviewMode == "bites" {
+				query = `SELECT count(*) FROM review_pending WHERE note_id=? AND generator_version='bites-v1' AND source_sha256=?`
+			}
+			var count int
+			if err := m.DB.QueryRowContext(ctx, query, o.NoteID, o.FrozenSHA).Scan(&count); err != nil {
+				return err
+			}
+			if count != 1 {
+				return fmt.Errorf("review_enqueued publication has %d matching review generations", count)
+			}
+		}
 	}
 	return m.resume(ctx, o)
 }
