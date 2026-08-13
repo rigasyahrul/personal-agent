@@ -9,6 +9,9 @@ class Root {
     this.html = value
     this.chatForm = value.includes('data-chat') ? {elements: {message: {value: this.chatForm?.elements.message.value || ''}}} : null
     this.newForm = value.includes('data-new') ? {elements: {title: {value: ''}, model: {value: '0'}, workspace_files: {checked: false}}} : null
+    this.back = value.includes('data-back') ? {addEventListener: (_, handler) => { this.back.onclick = handler }} : null
+    this.sendButton = value.includes('data-chat') ? {disabled: /<button disabled>Send<\/button>/.test(value)} : null
+    this.sessionButtons = [...value.matchAll(/data-session="([^"]+)"/g)].map(match => ({dataset: {session: match[1]}}))
   }
   get innerHTML() { return this.html }
   get textContent() { return this.html.replace(/<[^>]*>/g, ' ').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&') }
@@ -16,9 +19,17 @@ class Root {
     if (selector === 'form[data-chat]') return this.chatForm
     if (selector === 'form[data-new]') return this.newForm
     if (selector === '[name=message]') return this.chatForm?.elements.message
+    if (selector === '[data-back]') return this.back
+    if (selector === 'form[data-chat] button') return this.sendButton
     return null
   }
-  querySelectorAll() { return [] }
+  querySelectorAll(selector) { return selector === '[data-session]' ? this.sessionButtons : [] }
+}
+
+const deferred = () => {
+  let resolve, reject
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no })
+  return {promise, resolve, reject}
 }
 
 test('chat submit posts once with one stable key while polling and preserves history and draft after failure', async () => {
@@ -85,4 +96,112 @@ test('sessions route parses exactly and destroy clears polling timer', async () 
   await page.openChat({id: 's', title: 'S', provider: 'p', model_id: 'm'})
   page.destroy()
   assert.equal(cleared, 1)
+})
+
+test('polls serialize and coalesce, and an old session cannot overwrite the new chat', async () => {
+  const pending = []
+  const api = path => { const item = deferred(); pending.push({path, ...item}); return item.promise }
+  const root = new Root()
+  const page = createSessionsPage({root, api, projectID: 'p', setInterval: () => 1, clearInterval() {}})
+  const firstOpen = page.openChat({id: 'old', title: 'Old', provider: 'p', model_id: 'm'})
+  const extraA = page.poll(), extraB = page.poll()
+  assert.equal(pending.length, 2)
+  pending[0].resolve([{sequence: 1, role: 'user', content: 'old history'}]); pending[1].resolve(null)
+  await Promise.resolve(); await Promise.resolve()
+  assert.equal(pending.length, 4, 'many requests during a poll produce one follow-up pair')
+  pending[2].resolve([]); pending[3].resolve(null)
+  await Promise.all([firstOpen, extraA, extraB])
+
+  const stale = page.poll()
+  assert.equal(pending.length, 6)
+  const newOpen = page.openChat({id: 'new', title: 'New', provider: 'p', model_id: 'm'})
+  pending[4].resolve([{sequence: 2, role: 'assistant', content: 'stale old'}]); pending[5].resolve(null)
+  await Promise.resolve(); await Promise.resolve()
+  const newest = pending.slice(-2)
+  newest[0].resolve([{sequence: 1, role: 'user', content: 'new history'}]); newest[1].resolve(null)
+  await Promise.all([stale, newOpen])
+  assert.match(root.textContent, /New.*new history/s)
+  assert.doesNotMatch(root.textContent, /stale old/)
+})
+
+test('overlapping opens install only one timer and destroy clears it', async () => {
+  let installed = 0, cleared = 0
+  const page = createSessionsPage({root: new Root(), api: async path => path.endsWith('/messages') ? [] : null, projectID: 'p', setInterval: () => ++installed, clearInterval: () => cleared++})
+  await Promise.all([
+    page.openChat({id: 'same', title: 'Same', provider: 'p', model_id: 'm'}),
+    page.openChat({id: 'same', title: 'Same', provider: 'p', model_id: 'm'}),
+  ])
+  assert.equal(installed, 1)
+  page.destroy()
+  assert.equal(cleared, 1)
+})
+
+test('poll failure retains cached chat history and reports the error', async () => {
+  let fail = false
+  const api = async path => {
+    if (fail) throw new Error('network down')
+    return path.endsWith('/messages') ? [{sequence: 1, role: 'user', content: 'remember me'}] : {status: 'running'}
+  }
+  const root = new Root(), page = createSessionsPage({root, api, projectID: 'p', setInterval: () => 1, clearInterval() {}})
+  await page.openChat({id: 's', title: 'S', provider: 'p', model_id: 'm'})
+  fail = true; await page.poll()
+  assert.match(root.textContent, /remember me/)
+  assert.match(root.textContent, /network down/)
+  assert.match(root.innerHTML, /class="run-status" role="status" aria-live="polite"/)
+  assert.match(root.textContent, /Run: running/)
+})
+
+test('pending and failed send disables submit and retains draft, history, and one key', async () => {
+  const post = deferred(), calls = []
+  const api = (path, options = {}) => {
+    calls.push([path, options])
+    if (options.method === 'POST') return post.promise
+    return Promise.resolve(path.endsWith('/messages') ? [{sequence: 1, role: 'user', content: 'cached'}] : null)
+  }
+  const root = new Root(), page = createSessionsPage({root, api, projectID: 'p', randomUUID: () => 'one-key', setInterval: () => 1, clearInterval() {}})
+  await page.openChat({id: 's', title: 'S', provider: 'p', model_id: 'm'})
+  root.chatForm.elements.message.value = 'keep draft'
+  const sending = root.chatForm.onsubmit({preventDefault() {}})
+  assert.equal(root.querySelector('form[data-chat] button').disabled, true)
+  await root.chatForm.onsubmit({preventDefault() {}})
+  post.reject(new Error('send failed')); await sending
+  assert.equal(calls.filter(([, options]) => options.method === 'POST').length, 1)
+  assert.equal(calls.find(([, options]) => options.method === 'POST')[1].body.request_key, 'one-key')
+  assert.equal(root.querySelector('[name=message]').value, 'keep draft')
+  assert.match(root.textContent, /cached.*send failed/s)
+})
+
+test('pending send cannot leak into a newly opened session', async () => {
+  const post = deferred()
+  const api = (path, options = {}) => options.method === 'POST' ? post.promise : Promise.resolve(path.includes('/new/') && path.endsWith('/messages') ? [{sequence: 1, role: 'user', content: 'new only'}] : path.endsWith('/messages') ? [{sequence: 1, role: 'user', content: 'old'}] : null)
+  const root = new Root(), page = createSessionsPage({root, api, projectID: 'p', setInterval: () => 1, clearInterval() {}})
+  await page.openChat({id: 'old', title: 'Old', provider: 'p', model_id: 'm'})
+  root.chatForm.elements.message.value = 'old draft'
+  const sending = root.chatForm.onsubmit({preventDefault() {}})
+  await page.openChat({id: 'new', title: 'New', provider: 'p', model_id: 'm'})
+  post.reject(new Error('old failure')); await sending
+  assert.match(root.textContent, /New.*new only/s)
+  assert.doesNotMatch(root.textContent, /old failure|old draft/)
+})
+
+test('real create and navigation handlers consume failures and show create errors inline', async () => {
+  const unhandled = []
+  const listener = reason => unhandled.push(reason)
+  process.on('unhandledRejection', listener)
+  const root = new Root()
+  const api = async (path, options = {}) => {
+    if (path === '/api/v1/models') return {models: [{provider: 'p', model_id: 'm'}]}
+    if (options.method === 'POST') throw new Error('cannot create')
+    return [{id: 's', title: 'Session', provider: 'p', model_id: 'm'}]
+  }
+  const page = createSessionsPage({root, api, projectID: 'p', setInterval: () => 1, clearInterval() {}})
+  await page.list()
+  root.newForm.onsubmit({preventDefault() {}})
+  await new Promise(resolve => setImmediate(resolve))
+  assert.match(root.textContent, /cannot create/)
+  root.sessionButtons[0].onclick()
+  root.back?.onclick?.()
+  await new Promise(resolve => setImmediate(resolve))
+  process.off('unhandledRejection', listener)
+  assert.deepEqual(unhandled, [])
 })
