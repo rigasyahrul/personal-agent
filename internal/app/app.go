@@ -41,6 +41,16 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("recover unfinished publications: %w", err)
 	}
 	backupSvc := backup.NewService(db, cfg.DataDir, barrier, realClock, nil)
+	// Only load AWS/S3 when a bucket is explicitly configured; ignore ambient creds otherwise.
+	if cfg.BackupS3Bucket != "" {
+		sink, sinkErr := backup.NewAWSSinkFromEnv(ctx, cfg.BackupS3Bucket, cfg.BackupS3Region, cfg.BackupS3Endpoint)
+		if sinkErr != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("configure backup sink: %w", sinkErr)
+		}
+		backupSvc.Sink = sink
+		backupSvc.Bucket = cfg.BackupS3Bucket
+	}
 	provider := &agent.OpenAICompat{APIKey: cfg.OpenAIAPIKey, BaseURL: cfg.OpenAIBaseURL}
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	application := &App{

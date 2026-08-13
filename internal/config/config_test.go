@@ -60,3 +60,31 @@ func TestLoadRejectsAddressWithoutColon(t *testing.T) {
 		t.Fatal("Load() error = nil, want invalid PA_ADDR error")
 	}
 }
+
+func TestLoadBackupS3Optional(t *testing.T) {
+	t.Setenv("PA_BACKUP_S3_BUCKET", "")
+	t.Setenv("PA_S3_BUCKET", "")
+	t.Setenv("PA_BACKUP_S3_REGION", "")
+	t.Setenv("PA_S3_REGION", "")
+	t.Setenv("PA_BACKUP_S3_ENDPOINT", "")
+	t.Setenv("PA_S3_ENDPOINT", "")
+	t.Setenv("PA_ADDR", ":8080")
+	t.Setenv("PA_MODELS", "")
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.BackupS3Bucket != "" {
+		t.Fatalf("bucket=%q want empty", c.BackupS3Bucket)
+	}
+	t.Setenv("PA_BACKUP_S3_BUCKET", "my-backups")
+	t.Setenv("PA_BACKUP_S3_REGION", "auto")
+	t.Setenv("PA_BACKUP_S3_ENDPOINT", "https://s3.example")
+	c, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.BackupS3Bucket != "my-backups" || c.BackupS3Region != "auto" || c.BackupS3Endpoint != "https://s3.example" {
+		t.Fatalf("unexpected s3 config: %+v", c)
+	}
+}

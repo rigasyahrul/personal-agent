@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -140,6 +142,155 @@ func TestBarrierBlocksMutationDuringSnapshot(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("mutation remained blocked")
 	}
+}
+
+type memSink struct {
+	keys []string
+	err  error
+}
+
+func (m *memSink) Upload(_ context.Context, localDir, objectPrefix string) error {
+	if m.err != nil {
+		return m.err
+	}
+	return filepath.WalkDir(localDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(localDir, path)
+		if err != nil {
+			return err
+		}
+		key := strings.TrimSuffix(objectPrefix, "/") + "/" + filepath.ToSlash(rel)
+		m.keys = append(m.keys, key)
+		return nil
+	})
+}
+
+func testService(t *testing.T) (*backup.Service, *sql.DB, string) {
+	t.Helper()
+	dataDir := t.TempDir()
+	db, err := dbopen.Open(context.Background(), filepath.Join(dataDir, "db", "personal-agent.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','Known','2026-08-12T10:00:00Z','2026-08-12T10:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	source := layout.SourceDir(layout.ProjectRoot(dataDir, "", "p1"))
+	if err := os.MkdirAll(source, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "known.md"), []byte("# known note\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc := backup.NewService(db, dataDir, &backup.Barrier{}, &clock.FakeClock{T: time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC)}, nil)
+	// Always restore write bits under backups/ so t.TempDir cleanup succeeds after seals.
+	t.Cleanup(func() { unsealTree(t, filepath.Join(dataDir, "backups")) })
+	return svc, db, dataDir
+}
+
+func assertStoredStatus(t *testing.T, db *sql.DB, id, want string) {
+	t.Helper()
+	var got string
+	if err := db.QueryRow(`SELECT status FROM backup_runs WHERE id=?`, id).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("status=%q want %q", got, want)
+	}
+}
+
+func TestRunWithoutBucketSucceedsLocallyWithoutUpload(t *testing.T) {
+	svc, db, _ := testService(t)
+	up := &memSink{}
+	svc.Sink = up
+	run, err := svc.Run(context.Background())
+	if err != nil || run.Status != "succeeded" || len(up.keys) != 0 {
+		t.Fatalf("run=%+v keys=%v err=%v", run, up.keys, err)
+	}
+	t.Cleanup(func() { unsealTree(t, run.LocalPath) })
+	assertStoredStatus(t, db, run.ID, "succeeded")
+}
+
+func TestConfiguredUploadControlsFinalStatus(t *testing.T) {
+	svc, db, _ := testService(t)
+	up := &memSink{}
+	svc.Sink = up
+	svc.Bucket = "archive"
+	run, err := svc.Run(context.Background())
+	if err != nil || run.Status != "succeeded" || len(up.keys) == 0 || run.ObjectKey == "" {
+		t.Fatalf("run=%+v keys=%v err=%v", run, up.keys, err)
+	}
+	t.Cleanup(func() { unsealTree(t, run.LocalPath) })
+	assertStoredStatus(t, db, run.ID, "succeeded")
+	joined := strings.Join(up.keys, "\n")
+	if !strings.Contains(joined, "manifest.json") || !strings.Contains(joined, "database.sqlite") || !strings.Contains(joined, "files/") {
+		t.Fatalf("upload keys missing required members: %v", up.keys)
+	}
+
+	svc, db, _ = testService(t)
+	svc.Bucket = "archive"
+	svc.Sink = &memSink{err: fmt.Errorf("S3 unavailable")}
+	run, err = svc.Run(context.Background())
+	if err == nil || run.Status != "failed" || run.LocalPath == "" {
+		t.Fatalf("run=%+v err=%v", run, err)
+	}
+	t.Cleanup(func() { unsealTree(t, run.LocalPath) })
+	assertStoredStatus(t, db, run.ID, "failed")
+}
+
+func TestS3SinkUploadsDirectoryTree(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "database.sqlite"), []byte("db"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "files", "a"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "files", "a", "b.md"), []byte("note"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeS3{}
+	sink := backup.NewS3Sink(client, "bucket")
+	if err := sink.Upload(context.Background(), dir, "backups/run1"); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{
+		"backups/run1/manifest.json":   true,
+		"backups/run1/database.sqlite": true,
+		"backups/run1/files/a/b.md":    true,
+	}
+	if len(client.keys) != len(want) {
+		t.Fatalf("keys=%v", client.keys)
+	}
+	for _, k := range client.keys {
+		if !want[k] {
+			t.Fatalf("unexpected key %q in %v", k, client.keys)
+		}
+	}
+}
+
+type fakeS3 struct {
+	keys []string
+}
+
+func (f *fakeS3) PutObject(_ context.Context, bucket, key string, body io.Reader, size int64, _ string) error {
+	if bucket != "bucket" || size < 0 {
+		return fmt.Errorf("bad put")
+	}
+	if _, err := io.ReadAll(body); err != nil {
+		return err
+	}
+	f.keys = append(f.keys, key)
+	return nil
 }
 
 type testManifest struct {

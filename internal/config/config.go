@@ -18,16 +18,23 @@ type Config struct {
 	OpenAIAPIKey                  string
 	OpenAIBaseURL                 string
 	Models                        []ModelRef
+	// Backup S3 is optional. Empty BackupS3Bucket => local-only; do not load AWS.
+	BackupS3Bucket   string
+	BackupS3Region   string
+	BackupS3Endpoint string // optional path-style endpoint for MinIO/R2/etc.
 }
 
 func Load() (Config, error) {
 	c := Config{
-		DataDir:        os.Getenv("PA_DATA_DIR"),
-		Addr:           os.Getenv("PA_ADDR"),
-		BootstrapToken: os.Getenv("BOOTSTRAP_TOKEN"),
-		SecureCookies:  os.Getenv("PA_SECURE_COOKIES") != "false",
-		OpenAIAPIKey:   os.Getenv("OPENAI_API_KEY"),
-		OpenAIBaseURL:  os.Getenv("OPENAI_BASE_URL"),
+		DataDir:          os.Getenv("PA_DATA_DIR"),
+		Addr:             os.Getenv("PA_ADDR"),
+		BootstrapToken:   os.Getenv("BOOTSTRAP_TOKEN"),
+		SecureCookies:    os.Getenv("PA_SECURE_COOKIES") != "false",
+		OpenAIAPIKey:     os.Getenv("OPENAI_API_KEY"),
+		OpenAIBaseURL:    os.Getenv("OPENAI_BASE_URL"),
+		BackupS3Bucket:   firstEnv("PA_BACKUP_S3_BUCKET", "PA_S3_BUCKET"),
+		BackupS3Region:   firstEnv("PA_BACKUP_S3_REGION", "PA_S3_REGION"),
+		BackupS3Endpoint: firstEnv("PA_BACKUP_S3_ENDPOINT", "PA_S3_ENDPOINT"),
 	}
 	if c.DataDir == "" {
 		c.DataDir = "./data"
@@ -51,4 +58,13 @@ func Load() (Config, error) {
 		c.Models = append(c.Models, ModelRef{Provider: provider, ModelID: modelID})
 	}
 	return c, nil
+}
+
+func firstEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
 }
