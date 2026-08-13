@@ -96,21 +96,21 @@ func (s ReviewStore) Suspend(ctx context.Context, id string) error {
 }
 
 func (s ReviewStore) Rate(ctx context.Context, itemID, requestKey string, expectedVersion int64, rating domain.Rating, durationMS int64) (RatedItem, error) {
+	if strings.TrimSpace(itemID) == "" || strings.TrimSpace(requestKey) == "" || expectedVersion < 0 || durationMS < 0 || !validRating(rating) {
+		return RatedItem{}, ErrValidation
+	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return RatedItem{}, err
 	}
 	defer tx.Rollback()
 
-	prior, found, err := persistedEventResult(ctx, tx, requestKey)
+	prior, found, err := persistedEventResult(ctx, tx, itemID, requestKey, expectedVersion, rating, durationMS)
 	if err != nil {
 		return RatedItem{}, err
 	}
 	if found {
 		return prior, nil
-	}
-	if strings.TrimSpace(itemID) == "" || strings.TrimSpace(requestKey) == "" || durationMS < 0 || !validRating(rating) {
-		return RatedItem{}, ErrValidation
 	}
 
 	current, err := activeRatedItem(ctx, tx, itemID)
@@ -176,20 +176,28 @@ func validRating(rating domain.Rating) bool {
 	return rating == domain.RatingAgain || rating == domain.RatingHard || rating == domain.RatingGood || rating == domain.RatingEasy
 }
 
-func persistedEventResult(ctx context.Context, tx *sql.Tx, key string) (RatedItem, bool, error) {
-	var encoded string
-	err := tx.QueryRowContext(ctx, `SELECT resulting_state_json FROM review_events WHERE request_key=?`, key).Scan(&encoded)
+func persistedEventResult(ctx context.Context, tx *sql.Tx, itemID, key string, expectedVersion int64, rating domain.Rating, durationMS int64) (RatedItem, bool, error) {
+	var eventItemID, eventRating, previousEncoded, resultingEncoded string
+	var eventDuration sql.NullInt64
+	err := tx.QueryRowContext(ctx, `SELECT review_item_id,rating,duration_ms,previous_state_json,resulting_state_json FROM review_events WHERE request_key=?`, key).
+		Scan(&eventItemID, &eventRating, &eventDuration, &previousEncoded, &resultingEncoded)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RatedItem{}, false, nil
 	}
 	if err != nil {
 		return RatedItem{}, false, err
 	}
-	var item RatedItem
-	if err := json.Unmarshal([]byte(encoded), &item); err != nil {
+	var previous, resulting RatedItem
+	if err := json.Unmarshal([]byte(previousEncoded), &previous); err != nil {
 		return RatedItem{}, false, err
 	}
-	return item, true, nil
+	if err := json.Unmarshal([]byte(resultingEncoded), &resulting); err != nil {
+		return RatedItem{}, false, err
+	}
+	if eventItemID != itemID || eventRating != string(rating) || !eventDuration.Valid || eventDuration.Int64 != durationMS || previous.RowVersion != expectedVersion {
+		return RatedItem{}, true, ErrConflict
+	}
+	return resulting, true, nil
 }
 
 func activeRatedItem(ctx context.Context, tx *sql.Tx, id string) (RatedItem, error) {

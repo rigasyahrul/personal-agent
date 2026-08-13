@@ -71,7 +71,7 @@ func TestRateIsAtomicIdempotentAndVersioned(t *testing.T) {
 		t.Fatalf("persisted=%+v, want %+v", persisted, got)
 	}
 
-	again, err := s.Rate(ctx, itemID, "rate-1", -99, domain.RatingEasy, 20)
+	again, err := s.Rate(ctx, itemID, "rate-1", 0, domain.RatingGood, 1250)
 	if err != nil || !reflect.DeepEqual(again, got) {
 		t.Fatalf("replay=(%+v, %v), want original %+v", again, err, got)
 	}
@@ -91,6 +91,44 @@ func TestRateIsAtomicIdempotentAndVersioned(t *testing.T) {
 	}
 	if err := s.DB.QueryRow(`SELECT count(*) FROM review_events`).Scan(&events); err != nil || events != 1 {
 		t.Fatalf("events after stale rate=%d err=%v", events, err)
+	}
+}
+
+func TestRateRejectsRequestKeyReuseForDifferentMutation(t *testing.T) {
+	s, itemID := reviewStoreFixture(t)
+	ctx := context.Background()
+	if _, err := s.Rate(ctx, itemID, "rate-1", 0, domain.RatingGood, 1250); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.DB.Exec(`INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,stage,due_at,interval_days,ease_factor,reps,lapses,row_version,status,scheduler_version)
+		VALUES('item2','p1','n1','whole','sha',2,'Review this note',0,?,0,2.5,0,0,0,'active','sm2-lite-v1')`, s.Clock.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name       string
+		item       string
+		version    int64
+		rating     domain.Rating
+		durationMS int64
+	}{
+		{name: "item", item: "item2", version: 0, rating: domain.RatingGood, durationMS: 1250},
+		{name: "version", item: itemID, version: 1, rating: domain.RatingGood, durationMS: 1250},
+		{name: "rating", item: itemID, version: 0, rating: domain.RatingEasy, durationMS: 1250},
+		{name: "duration", item: itemID, version: 0, rating: domain.RatingGood, durationMS: 1251},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := s.Rate(ctx, tc.item, "rate-1", tc.version, tc.rating, tc.durationMS)
+			if !errors.Is(err, store.ErrConflict) {
+				t.Fatalf("err=%v, want request-key conflict", err)
+			}
+		})
+	}
+
+	var events int
+	if err := s.DB.QueryRow(`SELECT count(*) FROM review_events`).Scan(&events); err != nil || events != 1 {
+		t.Fatalf("events=%d err=%v", events, err)
 	}
 }
 

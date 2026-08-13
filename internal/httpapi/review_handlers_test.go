@@ -130,6 +130,10 @@ func TestReviewMutationsValidationIdempotencyAndBoundaries(t *testing.T) {
 	if first.Code != 200 || replay.Code != 200 || first.Body.String() != replay.Body.String() {
 		t.Fatalf("rate=%d/%d %q/%q", first.Code, replay.Code, first.Body.String(), replay.Body.String())
 	}
+	reused := reviewRequest(h, "POST", "/api/v1/review/items/item/rate", `{"rating":"easy","request_key":"key","row_version":1,"duration_ms":50}`, true, true)
+	if reused.Code != 409 || !strings.Contains(reused.Body.String(), `"error":"request_key_conflict"`) {
+		t.Fatalf("request key reuse=%d %q", reused.Code, reused.Body.String())
+	}
 	var events int
 	if err := d.queryRow("SELECT count(*) FROM review_events").Scan(&events); err != nil || events != 1 {
 		t.Fatalf("events=%d err=%v", events, err)

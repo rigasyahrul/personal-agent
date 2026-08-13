@@ -46,6 +46,8 @@ func (h reviewHandlers) rate(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.As(err, &conflict):
 		apiError(w, 409, "row_version_conflict")
+	case errors.Is(err, store.ErrConflict):
+		apiError(w, 409, "request_key_conflict")
 	case errors.Is(err, sql.ErrNoRows) || errors.Is(err, store.ErrNotFound):
 		apiError(w, 404, "review_item_not_found")
 	case errors.Is(err, store.ErrValidation):
