@@ -14,7 +14,7 @@ import (
 	database "github.com/rigasyahrul/personal-agent/internal/db"
 )
 
-func TestHealthSetupAndEmptyHome(t *testing.T) {
+func TestHealthAndSetupArePublicWhileHomeRequiresAuthentication(t *testing.T) {
 	dir := t.TempDir()
 	d, err := database.Open(context.Background(), filepath.Join(dir, "db", "a.sqlite"))
 	if err != nil {
@@ -28,7 +28,7 @@ func TestHealthSetupAndEmptyHome(t *testing.T) {
 		Clock:          &clock.FakeClock{T: time.Unix(0, 0)},
 		BootstrapToken: "x",
 	})
-	for _, path := range []string{"/health", "/api/v1/setup/status", "/api/v1/home"} {
+	for _, path := range []string{"/health", "/api/v1/setup/status"} {
 		r := httptest.NewRequest(http.MethodGet, path, nil)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
@@ -42,6 +42,11 @@ func TestHealthSetupAndEmptyHome(t *testing.T) {
 		if err := json.NewDecoder(w.Body).Decode(&v); err != nil {
 			t.Fatalf("%s not JSON: %v", path, err)
 		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/home", nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous home: %d %s", w.Code, w.Body.String())
 	}
 }
 

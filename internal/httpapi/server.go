@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 
 	"github.com/rigasyahrul/personal-agent/internal/clock"
@@ -26,15 +25,8 @@ func New(deps ServerDeps) http.Handler {
 		SecureCookies:  deps.SecureCookies,
 	})
 	SettingsRoutes(mux, deps.DB, deps.Clock)
+	ProjectRoutes(mux, deps.DB, deps.DataDir, deps.Clock)
 	mux.Handle("GET /health", healthHandler(deps.DataDir))
-	mux.HandleFunc("GET /api/v1/home", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"projects":     []any{},
-			"due_count":    0,
-			"last_project": nil,
-		})
-	})
 	if deps.Static != nil {
 		mux.Handle("GET /", http.FileServer(deps.Static))
 	}
