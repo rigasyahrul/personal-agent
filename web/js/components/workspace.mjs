@@ -23,12 +23,13 @@ export function workspaceRows(entries = [], changed = new Set()) {
   }).join('')
 }
 
-export async function renderWorkspacePanel({container, sessionID, messages, api, isCurrent = () => true, onFileSelected = () => {}}) {
+export async function renderWorkspacePanel({container, sessionID, messages, api, isCurrent = () => true, onFileSelected = () => {}, onTree = () => {}}) {
   try {
     const tree = await api.workspaceTree(sessionID)
     if (!isCurrent()) return
     container.innerHTML = `<section class="workspace-panel"><h2>Workspace files</h2><div class="workspace-tree">${workspaceRows(tree?.entries, changedPaths(messages))}</div><pre class="workspace-preview" aria-live="polite">Select a file</pre></section>`
     const panel = container.querySelector('.workspace-panel')
+    onTree(tree?.entries || [], panel)
     container.querySelectorAll('.workspace-entry--file').forEach(button => button.addEventListener('click', async () => {
       const preview = panel?.querySelector('.workspace-preview') || container.querySelector('.workspace-preview')
       try {

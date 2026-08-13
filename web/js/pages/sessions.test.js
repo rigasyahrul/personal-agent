@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {createSessionsPage} from './sessions.js'
 import {parseRoute} from '../router.js'
+import {TestDocument,TestElement,findText} from '../test-dom.mjs'
 
 class Root {
   constructor() { this.renders = []; this.innerHTML = '' }
@@ -326,4 +327,36 @@ test('real create and navigation handlers consume failures and show errors inlin
   } finally {
     process.off('unhandledRejection', listener)
   }
+})
+
+test('unavailable and throwing storage degrade without preventing sessions', async () => {
+  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage')
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,get(){throw new Error('blocked')}})
+  try{
+    const page=createSessionsPage({root:new Root(),api:async path=>path.endsWith('/messages')?[]:null,projectID:'p',setInterval:()=>1,clearInterval(){}})
+    await assert.doesNotReject(page.openChat({id:'s',title:'S',provider:'p',model_id:'m'}))
+  }finally{descriptor?Object.defineProperty(globalThis,'localStorage',descriptor):delete globalThis.localStorage}
+  const storage={getItem(){throw new Error('get blocked')},setItem(){throw new Error('set blocked')}}
+  const page=createSessionsPage({root:new Root(),storage,api:async path=>path.endsWith('/messages')?[]:null,projectID:'p',setInterval:()=>1,clearInterval(){}})
+  await assert.doesNotReject(page.openChat({id:'s',title:'S',provider:'p',model_id:'m'}))
+})
+
+test('restored operation polling is serialized across overlapping chat triggers',async()=>{
+  let active=0,maxActive=0,calls=0,release
+  const gate=new Promise(resolve=>release=resolve)
+  const page=createSessionsPage({root:new Root(),storage:{getItem:()=> '["op"]'},api:async path=>path.endsWith('/messages')?[]:null,projectID:'p',setInterval:()=>1,clearInterval(){},getOperation:async()=>{calls++;active++;maxActive=Math.max(maxActive,active);await gate;active--;return{operation_id:'op',badge:'Ready'}}})
+  const opening=page.openChat({id:'s',title:'S',provider:'p',model_id:'m'});await new Promise(resolve=>setImmediate(resolve));const extra=page.poll();release();await Promise.all([opening,extra]);await new Promise(resolve=>setImmediate(resolve))
+  assert.ok(calls>=1);assert.equal(maxActive,1)
+})
+
+test('promote dialog survives chat rerender with entered state and selection Save, then destroy removes it',async()=>{
+  const document=new TestDocument(),host=document.body,root=new Root();let panel,options
+  const renderWorkspace=async value=>{options=value;panel=new TestElement('section');panel.querySelector=selector=>selector==='[data-promote]'?panel.children.find(child=>Object.hasOwn(child.dataset,'promote'))||null:null;value.container.querySelector=selector=>selector==='.workspace-panel'?panel:null;value.onTree([{path:'draft.md',kind:'file'}],panel);if(!panel.children.length)value.onFileSelected({path:'draft.md',kind:'file'})}
+  const api=async path=>path.includes('/projects/p')?{name:'Project'}:path.endsWith('/messages')?[]:null
+  const page=createSessionsPage({root,api,projectID:'p',document,dialogHost:host,renderWorkspace,workspaceAPI:{},setInterval:()=>1,clearInterval(){}})
+  await page.openChat({id:'s',title:'S',provider:'p',model_id:'m',tool_grants:{workspace_files:true}})
+  panel.children[0].click();await new Promise(resolve=>setImmediate(resolve));const dialog=host.children[0],target=dialog.querySelector('input');target.value='entered.md'
+  const mode=dialog.querySelectorAll('input').find(input=>input.name==='review_mode'&&input.value==='bites');mode.checked=true
+  await page.poll();assert.equal(host.children[0],dialog);assert.equal(target.value,'entered.md');assert.ok(panel.children.find(child=>child.textContent==='Save to source'))
+  page.destroy();assert.equal(host.children.length,0)
 })

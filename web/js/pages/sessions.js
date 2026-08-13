@@ -27,8 +27,12 @@ export function createSessionsPage({
   promote = promoteSession,
   getOperation = operationStatus,
   retryPending = retryReviewPending,
-  storage = globalThis.localStorage,
+  storage,
+  document = globalThis.document,
+  dialogHost,
 }) {
+  if (storage === undefined) { try { storage = globalThis.localStorage } catch { storage = null } }
+  if (!dialogHost) dialogHost = document?.body
   let session = null
   let timer = null
   let sending = false
@@ -41,12 +45,15 @@ export function createSessionsPage({
   let pollQueued = false
   let sendToken = null
   let pollFailed = false
-  let selectedFile = null, promoteAttempt = null, operations = [], operationResults = new Map()
+  let selectedFile = null, promoteAttempt = null, operations = [], operationResults = new Map(), promoteDialog = null
+  let operationPollPromise = null, operationPollQueued = false
+  const retryingPending = new Set()
 
   function current(generation) { return !destroyed && isCurrent() && generation === chatGeneration }
 
   async function list() {
     stopPolling()
+    closePromoteDialog()
     session = null
     const generation = ++chatGeneration
     const [configured, sessions] = await Promise.all([
@@ -97,20 +104,24 @@ export function createSessionsPage({
     renderOperations()
   }
 
-  function renderOperations(){const host=root.querySelector('[data-operation-statuses]');if(!host||!globalThis.document?.createElement)return;host.replaceChildren(...operations.map(id=>operationResults.has(id)?operationBadge(operationResults.get(id),async(op,button)=>{if(!op.retry_cards||!op.pending_id)return;button.disabled=true;try{await retryPending(op.pending_id);operationResults.delete(op.operation_id);await pollOperations()}catch(reason){error=reason.message;renderChat()}}):document.createTextNode('Promoting…')))}
+  function renderOperations(){const host=root.querySelector('[data-operation-statuses]');if(!host||!document?.createElement)return;host.replaceChildren(...operations.map(id=>operationResults.has(id)?operationBadge(operationResults.get(id),op=>retryCards(op),{retryDisabled:retryingPending.has(operationResults.get(id).pending_id)}):document.createTextNode('Promoting…')))}
   function saveOperations(){try{storage?.setItem(operationStorageKey(session.id),JSON.stringify(operations))}catch{}}
-  async function pollOperations(){if(!session)return;const id=session.id,generation=chatGeneration;const active=operations.filter(operationID=>{const value=operationResults.get(operationID);return !value||!['Ready','Promote failed — Retry','Cards failed — Retry cards'].includes(value.badge)});await Promise.all(active.map(async operationID=>{try{const value=await getOperation(operationID);if(current(generation)&&session?.id===id)operationResults.set(operationID,value)}catch(reason){if(current(generation))error=reason.message}}));if(current(generation))renderOperations()}
+  async function pollOperations(){if(!session||destroyed)return;operationPollQueued=true;if(operationPollPromise)return operationPollPromise;operationPollPromise=(async()=>{while(operationPollQueued){operationPollQueued=false;const id=session?.id,generation=chatGeneration;if(!id)continue;const active=operations.filter(operationID=>{const value=operationResults.get(operationID);return !value||!['Ready','Promote failed — Retry','Cards failed — Retry cards'].includes(value.badge)});await Promise.all(active.map(async operationID=>{try{const value=await getOperation(operationID);if(current(generation)&&session?.id===id)operationResults.set(operationID,value)}catch(reason){if(current(generation)&&session?.id===id)error=reason.message}}));if(current(generation)&&session?.id===id)renderOperations()}})().finally(()=>{operationPollPromise=null});return operationPollPromise}
+  async function retryCards(op){const pendingID=op?.pending_id;if(!op?.retry_cards||!pendingID||retryingPending.has(pendingID))return;const generation=chatGeneration,id=session?.id;retryingPending.add(pendingID);renderOperations();try{await retryPending(pendingID);if(current(generation)&&session?.id===id)operationResults.delete(op.operation_id)}catch(reason){if(current(generation)&&session?.id===id){error=reason.message;renderChat()}}finally{retryingPending.delete(pendingID);if(current(generation)&&session?.id===id){renderOperations();await pollOperations()}}}
+
+  function closePromoteDialog(){const dialog=promoteDialog;promoteDialog=null;if(!dialog)return;try{if(dialog.open)dialog.close()}catch{}dialog.remove?.()}
 
   async function openPromoteModal(){if(!isPromotableWorkspaceFile(selectedFile)||!session)return;const generation=chatGeneration;let projectName=projectID;try{projectName=(await api(`/api/v1/projects/${pathID(projectID)}`))?.name||projectID}catch{}if(!current(generation))return
-    const dialog=document.createElement('dialog');dialog.className='promote-dialog';const form=document.createElement('form');form.method='dialog';const heading=document.createElement('h2');heading.textContent='Save to source';const project=document.createElement('p');project.textContent=`Project: ${projectName}`;const targetLabel=document.createElement('label');targetLabel.textContent='Target path';const target=document.createElement('input');target.name='target_relative_path';target.required=true;target.value=selectedFile.path;targetLabel.append(target);const modes=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent='Review mode';modes.append(legend);for(const value of['none','whole','bites']){const label=document.createElement('label'),radio=document.createElement('input');radio.type='radio';radio.name='review_mode';radio.value=value;radio.checked=value==='none';label.append(radio,document.createTextNode(value));modes.append(label)}const inline=document.createElement('p');inline.className='error';inline.setAttribute('role','alert');const submit=document.createElement('button');submit.type='submit';submit.textContent='Save';const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=()=>dialog.close();form.append(heading,project,targetLabel,modes,inline,submit,cancel);dialog.append(form);root.append(dialog)
-    form.onsubmit=async event=>{event.preventDefault();const targetPath=target.value.trim();if(!targetPath||!targetPath.endsWith('.md')){inline.textContent='Target path must end in .md';return}const reviewMode=form.querySelector('[name=review_mode]:checked').value,payload={workspace_path:selectedFile.path,target_relative_path:targetPath,review_mode:reviewMode};promoteAttempt=nextPromoteAttempt(promoteAttempt,payload,randomUUID);submit.disabled=true;inline.textContent='';try{const result=await promote(session.id,promoteAttempt.payload,promoteAttempt.key);if(!result?.operation_id)throw new Error('Promotion did not return an operation ID');if(!operations.includes(result.operation_id))operations.push(result.operation_id);saveOperations();promoteAttempt=null;dialog.close();await pollOperations()}catch(reason){inline.textContent=reason.message;submit.disabled=false}};dialog.showModal()
+    closePromoteDialog();const dialog=document.createElement('dialog');promoteDialog=dialog;dialog.className='promote-dialog';const form=document.createElement('form');form.method='dialog';const heading=document.createElement('h2');heading.textContent='Save to source';const project=document.createElement('p');project.textContent=`Project: ${projectName}`;const targetLabel=document.createElement('label');targetLabel.textContent='Target path';const target=document.createElement('input');target.name='target_relative_path';target.required=true;target.value=selectedFile.path;targetLabel.append(target);const modes=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent='Review mode';modes.append(legend);for(const value of['none','whole','bites']){const label=document.createElement('label'),radio=document.createElement('input');radio.type='radio';radio.name='review_mode';radio.value=value;radio.checked=value==='none';label.append(radio,document.createTextNode(value));modes.append(label)}const inline=document.createElement('p');inline.className='error';inline.setAttribute('role','alert');const submit=document.createElement('button');submit.type='submit';submit.textContent='Save';const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=closePromoteDialog;dialog.addEventListener?.('close',()=>{if(promoteDialog===dialog){promoteDialog=null;dialog.remove?.()}});form.append(heading,project,targetLabel,modes,inline,submit,cancel);dialog.append(form);dialogHost?.append(dialog)
+    form.onsubmit=async event=>{event.preventDefault();if(!current(generation)||promoteDialog!==dialog)return;const targetPath=target.value.trim();if(!targetPath||!targetPath.endsWith('.md')){inline.textContent='Target path must end in .md';return}const reviewMode=form.querySelector('[name=review_mode]:checked').value,payload={workspace_path:selectedFile.path,target_relative_path:targetPath,review_mode:reviewMode};promoteAttempt=nextPromoteAttempt(promoteAttempt,payload,randomUUID);submit.disabled=true;inline.textContent='';try{const result=await promote(session.id,promoteAttempt.payload,promoteAttempt.key);if(!current(generation)||promoteDialog!==dialog)return;if(!result?.operation_id)throw new Error('Promotion did not return an operation ID');if(!operations.includes(result.operation_id))operations.push(result.operation_id);saveOperations();promoteAttempt=null;closePromoteDialog();await pollOperations()}catch(reason){if(current(generation)&&promoteDialog===dialog){inline.textContent=reason.message;submit.disabled=false}}};dialog.showModal()
   }
 
   async function refreshWorkspace(generation, id) {
     if (!workspaceEnabled(session)) return
     const container = root.querySelector('[data-workspace-panel]')
     if (!container) return
-    await renderWorkspace({container, sessionID: id, messages, api: workspaceAPI, isCurrent: () => current(generation) && session?.id === id,onFileSelected:entry=>{selectedFile=entry;if(!isPromotableWorkspaceFile(entry))return;const panel=container.querySelector('.workspace-panel');if(panel&&!panel.querySelector?.('[data-promote]')){const save=document.createElement('button');save.type='button';save.dataset.promote='';save.textContent='Save to source';save.onclick=()=>void openPromoteModal();panel.append(save)}}})
+    const showSave=(entry,panel=container.querySelector('.workspace-panel'))=>{if(!isPromotableWorkspaceFile(entry)||!panel||panel.querySelector?.('[data-promote]'))return;const save=document.createElement('button');save.type='button';save.dataset.promote='';save.textContent='Save to source';save.onclick=()=>void openPromoteModal();panel.append(save)}
+    await renderWorkspace({container, sessionID: id, messages, api: workspaceAPI, isCurrent: () => current(generation) && session?.id === id,onTree:(entries,panel)=>{if(selectedFile){const same=entries.find(entry=>entry.path===selectedFile.path&&isPromotableWorkspaceFile(entry));selectedFile=same||null;if(same)showSave(same,panel)}},onFileSelected:entry=>{selectedFile=entry;if(isPromotableWorkspaceFile(entry))showSave(entry)}})
   }
 
   async function poll() {
@@ -182,6 +193,7 @@ export function createSessionsPage({
 
   async function openChat(value) {
     stopPolling()
+    closePromoteDialog()
     destroyed = false
     session = value
     error = ''
@@ -190,13 +202,13 @@ export function createSessionsPage({
     run = null
     sending = false
     sendToken = null
-    selectedFile=null;promoteAttempt=null;operationResults=new Map();try{const stored=JSON.parse(storage?.getItem(operationStorageKey(value.id))||'[]');operations=Array.isArray(stored)?stored.filter(x=>typeof x==='string'):[]}catch{operations=[]}
+    selectedFile=null;promoteAttempt=null;operationResults=new Map();retryingPending.clear();operationPollQueued=false;try{const stored=JSON.parse(storage?.getItem(operationStorageKey(value.id))||'[]');operations=Array.isArray(stored)?stored.filter(x=>typeof x==='string'):[]}catch{operations=[]}
     const generation = ++chatGeneration
     await poll()
     if (current(generation) && session?.id === value.id && timer === null) timer = setInterval(() => { void poll().catch(() => {}) }, 1500)
   }
 
   function stopPolling() { if (timer !== null) clearInterval(timer); timer = null }
-  function destroy() { destroyed = true; ++chatGeneration; stopPolling(); session = null }
+  function destroy() { destroyed = true; ++chatGeneration; stopPolling(); closePromoteDialog();retryingPending.clear();operationPollQueued=false;session = null }
   return {list, openChat, poll, destroy}
 }
