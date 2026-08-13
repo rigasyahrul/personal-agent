@@ -11,7 +11,7 @@
 | 3 Sessions + chat | 15–20 | 2 | no | done | impl/v1-p3-sessions | [T-019ff8ea…](https://ampcode.com/threads/T-019ff8ea-6a0b-77fe-91e5-09fbb64e6678) | 2026-08-13 |
 | 4 Workspace tools | 21–24 | 3 | no | done | impl/v1-p4-tools | [T-019ff945…](https://ampcode.com/threads/T-019ff945-5949-7619-946a-e050c40d177f) | 2026-08-13 |
 | 5 Promote + review | 25–32 | 4 | no | done | impl/v1-p5-promote-review | [T-019ff978…](https://ampcode.com/threads/T-019ff978-ac06-73fc-9f51-d4c8fcff2854) | 2026-08-13 |
-| 6 Backup | 33–36 | 5 | no | blocked | impl/v1-p6-backup | [T-019ffa08…](https://ampcode.com/threads/T-019ffa08-4f95-72c1-98fc-da8d98162847) | 2026-08-13 |
+| 6 Backup | 33–36 | 5 | no | running | impl/v1-p6-backup | [T-019ffa08…](https://ampcode.com/threads/T-019ffa08-4f95-72c1-98fc-da8d98162847) | 2026-08-13 |
 | 7 Hardening | 37–42 | 6 | no | todo | impl/v1-p7-hardening | | |
 
 **Status:** `todo` | `running` | `review` | `done` | `blocked`
@@ -25,12 +25,11 @@
 | 2026-08-13 | Phase 6 worker T-019ff9ed: T33 done, T34 nearly done; **OpenAI usage limit** mid-cleanup; unpushed; archived. |
 | 2026-08-13 | Phase 6 retry T-019ffa08: died immediately in `error` (likely same usage limit). No branch on origin. |
 | 2026-08-13 | **BLOCKED** on Amp/OpenAI provider usage limit. Need user to restore quota or switch provider, then re-dispatch Phase 6. |
+| 2026-08-13 | Phase 6 resumed on T-019ffa08 with consulting-grok-review gates (skill on main @ 7afcd1b). |
 
 ## Active blockers
 
-1. **P0 — OpenAI usage limit on Amp workers**  
-   Error: `OpenAI stream error: The usage limit has been reached.`  
-   Action: restore ChatGPT/OpenAI quota or change Amp model provider (https://ampcode.com/settings/model-providers), then ask master to re-dispatch Phase 6 (tasks 33–36).
+_None currently asserted by master — Phase 6 re-dispatched. If worker hits usage limit again, re-block._
 
 ## Master thread
 
