@@ -5,17 +5,27 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 echo "==> Checking Go toolchain"
-if ! command -v go >/dev/null 2>&1; then
-  if [[ "$(id -u)" -eq 0 ]]; then
-    apt=(apt-get)
-  else
-    apt=(sudo -n apt-get)
-  fi
-
-  export DEBIAN_FRONTEND=noninteractive
-  time "${apt[@]}" update
-  time "${apt[@]}" install -y --no-install-recommends golang-go
+required="1.24.0"
+current="$(/usr/local/go/bin/go version 2>/dev/null | sed -n 's/.*go\([0-9.]*\).*/\1/p' || true)"
+if [[ "$(id -u)" -eq 0 ]]; then
+  root=()
+else
+  root=(sudo -n)
 fi
+if [[ -z "$current" ]] || [[ "$(printf '%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]]; then
+  case "$(uname -m)" in
+    x86_64) go_arch="amd64" ;;
+    aarch64|arm64) go_arch="arm64" ;;
+    *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+  esac
+  echo "==> Installing Go $required"
+  curl -fsSLo /tmp/go.tgz "https://go.dev/dl/go${required}.linux-${go_arch}.tar.gz"
+  "${root[@]}" rm -rf /usr/local/go
+  "${root[@]}" tar -C /usr/local -xzf /tmp/go.tgz
+  rm -f /tmp/go.tgz
+fi
+printf '%s\n' 'export PATH="/usr/local/go/bin:$PATH"' | "${root[@]}" tee /etc/profile.d/personal-agent-go.sh >/dev/null
+export PATH="/usr/local/go/bin:$PATH"
 go version
 
 if [[ -f go.mod ]]; then
