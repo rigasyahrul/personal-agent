@@ -7,7 +7,7 @@
 | Phase | Tasks | Depends | Parallel-safe | Status | Branch | Worker thread | Updated |
 |-------|-------|---------|---------------|--------|--------|---------------|---------|
 | 1 Skeleton | 1–8 | — | no | done | impl/v1-p1-skeleton | [T-019ff854…](https://ampcode.com/threads/T-019ff854-0162-7096-abde-b22632804e47) | 2026-08-13 |
-| 2 Projects + source | 9–14 | 1 | no | running | impl/v1-p2-projects | (dispatching) | 2026-08-13 |
+| 2 Projects + source | 9–14 | 1 | no | running | impl/v1-p2-projects | [T-019ff890…](https://ampcode.com/threads/T-019ff890-519f-71ec-bea9-b3983d42fbcf) | 2026-08-13 |
 | 3 Sessions + chat | 15–20 | 2 | no | todo | impl/v1-p3-sessions | | |
 | 4 Workspace tools | 21–24 | 3 | no | todo | impl/v1-p4-tools | | |
 | 5 Promote + review | 25–32 | 4 | no | todo | impl/v1-p5-promote-review | | |
@@ -26,6 +26,7 @@
 | 2026-08-12 | Phase 1 worker on **sandbox** orb: https://ampcode.com/threads/T-019ff854-0162-7096-abde-b22632804e47 branch `impl/v1-p1-skeleton` tasks 1–8. |
 | 2026-08-13 | Phase 1 worker DONE @ `5b7a0ce` (14 commits). Master verified `go test ./...` green on Go 1.24.0. FF-merged to `main`. |
 | 2026-08-13 | Dispatching Phase 2 worker (tasks 9–14, branch `impl/v1-p2-projects`). |
+| 2026-08-13 | Phase 2 worker on sandbox: https://ampcode.com/threads/T-019ff890-519f-71ec-bea9-b3983d42fbcf |
 
 ## Active blockers
 
