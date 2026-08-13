@@ -6,3 +6,9 @@ export function mutate(path,method,body){return request(path,{method,body:JSON.s
 export function api(path,options={}){return request(`/api/v1${path}`,options)}
 export const workspaceTree=sessionID=>request(`/api/v1/sessions/${encodeURIComponent(sessionID)}/workspace/tree`)
 export const workspaceFile=(sessionID,path)=>request(`/api/v1/sessions/${encodeURIComponent(sessionID)}/workspace/file?path=${encodeURIComponent(path)}`)
+export const promoteSession=(sessionID,payload,key)=>request(`/api/v1/sessions/${encodeURIComponent(sessionID)}/promote`,{method:'POST',body:payload,headers:{'Idempotency-Key':key}})
+export const operationStatus=operationID=>request(`/api/v1/operations/${encodeURIComponent(operationID)}`)
+export const reviewQueue=scope=>request(`/api/v1/review/queue?scope=${encodeURIComponent(scope)}`)
+export const rateReviewItem=(itemID,payload)=>request(`/api/v1/review/items/${encodeURIComponent(itemID)}/rate`,{method:'POST',body:payload})
+export const suspendReviewItem=itemID=>request(`/api/v1/review/items/${encodeURIComponent(itemID)}/suspend`,{method:'POST',body:{}})
+export const retryReviewPending=pendingID=>request(`/api/v1/review/pending/${encodeURIComponent(pendingID)}/retry`,{method:'POST',body:{}})

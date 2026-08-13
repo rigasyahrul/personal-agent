@@ -23,7 +23,7 @@ export function workspaceRows(entries = [], changed = new Set()) {
   }).join('')
 }
 
-export async function renderWorkspacePanel({container, sessionID, messages, api, isCurrent = () => true}) {
+export async function renderWorkspacePanel({container, sessionID, messages, api, isCurrent = () => true, onFileSelected = () => {}}) {
   try {
     const tree = await api.workspaceTree(sessionID)
     if (!isCurrent()) return
@@ -33,7 +33,7 @@ export async function renderWorkspacePanel({container, sessionID, messages, api,
       const preview = panel?.querySelector('.workspace-preview') || container.querySelector('.workspace-preview')
       try {
         const file = await api.workspaceFile(sessionID, button.dataset.path)
-        if (isCurrent() && container.querySelector('.workspace-panel') === panel) preview.textContent = file?.content ?? ''
+        if (isCurrent() && container.querySelector('.workspace-panel') === panel) { preview.textContent = file?.content ?? ''; onFileSelected({path:button.dataset.path,kind:'file'}) }
       } catch {
         if (isCurrent() && container.querySelector('.workspace-panel') === panel) preview.textContent = 'Unable to read file.'
       }

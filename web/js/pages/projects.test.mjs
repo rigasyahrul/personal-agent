@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {projectCard} from './home.js'
 import {projectOverview} from './project.js'
 import {bodyWithinByteLimit, directPayload, nextPublicationKey, noteViewer, publicationDestination, publicationResultState, treeRows} from './notes.js'
-import {navigateIfCurrent, parseRoute} from '../router.js'
+import {navigateIfCurrent, parseRoute, reviewHash, validReviewScope} from '../router.js'
+import {isPromotableWorkspaceFile, nextPromoteAttempt} from './sessions.js'
 
 test('project card includes counts and vault badge', () => {
   const html = projectCard({id: 'p1', name: 'Go', vault_name: 'Learning', note_count: 2, session_count: 0, due_count: 1})
@@ -34,6 +35,24 @@ test('router falls back for malformed encoding and surplus segments', () => {
   assert.deepEqual(parseRoute('#/projects/%E0%A4%A'), {name: 'home'})
   assert.deepEqual(parseRoute('#/projects/p1/notes/n1/extra'), {name: 'home'})
   assert.deepEqual(parseRoute('#/projects/p1/extra'), {name: 'home'})
+})
+
+test('review routes carry and validate exact hash-query scope', () => {
+  assert.deepEqual(parseRoute('#/review?scope=all'), {name: 'review', scope: 'all'})
+  assert.deepEqual(parseRoute('#/projects/a%2Fb/review?scope=project%3Aa%2Fb'), {name: 'review', projectID: 'a/b', scope: 'project:a/b'})
+  assert.equal(reviewHash('project:a/b', 'a/b'), '#/projects/a%2Fb/review?scope=project%3Aa%2Fb')
+  assert.equal(validReviewScope('project:other', 'a/b'), false)
+  assert.equal(validReviewScope('project:undefined'), false)
+})
+
+test('promote accepts only regular lowercase markdown and keeps key for unchanged payload', () => {
+  assert.equal(isPromotableWorkspaceFile({kind: 'file', path: 'draft.md'}), true)
+  assert.equal(isPromotableWorkspaceFile({kind: 'directory', path: 'draft.md'}), false)
+  assert.equal(isPromotableWorkspaceFile({kind: 'file', path: 'draft.MD'}), false)
+  const payload = {workspace_path: 'draft.md', target_relative_path: 'note.md', review_mode: 'whole'}
+  const first = nextPromoteAttempt(null, payload, () => 'key-1')
+  assert.equal(nextPromoteAttempt(first, {...payload}, () => 'key-2').key, 'key-1')
+  assert.equal(nextPromoteAttempt(first, {...payload, review_mode: 'bites'}, () => 'key-3').key, 'key-3')
 })
 
 test('dynamic project, path, and note values are escaped', () => {

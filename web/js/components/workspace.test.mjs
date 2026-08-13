@@ -84,6 +84,16 @@ test('renderWorkspacePanel renders escaped tree markup and binds real file click
   assert.equal(container.querySelector('.workspace-preview').textContent, '<script>not markup</script>')
 })
 
+test('renderWorkspacePanel reports a selected regular file after preview succeeds', async () => {
+  const container = new WorkspaceContainer(), selected = []
+  await renderWorkspacePanel({container, sessionID: 's', messages: [], onFileSelected: entry => selected.push(entry), api: {
+    workspaceTree: async () => ({entries: [{path: 'draft.md', kind: 'file'}]}),
+    workspaceFile: async () => ({content: '# Draft'}),
+  }})
+  await container.buttons[0].listeners.get('click')()
+  assert.deepEqual(selected, [{path: 'draft.md', kind: 'file'}])
+})
+
 test('renderWorkspacePanel contains tree and file rejections with accessible concise errors', async () => {
   const treeContainer = new WorkspaceContainer()
   await renderWorkspacePanel({container: treeContainer, sessionID: 's', messages: [], api: {workspaceTree: async () => { throw new Error('secret tree detail') }}})

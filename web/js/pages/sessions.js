@@ -1,5 +1,6 @@
 import {renderWorkspacePanel} from '../components/workspace.mjs'
-import {workspaceTree, workspaceFile} from '../api.js'
+import {workspaceTree, workspaceFile, promoteSession, operationStatus, retryReviewPending} from '../api.js'
+import {operationBadge} from '../components/status-badges.js'
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]))
 const pathID = value => encodeURIComponent(value)
@@ -9,6 +10,9 @@ function workspaceEnabled(session) {
   if (typeof session?.tool_grants_json !== 'string') return false
   try { return JSON.parse(session.tool_grants_json)?.workspace_files === true } catch { return false }
 }
+export const isPromotableWorkspaceFile = entry => entry?.kind === 'file' && entry.path.endsWith('.md')
+export function nextPromoteAttempt(previous,payload,uuid){const fingerprint=JSON.stringify(payload);return previous?.fingerprint===fingerprint?previous:{fingerprint,key:uuid(),payload}}
+const operationStorageKey=sessionID=>`personal-agent:v1:promote-operations:${sessionID}`
 
 export function createSessionsPage({
   root,
@@ -20,6 +24,10 @@ export function createSessionsPage({
   isCurrent = () => true,
   workspaceAPI = {workspaceTree, workspaceFile},
   renderWorkspace = renderWorkspacePanel,
+  promote = promoteSession,
+  getOperation = operationStatus,
+  retryPending = retryReviewPending,
+  storage = globalThis.localStorage,
 }) {
   let session = null
   let timer = null
@@ -33,6 +41,7 @@ export function createSessionsPage({
   let pollQueued = false
   let sendToken = null
   let pollFailed = false
+  let selectedFile = null, promoteAttempt = null, operations = [], operationResults = new Map()
 
   function current(generation) { return !destroyed && isCurrent() && generation === chatGeneration }
 
@@ -80,18 +89,28 @@ export function createSessionsPage({
   function renderChat(preserveDraft = true) {
     const draft = preserveDraft ? root.querySelector('[name=message]')?.value || '' : ''
     const workspace = workspaceEnabled(session) ? '<aside data-workspace-panel></aside>' : ''
-    root.innerHTML = `<div class="session-layout"><section class="sessions-chat"><button type="button" data-back>Sessions</button><div class="page-heading"><h2>${esc(session.title)}</h2><span class="model-badge">${esc(session.provider)}:${esc(session.model_id)}</span></div><ol class="messages">${[...messages].sort((a, b) => a.sequence - b.sequence).map(message => `<li class="message message-${esc(message.role)}"><strong>${esc(message.role)}</strong><p>${esc(message.content)}</p></li>`).join('')}</ol><p class="run-status" role="status" aria-live="polite">${run ? `Run: ${esc(run.status)}` : 'Idle'}</p><p class="error" role="alert">${esc(error)}</p><form data-chat><label>Message<textarea name="message" required></textarea></label><button ${sending || run ? 'disabled' : ''}>Send</button></form></section>${workspace}</div>`
+    root.innerHTML = `<div class="session-layout"><section class="sessions-chat"><button type="button" data-back>Sessions</button><div class="page-heading"><h2>${esc(session.title)}</h2><span class="model-badge">${esc(session.provider)}:${esc(session.model_id)}</span></div><div data-operation-statuses></div><ol class="messages">${[...messages].sort((a, b) => a.sequence - b.sequence).map(message => `<li class="message message-${esc(message.role)}"><strong>${esc(message.role)}</strong><p>${esc(message.content)}</p></li>`).join('')}</ol><p class="run-status" role="status" aria-live="polite">${run ? `Run: ${esc(run.status)}` : 'Idle'}</p><p class="error" role="alert">${esc(error)}</p><form data-chat><label>Message<textarea name="message" required></textarea></label><button ${sending || run ? 'disabled' : ''}>Send</button></form></section>${workspace}</div>`
     const input = root.querySelector('[name=message]')
     if (input) input.value = draft
     root.querySelector('[data-back]')?.addEventListener('click', () => { void list().catch(listError => { if (!destroyed && isCurrent()) root.innerHTML = `<p class="error" role="alert">${esc(listError.message)}</p>` }) })
     root.querySelector('form[data-chat]').onsubmit = send
+    renderOperations()
+  }
+
+  function renderOperations(){const host=root.querySelector('[data-operation-statuses]');if(!host||!globalThis.document?.createElement)return;host.replaceChildren(...operations.map(id=>operationResults.has(id)?operationBadge(operationResults.get(id),async(op,button)=>{if(!op.retry_cards||!op.pending_id)return;button.disabled=true;try{await retryPending(op.pending_id);operationResults.delete(op.operation_id);await pollOperations()}catch(reason){error=reason.message;renderChat()}}):document.createTextNode('Promoting…')))}
+  function saveOperations(){try{storage?.setItem(operationStorageKey(session.id),JSON.stringify(operations))}catch{}}
+  async function pollOperations(){if(!session)return;const id=session.id,generation=chatGeneration;const active=operations.filter(operationID=>{const value=operationResults.get(operationID);return !value||!['Ready','Promote failed — Retry','Cards failed — Retry cards'].includes(value.badge)});await Promise.all(active.map(async operationID=>{try{const value=await getOperation(operationID);if(current(generation)&&session?.id===id)operationResults.set(operationID,value)}catch(reason){if(current(generation))error=reason.message}}));if(current(generation))renderOperations()}
+
+  async function openPromoteModal(){if(!isPromotableWorkspaceFile(selectedFile)||!session)return;const generation=chatGeneration;let projectName=projectID;try{projectName=(await api(`/api/v1/projects/${pathID(projectID)}`))?.name||projectID}catch{}if(!current(generation))return
+    const dialog=document.createElement('dialog');dialog.className='promote-dialog';const form=document.createElement('form');form.method='dialog';const heading=document.createElement('h2');heading.textContent='Save to source';const project=document.createElement('p');project.textContent=`Project: ${projectName}`;const targetLabel=document.createElement('label');targetLabel.textContent='Target path';const target=document.createElement('input');target.name='target_relative_path';target.required=true;target.value=selectedFile.path;targetLabel.append(target);const modes=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent='Review mode';modes.append(legend);for(const value of['none','whole','bites']){const label=document.createElement('label'),radio=document.createElement('input');radio.type='radio';radio.name='review_mode';radio.value=value;radio.checked=value==='none';label.append(radio,document.createTextNode(value));modes.append(label)}const inline=document.createElement('p');inline.className='error';inline.setAttribute('role','alert');const submit=document.createElement('button');submit.type='submit';submit.textContent='Save';const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=()=>dialog.close();form.append(heading,project,targetLabel,modes,inline,submit,cancel);dialog.append(form);root.append(dialog)
+    form.onsubmit=async event=>{event.preventDefault();const targetPath=target.value.trim();if(!targetPath||!targetPath.endsWith('.md')){inline.textContent='Target path must end in .md';return}const reviewMode=form.querySelector('[name=review_mode]:checked').value,payload={workspace_path:selectedFile.path,target_relative_path:targetPath,review_mode:reviewMode};promoteAttempt=nextPromoteAttempt(promoteAttempt,payload,randomUUID);submit.disabled=true;inline.textContent='';try{const result=await promote(session.id,promoteAttempt.payload,promoteAttempt.key);if(!result?.operation_id)throw new Error('Promotion did not return an operation ID');if(!operations.includes(result.operation_id))operations.push(result.operation_id);saveOperations();promoteAttempt=null;dialog.close();await pollOperations()}catch(reason){inline.textContent=reason.message;submit.disabled=false}};dialog.showModal()
   }
 
   async function refreshWorkspace(generation, id) {
     if (!workspaceEnabled(session)) return
     const container = root.querySelector('[data-workspace-panel]')
     if (!container) return
-    await renderWorkspace({container, sessionID: id, messages, api: workspaceAPI, isCurrent: () => current(generation) && session?.id === id})
+    await renderWorkspace({container, sessionID: id, messages, api: workspaceAPI, isCurrent: () => current(generation) && session?.id === id,onFileSelected:entry=>{selectedFile=entry;if(!isPromotableWorkspaceFile(entry))return;const panel=container.querySelector('.workspace-panel');if(panel&&!panel.querySelector?.('[data-promote]')){const save=document.createElement('button');save.type='button';save.dataset.promote='';save.textContent='Save to source';save.onclick=()=>void openPromoteModal();panel.append(save)}}})
   }
 
   async function poll() {
@@ -115,6 +134,7 @@ export function createSessionsPage({
             if (pollFailed) error = ''
             pollFailed = false
             renderChat()
+            void pollOperations()
             if (workspaceEnabled(session)) await refreshWorkspace(generation, id)
           }
         } catch (pollError) {
@@ -170,6 +190,7 @@ export function createSessionsPage({
     run = null
     sending = false
     sendToken = null
+    selectedFile=null;promoteAttempt=null;operationResults=new Map();try{const stored=JSON.parse(storage?.getItem(operationStorageKey(value.id))||'[]');operations=Array.isArray(stored)?stored.filter(x=>typeof x==='string'):[]}catch{operations=[]}
     const generation = ++chatGeneration
     await poll()
     if (current(generation) && session?.id === value.id && timer === null) timer = setInterval(() => { void poll().catch(() => {}) }, 1500)
