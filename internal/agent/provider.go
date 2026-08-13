@@ -57,3 +57,18 @@ type RunStore interface {
 type SessionReader interface {
 	Get(context.Context, string) (domain.Session, error)
 }
+
+var workspaceToolDefinitions = []ToolDefinition{
+	{Name: "read_file", Description: "Read a regular workspace file", Parameters: objectSchema("path")},
+	{Name: "write_file", Description: "Atomically replace a workspace file", Parameters: objectSchema("path", "content")},
+	{Name: "edit_file", Description: "Replace one exact occurrence in a workspace file", Parameters: objectSchema("path", "old", "replacement")},
+	{Name: "mkdir", Description: "Create workspace directories", Parameters: objectSchema("path")},
+}
+
+func objectSchema(required ...string) map[string]any {
+	properties := make(map[string]any, len(required))
+	for _, name := range required {
+		properties[name] = map[string]any{"type": "string"}
+	}
+	return map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
+}

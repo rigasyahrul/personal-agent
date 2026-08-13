@@ -25,8 +25,14 @@ func TestOpenAICompatConvertsRequestAndResponse(t *testing.T) {
 		if messages[0].(map[string]any)["content"] != "hello" {
 			t.Errorf("messages = %#v", messages)
 		}
-		if _, exists := body["tools"]; exists {
-			t.Errorf("unexpected tools: %#v", body["tools"])
+		assistantCall := messages[1].(map[string]any)["tool_calls"].([]any)[0].(map[string]any)
+		function := assistantCall["function"].(map[string]any)
+		if assistantCall["id"] != "prior-1" || function["name"] != "read_file" || function["arguments"] != `{"path":"x"}` || messages[2].(map[string]any)["tool_call_id"] != "prior-1" {
+			t.Errorf("tool protocol = %#v", messages)
+		}
+		tools := body["tools"].([]any)
+		if len(tools) != 1 || tools[0].(map[string]any)["type"] != "function" {
+			t.Errorf("tools = %#v", tools)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hi","tool_calls":[{"id":"c1","type":"function","function":{"name":"read","arguments":"{\"path\":\"x\"}"}}]}}]}`))
@@ -34,8 +40,12 @@ func TestOpenAICompatConvertsRequestAndResponse(t *testing.T) {
 	defer server.Close()
 
 	provider := &OpenAICompat{BaseURL: server.URL + "/v1/", APIKey: "secret"}
-	got, err := provider.Chat(context.Background(), ChatRequest{Model: "gpt-test", Messages: []ChatMessage{{Role: "user", Content: "hello"}}, Parameters: map[string]any{"temperature": 0.25}})
-	if err != nil || got.Content != "hi" || len(got.ToolCalls) != 1 || got.ToolCalls[0].Name != "read" || len(got.Raw) == 0 {
+	got, err := provider.Chat(context.Background(), ChatRequest{Model: "gpt-test", Messages: []ChatMessage{
+		{Role: "user", Content: "hello"},
+		{Role: "assistant", ToolCalls: []ToolCall{{ID: "prior-1", Name: "read_file", Arguments: `{"path":"x"}`}}},
+		{Role: "tool", Content: `{"content":"ok"}`, ToolCallID: "prior-1"},
+	}, Tools: []ToolDefinition{{Name: "read_file", Parameters: map[string]any{"type": "object"}}}, Parameters: map[string]any{"temperature": 0.25}})
+	if err != nil || got.Content != "hi" || len(got.ToolCalls) != 1 || got.ToolCalls[0].Name != "read" || got.ToolCalls[0].Arguments != `{"path":"x"}` || len(got.Raw) == 0 {
 		t.Fatalf("response = %#v, %v", got, err)
 	}
 }

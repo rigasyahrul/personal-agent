@@ -2,7 +2,11 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +19,18 @@ type fakeProvider struct {
 	calls int
 	req   ChatRequest
 	err   error
+}
+
+type scriptedProvider struct {
+	requests  []ChatRequest
+	responses []ChatResponse
+}
+
+func (p *scriptedProvider) Chat(_ context.Context, req ChatRequest) (ChatResponse, error) {
+	p.requests = append(p.requests, req)
+	response := p.responses[0]
+	p.responses = p.responses[1:]
+	return response, nil
 }
 
 func (f *fakeProvider) Chat(_ context.Context, req ChatRequest) (ChatResponse, error) {
@@ -39,6 +55,105 @@ func seededRunner(t *testing.T, parameters string, provider Provider) (*Runner, 
 	messages := &store.MessageStore{DB: db, Now: func() time.Time { return now }}
 	return &Runner{DB: db, DataDir: t.TempDir(), Provider: provider, Messages: messages, Runs: runs,
 		Sessions: &store.SessionStore{DB: db}}, "s1", runs, messages
+}
+
+func toolRunner(t *testing.T, provider Provider, granted bool) (*Runner, string, *store.RunStore, *store.MessageStore) {
+	t.Helper()
+	runner, sessionID, runs, messages := seededRunner(t, `{}`, provider)
+	grants := `{"workspace_files":false}`
+	if granted {
+		grants = `{"workspace_files":true}`
+	}
+	if _, err := runner.DB.Exec(`UPDATE sessions SET tool_grants_json=? WHERE id=?`, grants, sessionID); err != nil {
+		t.Fatal(err)
+	}
+	workspace := filepath.Join(runner.DataDir, "files", "global", "sessions", sessionID)
+	if err := os.MkdirAll(workspace, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return runner, sessionID, runs, messages
+}
+
+func TestRunnerDoesNotAdvertiseToolsWithoutGrant(t *testing.T) {
+	provider := &scriptedProvider{responses: []ChatResponse{{Content: "plain answer"}}}
+	runner, sessionID, _, messages := toolRunner(t, provider, false)
+	if _, err := runner.Start(context.Background(), sessionID, "request", "write x"); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.requests) != 1 || len(provider.requests[0].Tools) != 0 {
+		t.Fatalf("tools leaked: %#v", provider.requests)
+	}
+	history, _ := messages.List(context.Background(), sessionID)
+	for _, message := range history {
+		if message.Role == domain.MessageRoleTool {
+			t.Fatalf("tool message persisted: %#v", message)
+		}
+	}
+}
+
+func TestRunnerExecutesRootedToolsAndPreservesProtocol(t *testing.T) {
+	call := ToolCall{ID: "call-1", Name: "write_file", Arguments: `{"path":"draft.txt","content":"hello"}`}
+	provider := &scriptedProvider{responses: []ChatResponse{{ToolCalls: []ToolCall{call}}, {Content: "saved"}}}
+	runner, sessionID, _, messages := toolRunner(t, provider, true)
+	if _, err := runner.Start(context.Background(), sessionID, "request", "save it"); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.requests) != 2 || len(provider.requests[0].Tools) != 4 {
+		t.Fatalf("requests = %#v", provider.requests)
+	}
+	followup := provider.requests[1].Messages
+	if len(followup) != 3 || len(followup[1].ToolCalls) != 1 || followup[1].ToolCalls[0] != call || followup[2].ToolCallID != call.ID {
+		t.Fatalf("follow-up protocol = %#v", followup)
+	}
+	history, err := messages.List(context.Background(), sessionID)
+	if err != nil || len(history) != 4 || history[1].ToolCallsJSON == nil || history[2].ToolCallID == nil || *history[2].ToolCallID != call.ID {
+		t.Fatalf("history = %#v, %v", history, err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(history[2].Content), &result); err != nil || result["changed_path"] != "draft.txt" {
+		t.Fatalf("tool result = %#v, %v", result, err)
+	}
+	got, err := os.ReadFile(filepath.Join(runner.DataDir, "files", "global", "sessions", sessionID, "draft.txt"))
+	if err != nil || string(got) != "hello" {
+		t.Fatalf("workspace file = %q, %v", got, err)
+	}
+}
+
+func TestRunnerRejectsHostileAndUnknownToolArgumentsSafely(t *testing.T) {
+	for _, call := range []ToolCall{
+		{ID: "escape", Name: "read_file", Arguments: `{"path":"../../etc/passwd"}`},
+		{ID: "shell", Name: "shell", Arguments: `{"command":"id"}`},
+	} {
+		t.Run(call.ID, func(t *testing.T) {
+			provider := &scriptedProvider{responses: []ChatResponse{{ToolCalls: []ToolCall{call}}, {Content: "done"}}}
+			runner, sessionID, _, messages := toolRunner(t, provider, true)
+			if _, err := runner.Start(context.Background(), sessionID, call.ID, "try"); err != nil {
+				t.Fatal(err)
+			}
+			history, _ := messages.List(context.Background(), sessionID)
+			content := history[2].Content
+			if !strings.Contains(content, "error") || strings.Contains(content, runner.DataDir) || strings.Contains(content, "/etc/") {
+				t.Fatalf("unsafe tool error %q", content)
+			}
+		})
+	}
+}
+
+func TestRunnerToolRoundLimitTerminalizesRun(t *testing.T) {
+	responses := make([]ChatResponse, 8)
+	for i := range responses {
+		responses[i].ToolCalls = []ToolCall{{ID: string(rune('a' + i)), Name: "mkdir", Arguments: `{"path":"x"}`}}
+	}
+	provider := &scriptedProvider{responses: responses}
+	runner, sessionID, runs, _ := toolRunner(t, provider, true)
+	runID, err := runner.Start(context.Background(), sessionID, "limit", "loop")
+	if err == nil || !strings.Contains(err.Error(), "tool round limit") {
+		t.Fatalf("error = %v", err)
+	}
+	run, lookupErr := runs.ByID(context.Background(), runID)
+	if lookupErr != nil || run.Status != domain.AgentRunStatusFailed || len(provider.requests) != 8 {
+		t.Fatalf("run/requests = %#v/%d, %v", run, len(provider.requests), lookupErr)
+	}
 }
 
 func TestRunnerStartIsSynchronousIdempotentAndUsesImmutableModel(t *testing.T) {
