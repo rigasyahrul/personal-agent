@@ -80,6 +80,29 @@ func TestConcurrentSameKeyRetriesConverge(t *testing.T) {
 	}
 }
 
+func TestWholeReviewItemStartsWithExactDurableState(t *testing.T) {
+	d, db, c := fixture(t)
+	in := input()
+	in.ReviewMode = domain.ReviewMode("whole")
+	if _, _, err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).Run(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	var kind, sha, prompt, due, status, scheduler string
+	var revision, stage, reps, lapses int
+	var rowVersion int64
+	var interval, ease float64
+	var lastReviewed sql.NullString
+	err := db.QueryRow(`SELECT kind,source_sha256,source_revision,prompt,stage,interval_days,ease_factor,reps,lapses,due_at,last_reviewed_at,row_version,status,scheduler_version FROM review_items WHERE note_id=?`, in.NoteID).
+		Scan(&kind, &sha, &revision, &prompt, &stage, &interval, &ease, &reps, &lapses, &due, &lastReviewed, &rowVersion, &status, &scheduler)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDue := c.Now().UTC().Format(time.RFC3339Nano)
+	if kind != "whole" || sha == "" || revision != 1 || prompt != "Review this note" || stage != 0 || interval != 0 || ease != 2.5 || reps != 0 || lapses != 0 || due != wantDue || lastReviewed.Valid || rowVersion != 0 || status != "active" || scheduler != "sm2-lite-v1" {
+		t.Fatalf("whole state: kind=%q sha=%q revision=%d prompt=%q stage=%d interval=%v ease=%v reps=%d lapses=%d due=%q last=%v version=%d status=%q scheduler=%q", kind, sha, revision, prompt, stage, interval, ease, reps, lapses, due, lastReviewed, rowVersion, status, scheduler)
+	}
+}
+
 func TestWholeReviewConflictMustMatchExactReusableRow(t *testing.T) {
 	d, db, c := completedFixture(t, "whole")
 	if _, err := db.Exec(`UPDATE review_items SET scheduler_version='other' WHERE note_id='n1'; UPDATE direct_ops SET status='finalized' WHERE id='op1'`); err != nil {

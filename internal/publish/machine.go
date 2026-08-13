@@ -634,7 +634,7 @@ func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 	defer tx.Rollback()
 	now := m.now()
 	if o.ReviewMode == "whole" {
-		_, err = tx.ExecContext(ctx, `INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,stage,due_at,interval_days,ease_factor,reps,lapses,row_version,status,scheduler_version) VALUES(?,?,?,'whole',?,1,'Review this note',0,?,0,2.5,0,0,1,'active','sm2-lite-v1') ON CONFLICT(note_id,source_revision) WHERE kind='whole' AND status='active' DO NOTHING`, uuid.NewString(), o.ProjectID, o.NoteID, o.FrozenSHA, now)
+		_, err = tx.ExecContext(ctx, `INSERT INTO review_items(id,project_id,note_id,kind,source_sha256,source_revision,prompt,stage,due_at,interval_days,ease_factor,reps,lapses,row_version,status,scheduler_version) VALUES(?,?,?,'whole',?,1,'Review this note',0,?,0,2.5,0,0,0,'active','sm2-lite-v1') ON CONFLICT(note_id,source_revision) WHERE kind='whole' AND status='active' DO NOTHING`, uuid.NewString(), o.ProjectID, o.NoteID, o.FrozenSHA, now)
 	} else if o.ReviewMode == "bites" {
 		_, err = tx.ExecContext(ctx, `INSERT INTO review_pending(id,note_id,source_sha256,generator_version,status,attempts,created_at,updated_at) VALUES(?,?,?,'bites-v1','pending',0,?,?) ON CONFLICT(note_id,source_sha256,generator_version) DO NOTHING`, uuid.NewString(), o.NoteID, o.FrozenSHA, now, now)
 	}
