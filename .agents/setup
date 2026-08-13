@@ -19,7 +19,7 @@ if [[ -z "$current" ]] || [[ "$(printf '%s\n' "$required" "$current" | sort -V |
   echo "==> Installing Go $required"
   curl -fsSLo /tmp/go.tgz "https://go.dev/dl/go${required}.linux-${go_arch}.tar.gz"
 
-  install_parent=/usr/local
+  install_parent="${PA_SETUP_INSTALL_PARENT:-/usr/local}"
   privilege=()
   if [[ "$(id -u)" -ne 0 ]] && [[ ! -w "$install_parent" ]]; then
     if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
@@ -33,6 +33,14 @@ if [[ -z "$current" ]] || [[ "$(printf '%s\n' "$required" "$current" | sort -V |
   "${privilege[@]}" tar -C "$install_parent" -xzf /tmp/go.tgz
   rm -f /tmp/go.tgz
   export PATH="$install_parent/go/bin:$PATH"
+
+  profile_path="$install_parent/go/bin"
+  if [[ "$install_parent" == "$HOME/.local" ]]; then
+    profile_path='$HOME/.local/go/bin'
+  fi
+  profile_entry="export PATH=\"$profile_path:\$PATH\""
+  touch "$HOME/.profile"
+  grep -Fqx "$profile_entry" "$HOME/.profile" || printf '%s\n' "$profile_entry" >> "$HOME/.profile"
 fi
 go version
 

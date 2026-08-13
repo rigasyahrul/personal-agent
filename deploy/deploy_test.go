@@ -80,6 +80,50 @@ func TestSetupDoesNotInstallWhenPathGoIsSuitable(t *testing.T) {
 	}
 }
 
+func TestSetupPersistsFallbackGoPathForFutureShells(t *testing.T) {
+	home := t.TempDir()
+	bin := t.TempDir()
+	log := filepath.Join(home, "go.log")
+	writeExecutable(t, filepath.Join(bin, "go"), "#!/bin/sh\n[ \"$1\" = version ] && echo 'go version go1.23.0 linux/amd64'\nexit 0\n")
+	writeExecutable(t, filepath.Join(bin, "curl"), "#!/bin/sh\n: > /tmp/go.tgz\n")
+	writeExecutable(t, filepath.Join(bin, "id"), "#!/bin/sh\n[ \"$1\" = -u ] && echo 1000\n")
+	writeExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexit 1\n")
+	writeExecutable(t, filepath.Join(bin, "tar"), `#!/bin/sh
+while [ "$1" != "-C" ]; do shift; done
+parent=$2
+mkdir -p "$parent/go/bin"
+cat > "$parent/go/bin/go" <<'EOF'
+#!/bin/sh
+if [ "$1" = version ]; then echo 'go version go1.24.0 linux/amd64'; exit; fi
+if [ "$1 $2" = 'mod download' ]; then echo download >> "$SETUP_TEST_LOG"; exit; fi
+exit 1
+EOF
+chmod +x "$parent/go/bin/go"
+`)
+
+	for range 2 {
+		cmd := exec.Command("bash", "../.agents/setup")
+		cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+":/usr/bin:/bin", "PA_SETUP_INSTALL_PARENT="+filepath.Join(home, ".local"), "SETUP_TEST_LOG="+log)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("setup fallback failed: %v\n%s", err, output)
+		}
+	}
+
+	profile := readFile(t, filepath.Join(home, ".profile"))
+	want := `export PATH="$HOME/.local/go/bin:$PATH"`
+	if strings.Count(profile, want) != 1 {
+		t.Fatalf("profile must contain one persistent Go PATH entry; got:\n%s", profile)
+	}
+	if downloads := strings.Count(readFile(t, log), "download\n"); downloads != 2 {
+		t.Fatalf("installed Go must continue to go mod download on each run; got %d calls", downloads)
+	}
+	cmd := exec.Command("bash", "-c", `. "$HOME/.profile" && go version`)
+	cmd.Env = append(os.Environ(), "HOME="+home, "PATH=/usr/bin:/bin")
+	if output, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(output), "go1.24.0") {
+		t.Fatalf("future shell did not select persisted Go: %v\n%s", err, output)
+	}
+}
+
 func writeExecutable(t *testing.T, path, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {
