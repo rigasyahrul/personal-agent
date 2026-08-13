@@ -170,12 +170,14 @@ test('workspace is tools-on only and refreshes with newly polled tool messages',
   assert.equal(renders.length, 0)
   assert.doesNotMatch(root.innerHTML, /data-workspace-panel/)
 
-  await page.openChat({id: 'on', title: 'On', provider: 'p', model_id: 'm', tool_grants: {workspace_files: true}})
+  await page.openChat({id: 'on', title: 'On', provider: 'p', model_id: 'm', tool_grants_json: '{"workspace_files":true}'})
   assert.match(root.innerHTML, /data-workspace-panel/)
   assert.equal(renders.at(-1).sessionID, 'on')
+  assert.equal(renders.length, 1, 'positive persisted grants drive the initial panel refresh')
   messages = [{role: 'tool', changed_path: 'new.txt'}]
   await page.poll()
   assert.deepEqual(renders.at(-1).messages, messages)
+  assert.equal(renders.length, 2, 'positive persisted grants drive the polling panel refresh')
 })
 
 test('malformed persisted grants default workspace off', async () => {

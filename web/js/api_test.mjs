@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import {APIError, api, get, mutate} from './api.js'
+import {APIError, api, get, mutate, workspaceFile, workspaceTree} from './api.js'
 
 globalThis.document = {cookie: ''}
 globalThis.fetch = async () => new Response(null, {status: 201})
@@ -46,3 +46,20 @@ assert.deepEqual(await api('/projects', {method: 'POST', body: {name: 'Go'}}), {
 assert.equal(requested.path, '/api/v1/projects')
 assert.equal(requested.options.body, '{"name":"Go"}')
 console.log('PASS api prefixes project paths and serializes object bodies')
+
+const paths = []
+globalThis.fetch = async path => {
+  paths.push(path)
+  return new Response('{"entries":[]}', {status: 200})
+}
+await workspaceTree('session /?#%')
+globalThis.fetch = async path => {
+  paths.push(path)
+  return new Response('{"content":""}', {status: 200})
+}
+await workspaceFile('session /?#%', 'folder/<note> &?#%.txt')
+assert.deepEqual(paths, [
+  '/api/v1/sessions/session%20%2F%3F%23%25/workspace/tree',
+  '/api/v1/sessions/session%20%2F%3F%23%25/workspace/file?path=folder%2F%3Cnote%3E%20%26%3F%23%25.txt',
+])
+console.log('PASS workspace API paths encode session IDs and logical file paths')
