@@ -10,7 +10,7 @@
 | 2 Projects + source | 9–14 | 1 | no | done | impl/v1-p2-projects | [T-019ff890…](https://ampcode.com/threads/T-019ff890-519f-71ec-bea9-b3983d42fbcf) | 2026-08-13 |
 | 3 Sessions + chat | 15–20 | 2 | no | done | impl/v1-p3-sessions | [T-019ff8ea…](https://ampcode.com/threads/T-019ff8ea-6a0b-77fe-91e5-09fbb64e6678) | 2026-08-13 |
 | 4 Workspace tools | 21–24 | 3 | no | done | impl/v1-p4-tools | [T-019ff945…](https://ampcode.com/threads/T-019ff945-5949-7619-946a-e050c40d177f) | 2026-08-13 |
-| 5 Promote + review | 25–32 | 4 | no | running | impl/v1-p5-promote-review | (dispatching) | 2026-08-13 |
+| 5 Promote + review | 25–32 | 4 | no | running | impl/v1-p5-promote-review | [T-019ff978…](https://ampcode.com/threads/T-019ff978-ac06-73fc-9f51-d4c8fcff2854) | 2026-08-13 |
 | 6 Backup | 33–36 | 5 | no | todo | impl/v1-p6-backup | | |
 | 7 Hardening | 37–42 | 6 | no | todo | impl/v1-p7-hardening | | |
 
@@ -25,6 +25,7 @@
 | 2026-08-13 | Phase 3 DONE @ `5ac9dfc` → FF main. |
 | 2026-08-13 | Phase 4 DONE @ `c8cddc6` (13 commits) → FF main. Master `go test ./...` green. |
 | 2026-08-13 | Dispatching Phase 5 worker (tasks 25–32, branch `impl/v1-p5-promote-review`). |
+| 2026-08-13 | Phase 5 worker on sandbox: https://ampcode.com/threads/T-019ff978-ac06-73fc-9f51-d4c8fcff2854 |
 
 ## Active blockers
 
