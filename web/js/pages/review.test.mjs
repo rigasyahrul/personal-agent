@@ -36,3 +36,24 @@ test('all-project review never emits project undefined',async()=>{
   const root=new TestElement('main');await renderReview(root,{scope:'all',api:queue([],true)})
   assert.equal([...root.walk()].some(node=>Object.hasOwn(node,'href')&&String(node.href).includes('undefined')),false)
 })
+
+test('successful action with failed refresh restores mounted card for retry',async()=>{
+  const root=new TestElement('main');let queues=0,rates=0
+  const api={reviewQueue:async()=>{if(++queues>1)throw new Error('refresh failed');return{items:[{id:'i',kind:'bite',prompt:'Q',answer:'A',row_version:1}]}},rateReviewItem:async()=>{rates++},suspendReviewItem:async()=>{}}
+  await renderReview(root,{scope:'all',api})
+  await findText(root,'good').click()
+  assert.equal(findText(root,'good').disabled,false)
+  assert.equal(findText(root,'refresh failed').getAttribute('role'),'alert')
+  await findText(root,'good').click()
+  assert.equal(rates,2)
+})
+
+test('failed action refresh cannot restore over a newer render',async()=>{
+  const root=new TestElement('main');let rejectRefresh,calls=0
+  const api={reviewQueue:()=>++calls===1?Promise.resolve({items:[{id:'i',kind:'bite',prompt:'OLD',answer:'A',row_version:1}]}):new Promise((_,reject)=>rejectRefresh=reject),rateReviewItem:async()=>{},suspendReviewItem:async()=>{}}
+  await renderReview(root,{scope:'all',api})
+  const action=findText(root,'good').click();await Promise.resolve()
+  await renderReview(root,{scope:'all',api:queue([],true)})
+  rejectRefresh(new Error('stale refresh'));await action
+  assert.ok(findText(root,'Caught up in all projects.'));assert.equal(findText(root,'stale refresh'),undefined)
+})

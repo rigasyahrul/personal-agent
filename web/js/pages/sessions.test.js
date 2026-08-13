@@ -360,3 +360,19 @@ test('promote dialog survives chat rerender with entered state and selection Sav
   await page.poll();assert.equal(host.children[0],dialog);assert.equal(target.value,'entered.md');assert.ok(panel.children.find(child=>child.textContent==='Save to source'))
   page.destroy();assert.equal(host.children.length,0)
 })
+
+test('promote submit remains bound to captured file and stable attempt across failure',async()=>{
+  const document=new TestDocument(),root=new Root(),calls=[];let workspaceOptions,fail=true,key=0
+  const renderWorkspace=async value=>{workspaceOptions=value;const panel=new TestElement('section');panel.querySelector=selector=>selector==='[data-promote]'?panel.children.find(child=>Object.hasOwn(child.dataset,'promote'))||null:null;value.container.querySelector=selector=>selector==='.workspace-panel'?panel:null;value.onFileSelected({path:'draft.md',kind:'file'});value.save=panel.children[0]}
+  const page=createSessionsPage({root,document,dialogHost:document.body,projectID:'p',renderWorkspace,workspaceAPI:{},randomUUID:()=>`key-${++key}`,api:async path=>path==='/api/v1/projects/p'?{name:'P'}:path.endsWith('/messages')?[]:null,promote:async(...args)=>{calls.push(args);if(fail)throw new Error('missing file');return{operation_id:'op'}},getOperation:async()=>({operation_id:'op',badge:'Ready'}),setInterval:()=>1,clearInterval(){}})
+  await page.openChat({id:'session',title:'S',provider:'p',model_id:'m',tool_grants:{workspace_files:true}})
+  workspaceOptions.save.click();await new Promise(resolve=>setImmediate(resolve))
+  const dialog=document.body.children[0],form=dialog.querySelector('form'),target=dialog.querySelector('input');target.value='target.md'
+  const bites=dialog.querySelectorAll('input').find(input=>input.value==='bites');dialog.querySelectorAll('input').forEach(input=>input.checked=false);bites.checked=true
+  workspaceOptions.onFileSelected({path:'other.md',kind:'file'})
+  await form.onsubmit({preventDefault(){}})
+  assert.deepEqual(calls[0],['session',{workspace_path:'draft.md',target_relative_path:'target.md',review_mode:'bites'},'key-1'])
+  assert.equal(findText(dialog,'missing file').getAttribute('role'),'alert');assert.equal(target.value,'target.md')
+  fail=false;await form.onsubmit({preventDefault(){}})
+  assert.equal(calls[1][2],'key-1');assert.equal(document.body.children.length,0)
+})
