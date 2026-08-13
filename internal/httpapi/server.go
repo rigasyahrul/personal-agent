@@ -49,6 +49,9 @@ func New(deps ServerDeps) http.Handler {
 	auth := func(next http.Handler) http.Handler { return requireAuthAt(deps.DB, now, next) }
 	mutation := func(next http.Handler) http.Handler { return auth(RequireCSRF(next)) }
 	rh := reviewHandlers{db: deps.DB, queue: review.Queue{DB: deps.DB, Clock: deps.Clock}, store: store.ReviewStore{DB: deps.DB, Clock: deps.Clock}}
+	ph := promoteHandlers{db: deps.DB, machine: deps.Publish, sessions: sessions}
+	mux.Handle("POST /api/v1/sessions/{id}/promote", mutation(http.HandlerFunc(ph.create)))
+	mux.Handle("GET /api/v1/operations/{id}", auth(http.HandlerFunc(ph.status)))
 	mux.Handle("GET /api/v1/review/queue", auth(http.HandlerFunc(rh.queueDue)))
 	mux.Handle("POST /api/v1/review/items/{id}/rate", mutation(http.HandlerFunc(rh.rate)))
 	mux.Handle("POST /api/v1/review/items/{id}/suspend", mutation(http.HandlerFunc(rh.suspend)))

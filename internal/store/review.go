@@ -39,6 +39,17 @@ type ReviewStore struct {
 	Clock clock.Clock
 }
 
+type ReviewPending struct {
+	ID, NoteID, SourceSHA256, GeneratorVersion, Status string
+}
+
+func ReviewPendingForPublication(ctx context.Context, db *sql.DB, noteID, sourceSHA256 string) (ReviewPending, error) {
+	var out ReviewPending
+	err := db.QueryRowContext(ctx, `SELECT id,note_id,source_sha256,generator_version,status FROM review_pending WHERE note_id=? AND source_sha256=? AND generator_version='bites-v1'`, noteID, sourceSHA256).
+		Scan(&out.ID, &out.NoteID, &out.SourceSHA256, &out.GeneratorVersion, &out.Status)
+	return out, err
+}
+
 func RetryReviewPending(ctx context.Context, db *sql.DB, id string) error {
 	res, err := db.ExecContext(ctx, `UPDATE review_pending SET status='pending',lease_until=NULL,last_error=NULL WHERE id=? AND status='failed'`, id)
 	if err != nil {
