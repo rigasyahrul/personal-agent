@@ -11,7 +11,7 @@
 | 3 Sessions + chat | 15–20 | 2 | no | done | impl/v1-p3-sessions | [T-019ff8ea…](https://ampcode.com/threads/T-019ff8ea-6a0b-77fe-91e5-09fbb64e6678) | 2026-08-13 |
 | 4 Workspace tools | 21–24 | 3 | no | done | impl/v1-p4-tools | [T-019ff945…](https://ampcode.com/threads/T-019ff945-5949-7619-946a-e050c40d177f) | 2026-08-13 |
 | 5 Promote + review | 25–32 | 4 | no | done | impl/v1-p5-promote-review | [T-019ff978…](https://ampcode.com/threads/T-019ff978-ac06-73fc-9f51-d4c8fcff2854) | 2026-08-13 |
-| 6 Backup | 33–36 | 5 | no | running | impl/v1-p6-backup | [T-019ffa08…](https://ampcode.com/threads/T-019ffa08-4f95-72c1-98fc-da8d98162847) | 2026-08-13 |
+| 6 Backup | 33–36 | 5 | no | running | impl/v1-p6-backup | [T-019ffad8…](https://ampcode.com/threads/T-019ffad8-acf3-712c-b091-a1b91d0ae257) **grok45** | 2026-08-13 |
 | 7 Hardening | 37–42 | 6 | no | todo | impl/v1-p7-hardening | | |
 
 **Status:** `todo` | `running` | `review` | `done` | `blocked`
@@ -20,20 +20,22 @@
 
 | When | Event |
 |------|--------|
-| 2026-08-13 | Phases 1–4 DONE and FF-merged to main. |
-| 2026-08-13 | Phase 5 DONE @ `85172f2` (25 commits) → FF main. Master `go test ./...` green. |
-| 2026-08-13 | Phase 6 worker T-019ff9ed: T33 done, T34 nearly done; **OpenAI usage limit** mid-cleanup; unpushed; archived. |
-| 2026-08-13 | Phase 6 retry T-019ffa08: died immediately in `error` (likely same usage limit). No branch on origin. |
-| 2026-08-13 | **BLOCKED** on Amp/OpenAI provider usage limit. Need user to restore quota or switch provider, then re-dispatch Phase 6. |
-| 2026-08-13 | Phase 6 resumed on T-019ffa08 with consulting-grok-review gates (skill on main @ 7afcd1b). |
+| 2026-08-13 | Phases 1–5 DONE and FF-merged to main. |
+| 2026-08-13 | Phase 6 attempts on **high** mode failed (OpenAI/ChatGPT usage limit / stuck error). |
+| 2026-08-13 | Root cause: worker threads must use **grok45** (xai/grok-4.5), not high. |
+| 2026-08-13 | Phase 6 dispatched **grok45**: https://ampcode.com/threads/T-019ffad8-acf3-712c-b091-a1b91d0ae257 — consulting-grok-review gates required. Prior high-mode T-019ffa08 archived. |
 
 ## Active blockers
 
-_None currently asserted by master — Phase 6 re-dispatched. If worker hits usage limit again, re-block._
+_None._
 
 ## Master thread
 
 - URL: https://ampcode.com/threads/T-019ff850-de59-752f-b240-f3e790a566cc
+
+## Worker mode rule
+
+Phase workers that hit ChatGPT limits: spawn with `amp -m grok45 -ox ...` (plugin `.amp/plugins/grok-45-mode.ts`). Do not continue a high-mode thread expecting Grok.
 
 ## Accepted phases (on origin/main)
 
@@ -44,8 +46,3 @@ _None currently asserted by master — Phase 6 re-dispatched. If worker hits usa
 | 3 | `5ac9dfc` | Sessions, runner, chat API/UI |
 | 4 | `c8cddc6` | Rooted workspace tools, tool loop, API, UI panel |
 | 5 | `85172f2` | Promote machine, SM-2, bites, review queue/UI |
-
-## main HEAD
-
-Phases 1–5 merged. Board docs commits after `85172f2`.  
-`go test ./...` last verified green on Phase 5 merge under Go 1.24.0.
