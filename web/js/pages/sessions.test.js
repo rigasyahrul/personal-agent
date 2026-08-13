@@ -4,8 +4,9 @@ import {createSessionsPage} from './sessions.js'
 import {parseRoute} from '../router.js'
 
 class Root {
-  constructor() { this.innerHTML = '' }
+  constructor() { this.renders = []; this.innerHTML = '' }
   set innerHTML(value) {
+    this.renders.push(value)
     this.html = value
     this.chatForm = value.includes('data-chat') ? {elements: {message: {value: this.chatForm?.elements.message.value || ''}}} : null
     this.newForm = value.includes('data-new') ? {elements: {title: {value: ''}, model: {value: '0'}, workspace_files: {checked: false}}} : null
@@ -187,6 +188,41 @@ test('pending send cannot leak into a newly opened session', async () => {
   assert.doesNotMatch(root.textContent, /old failure|old draft/)
 })
 
+test('an older button open rejection cannot replace a newer successful chat', async () => {
+  const root = new Root()
+  let page, newerOpen, intervals = 0
+  const api = async path => {
+    if (path === '/api/v1/models') return {models: [{provider: 'p', model_id: 'm'}]}
+    if (path === '/api/v1/projects/p/sessions') return [{id: 'old', title: 'Old', provider: 'p', model_id: 'm'}]
+    if (path.includes('/new/') && path.endsWith('/messages')) return [{sequence: 1, role: 'user', content: 'new history'}]
+    if (path.endsWith('/messages')) return []
+    if (path.endsWith('/runs/current')) return null
+    throw new Error(`unexpected request: ${path}`)
+  }
+  page = createSessionsPage({
+    root,
+    api,
+    projectID: 'p',
+    setInterval: () => {
+      if (++intervals === 1) {
+        newerOpen = page.openChat({id: 'new', title: 'New', provider: 'p', model_id: 'm'})
+        throw new Error('stale cannot open')
+      }
+      return intervals
+    },
+    clearInterval() {},
+  })
+  await page.list()
+
+  root.sessionButtons[0].onclick()
+  await new Promise(resolve => setImmediate(resolve))
+  await newerOpen
+  await new Promise(resolve => setImmediate(resolve))
+
+  assert.match(root.textContent, /New.*new history/s)
+  assert.equal(root.renders.some(html => /Sessions.*stale cannot open/s.test(html)), false)
+})
+
 test('real create and navigation handlers consume failures and show errors inline', async () => {
   const unhandled = []
   const listener = reason => unhandled.push(reason)
@@ -194,10 +230,14 @@ test('real create and navigation handlers consume failures and show errors inlin
   try {
     const root = new Root()
     let cannotList = false
+    let cannotCreate = true
     let cannotOpen = true
     let intervalAttempt = deferred()
     const api = async (path, options = {}) => {
-      if (options.method === 'POST') throw new Error('cannot create')
+      if (options.method === 'POST') {
+        if (cannotCreate) throw new Error('cannot create')
+        return {id: 'created', title: 'Created', provider: 'p', model_id: 'm'}
+      }
       if (cannotList && (path === '/api/v1/models' || path === '/api/v1/projects/p/sessions')) throw new Error('cannot list')
       if (path === '/api/v1/models') return {models: [{provider: 'p', model_id: 'm'}]}
       if (path === '/api/v1/projects/p/sessions') return [{id: 's', title: 'Session', provider: 'p', model_id: 'm'}]
@@ -222,6 +262,14 @@ test('real create and navigation handlers consume failures and show errors inlin
     await new Promise(resolve => setImmediate(resolve))
     assert.match(root.textContent, /cannot create/)
 
+    cannotCreate = false
+    intervalAttempt = deferred()
+    root.newForm.onsubmit({preventDefault() {}})
+    await intervalAttempt.promise
+    await new Promise(resolve => setImmediate(resolve))
+    assert.match(root.textContent, /Sessions.*cannot open/s)
+
+    intervalAttempt = deferred()
     root.sessionButtons[0].onclick()
     await intervalAttempt.promise
     await new Promise(resolve => setImmediate(resolve))

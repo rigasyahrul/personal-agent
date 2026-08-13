@@ -36,6 +36,18 @@ export function createSessionsPage({
     if (!current(generation)) return
     const models = configured?.models || []
     let listError = ''
+    const openFromList = async selected => {
+      const expectedGeneration = chatGeneration + 1
+      const selectedID = selected.id
+      try {
+        await openChat(selected)
+      } catch (openError) {
+        if (current(expectedGeneration) && session?.id === selectedID) {
+          listError = openError.message
+          renderList()
+        }
+      }
+    }
     const renderList = () => {
       const create = models.length ? `<form data-new class="sessions-create"><label>Title<input name="title" required maxlength="200"></label><label>Model<select name="model" required>${models.map((model, index) => `<option value="${index}">${esc(model.provider)}:${esc(model.model_id)}</option>`).join('')}</select></label><label class="sessions-grant"><input type="checkbox" name="workspace_files"> Allow workspace files</label><button>Create session</button><p class="error" role="alert">${esc(listError)}</p></form>` : '<section class="sessions-setup"><p>Configure a model before creating a session.</p><a class="button" href="#/settings">Open settings</a></section>'
       root.innerHTML = `<div class="page-heading"><h2>Sessions</h2></div>${create}<ul class="sessions-list">${sessions.map(item => `<li><button type="button" data-session="${esc(item.id)}"><span>${esc(item.title)}</span><span class="model-badge">${esc(item.provider)}:${esc(item.model_id)}</span></button></li>`).join('')}</ul>`
@@ -46,10 +58,10 @@ export function createSessionsPage({
         const model = models[index]
         if (!model) return
         void api(`/api/v1/projects/${pathID(projectID)}/sessions`, {method: 'POST', body: {home: 'project', title: form.elements.title.value, provider: model.provider, model_id: model.model_id, model_parameters: {}, tool_grants: {workspace_files: Boolean(form.elements.workspace_files.checked)}}})
-          .then(created => current(generation) ? openChat(created) : undefined)
+          .then(created => { if (current(generation)) void openFromList(created) })
           .catch(createError => { if (current(generation)) { listError = createError.message; renderList() } })
       }
-      root.querySelectorAll('[data-session]').forEach(button => { button.onclick = () => { void openChat(sessions.find(item => item.id === button.dataset.session)).catch(openError => { if (!destroyed && isCurrent()) { listError = openError.message; renderList() } }) } })
+      root.querySelectorAll('[data-session]').forEach(button => { button.onclick = () => { void openFromList(sessions.find(item => item.id === button.dataset.session)) } })
     }
     renderList()
   }
