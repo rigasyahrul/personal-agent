@@ -8,7 +8,7 @@
 |-------|-------|---------|---------------|--------|--------|---------------|---------|
 | 1 Skeleton | 1–8 | — | no | done | impl/v1-p1-skeleton | [T-019ff854…](https://ampcode.com/threads/T-019ff854-0162-7096-abde-b22632804e47) | 2026-08-13 |
 | 2 Projects + source | 9–14 | 1 | no | done | impl/v1-p2-projects | [T-019ff890…](https://ampcode.com/threads/T-019ff890-519f-71ec-bea9-b3983d42fbcf) | 2026-08-13 |
-| 3 Sessions + chat | 15–20 | 2 | no | running | impl/v1-p3-sessions | (dispatching) | 2026-08-13 |
+| 3 Sessions + chat | 15–20 | 2 | no | running | impl/v1-p3-sessions | [T-019ff8ea…](https://ampcode.com/threads/T-019ff8ea-6a0b-77fe-91e5-09fbb64e6678) | 2026-08-13 |
 | 4 Workspace tools | 21–24 | 3 | no | todo | impl/v1-p4-tools | | |
 | 5 Promote + review | 25–32 | 4 | no | todo | impl/v1-p5-promote-review | | |
 | 6 Backup | 33–36 | 5 | no | todo | impl/v1-p6-backup | | |
@@ -28,6 +28,7 @@
 | 2026-08-13 | Phase 2 worker on sandbox: https://ampcode.com/threads/T-019ff890-519f-71ec-bea9-b3983d42fbcf |
 | 2026-08-13 | Phase 2 worker DONE @ `0b79b00` (15 commits). Master verified green. FF-merged to `main`. |
 | 2026-08-13 | Dispatching Phase 3 worker (tasks 15–20, branch `impl/v1-p3-sessions`). |
+| 2026-08-13 | Phase 3 worker on sandbox: https://ampcode.com/threads/T-019ff8ea-6a0b-77fe-91e5-09fbb64e6678 |
 
 ## Active blockers
 
