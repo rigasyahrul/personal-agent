@@ -39,6 +39,21 @@ type ReviewStore struct {
 	Clock clock.Clock
 }
 
+func RetryReviewPending(ctx context.Context, db *sql.DB, id string) error {
+	res, err := db.ExecContext(ctx, `UPDATE review_pending SET status='pending',lease_until=NULL,last_error=NULL WHERE id=? AND status='failed'`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return ErrConflict
+	}
+	return nil
+}
+
 func (s ReviewStore) Rate(ctx context.Context, itemID, requestKey string, expectedVersion int64, rating domain.Rating, durationMS int64) (RatedItem, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
