@@ -29,6 +29,14 @@ await assert.rejects(get('/api/v1/auth/me'), error => {
 })
 console.log('PASS api request preserves failure status and body')
 
+globalThis.fetch = async () => new Response('{"error":"provider_unavailable","detail":"secret upstream response"}', {status: 502})
+await assert.rejects(get('/api/v1/sessions/s/messages'), error => {
+  assert.equal(error.message, 'provider unavailable')
+  assert.doesNotMatch(error.message, /secret/)
+  return true
+})
+console.log('PASS api request presents safe JSON error codes')
+
 let requested
 globalThis.fetch = async (path, options) => {
   requested = {path, options}
