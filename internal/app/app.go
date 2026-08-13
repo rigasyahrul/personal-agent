@@ -10,6 +10,7 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	database "github.com/rigasyahrul/personal-agent/internal/db"
 	"github.com/rigasyahrul/personal-agent/internal/httpapi"
+	"github.com/rigasyahrul/personal-agent/internal/publish"
 )
 
 type App struct {
@@ -22,6 +23,11 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	machine := &publish.Machine{DB: db, DataDir: cfg.DataDir, Clock: clock.RealClock{}}
+	if err := machine.RecoverAll(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 
 	return &App{
 		db: db,
@@ -32,6 +38,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 			BootstrapToken: cfg.BootstrapToken,
 			SecureCookies:  cfg.SecureCookies,
 			Static:         http.Dir("web"),
+			Publish:        machine,
 		}),
 	}, nil
 }

@@ -58,7 +58,7 @@ func (s *NoteStore) Tree(ctx context.Context, projectID string) ([]TreeEntry, er
 		return nil, err
 	}
 	defer r.Close()
-	rows, err := s.db.QueryContext(ctx, `SELECT relative_path,id,content_sha256,byte_size FROM notes WHERE project_id=? AND status='ready'`, projectID)
+	rows, err := s.db.QueryContext(ctx, `SELECT relative_path,id,content_sha256,byte_size,status FROM notes WHERE project_id=?`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,14 +68,22 @@ func (s *NoteStore) Tree(ctx context.Context, projectID string) ([]TreeEntry, er
 		size     int64
 	}
 	ids := map[string]indexedNote{}
+	pending := map[string]bool{}
 	for rows.Next() {
-		var p, id string
+		var p, id, status string
 		var hash sql.NullString
 		var size sql.NullInt64
-		if err := rows.Scan(&p, &id, &hash, &size); err != nil {
+		if err := rows.Scan(&p, &id, &hash, &size, &status); err != nil {
 			return nil, err
 		}
-		if _, err = paths.ValidateRelPath(p); err != nil || path.Ext(p) != ".md" || !hash.Valid || !size.Valid || size.Int64 < 0 || size.Int64 > paths.MaxMarkdownBytes {
+		if _, err = paths.ValidateRelPath(p); err != nil || path.Ext(p) != ".md" {
+			return nil, ErrIntegrity
+		}
+		if status == "pending" {
+			pending[p] = true
+			continue
+		}
+		if status != "ready" || !hash.Valid || !size.Valid || size.Int64 < 0 || size.Int64 > paths.MaxMarkdownBytes {
 			return nil, ErrIntegrity
 		}
 		ids[p] = indexedNote{id: id, hash: hash.String, size: size.Int64}
@@ -95,6 +103,9 @@ func (s *NoteStore) Tree(ctx context.Context, projectID string) ([]TreeEntry, er
 		}
 		indexed, ok := ids[p]
 		if !ok {
+			if pending[p] {
+				return nil
+			}
 			return ErrIntegrity
 		}
 		body, err := r.ReadFile(p, paths.MaxMarkdownBytes)

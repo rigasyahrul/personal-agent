@@ -2,6 +2,7 @@ package fsroot
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"math"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/rigasyahrul/personal-agent/internal/paths"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -17,7 +19,10 @@ var (
 	ErrUnsafe      = errors.New("unsafe filesystem node")
 )
 
-type Root struct{ root *os.Root }
+type Root struct {
+	root *os.Root
+	fd   int
+}
 
 func Open(name string) (*Root, error) {
 	abs, err := filepath.Abs(name)
@@ -45,10 +50,22 @@ func Open(name string) (*Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Root{root: r}, nil
+	fd, err := unix.Openat2(unix.AT_FDCWD, abs, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_NO_SYMLINKS})
+	if err != nil {
+		_ = r.Close()
+		return nil, ErrUnsafe
+	}
+	return &Root{root: r, fd: fd}, nil
 }
 
-func (r *Root) Close() error { return r.root.Close() }
+func (r *Root) Close() error {
+	a := r.root.Close()
+	b := unix.Close(r.fd)
+	if a != nil {
+		return a
+	}
+	return b
+}
 
 func valid(name string) error {
 	if _, err := paths.ValidateRelPath(name); err != nil || strings.Contains(name, `\`) {
@@ -127,6 +144,66 @@ func (r *Root) MkdirAll(name string, perm fs.FileMode) error {
 		}
 	}
 	return nil
+}
+
+// WriteFileNoReplace atomically installs a regular file without following
+// symlinks or replacing an existing destination.
+func (r *Root) WriteFileNoReplace(name string, body []byte, perm fs.FileMode) error {
+	if err := valid(name); err != nil {
+		return err
+	}
+	dir := filepath.ToSlash(filepath.Dir(name))
+	if dir == "." {
+		dir = ""
+	}
+	if dir != "" {
+		if err := r.MkdirAll(dir, 0700); err != nil && !errors.Is(err, fs.ErrExist) {
+			return err
+		}
+	}
+	tmp := filepath.ToSlash(filepath.Join(dir, fmt.Sprintf(".publish-%d-%d", os.Getpid(), unix.Gettid())))
+	tfd, err := unix.Openat(r.fd, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, uint32(perm.Perm()))
+	if err != nil {
+		return err
+	}
+	remove := true
+	defer func() {
+		if remove {
+			_ = unix.Unlinkat(r.fd, tmp, 0)
+		}
+	}()
+	f := os.NewFile(uintptr(tfd), tmp)
+	if _, err = f.Write(body); err == nil {
+		err = f.Sync()
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	err = unix.Renameat2(r.fd, tmp, r.fd, name, unix.RENAME_NOREPLACE)
+	if errors.Is(err, unix.EEXIST) {
+		return fs.ErrExist
+	}
+	if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.ENOTDIR) {
+		return ErrUnsafe
+	}
+	if err != nil {
+		return err
+	}
+	remove = false
+	dfd, err := unix.Openat(r.fd, func() string {
+		if dir == "" {
+			return "."
+		}
+		return dir
+	}(), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(dfd)
+	return unix.Fsync(dfd)
 }
 
 func (r *Root) Walk(fn func(path string, info fs.FileInfo) error) error {

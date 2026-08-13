@@ -2,6 +2,8 @@ package domain
 
 import "time"
 
+type ReviewMode string
+
 type Vault struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`

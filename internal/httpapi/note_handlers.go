@@ -1,18 +1,24 @@
 package httpapi
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"path"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
+	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/fsroot"
 	"github.com/rigasyahrul/personal-agent/internal/layout"
 	"github.com/rigasyahrul/personal-agent/internal/paths"
+	"github.com/rigasyahrul/personal-agent/internal/publish"
 	"github.com/rigasyahrul/personal-agent/internal/store"
 )
 
@@ -20,14 +26,60 @@ type noteHandlers struct {
 	db      *sql.DB
 	dataDir string
 	notes   *store.NoteStore
+	publish *publish.Machine
 }
 
-func NoteRoutes(mux *http.ServeMux, db *sql.DB, dataDir string, c clock.Clock) {
-	h := noteHandlers{db: db, dataDir: dataDir, notes: store.NewNoteStore(db, dataDir)}
+func NoteRoutes(mux *http.ServeMux, db *sql.DB, dataDir string, c clock.Clock, machine *publish.Machine) {
+	h := noteHandlers{db: db, dataDir: dataDir, notes: store.NewNoteStore(db, dataDir), publish: machine}
 	authenticated := func(next http.Handler) http.Handler { return requireAuthAt(db, c.Now, next) }
 	mux.Handle("GET /api/v1/projects/{id}/tree", authenticated(http.HandlerFunc(h.tree)))
 	mux.Handle("POST /api/v1/projects/{id}/folders", authenticated(RequireCSRF(http.HandlerFunc(h.createFolder))))
 	mux.Handle("GET /api/v1/notes/{id}", authenticated(http.HandlerFunc(h.get)))
+	mux.Handle("POST /api/v1/projects/{id}/direct-notes", authenticated(RequireCSRF(http.HandlerFunc(h.direct))))
+}
+
+func (h noteHandlers) direct(w http.ResponseWriter, r *http.Request) {
+	key := r.Header.Get("Idempotency-Key")
+	if strings.TrimSpace(key) == "" {
+		http.Error(w, "invalid request", 400)
+		return
+	}
+	var in struct {
+		Path       string            `json:"path"`
+		ReviewMode domain.ReviewMode `json:"review_mode"`
+		Body       string            `json:"body"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, paths.MaxMarkdownBytes+4096)
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&in); err != nil {
+		http.Error(w, "invalid request", 400)
+		return
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		http.Error(w, "invalid request", 400)
+		return
+	}
+	clean, err := paths.ValidateRelPath(in.Path)
+	if err != nil {
+		http.Error(w, "invalid request", 400)
+		return
+	}
+	project := r.PathValue("id")
+	sum := sha256.Sum256([]byte(project + "\x00" + clean + "\x00" + string(in.ReviewMode) + "\x00" + in.Body))
+	status, note, err := h.publish.Run(r.Context(), publish.PublishInput{OpID: uuid.NewString(), RequestKey: key, RequestFingerprint: fmt.Sprintf("%x", sum), Kind: "direct", Body: []byte(in.Body), TargetProjectID: project, TargetRelPath: clean, ReviewMode: in.ReviewMode, NoteID: uuid.NewString()})
+	if errors.Is(err, publish.ErrInvalid) {
+		http.Error(w, "invalid request", 400)
+		return
+	}
+	if errors.Is(err, publish.ErrConflict) {
+		http.Error(w, "conflict", 409)
+		return
+	}
+	if err != nil {
+		internalError(w)
+		return
+	}
+	jsonResponse(w, 201, map[string]string{"status": status, "note_id": note})
 }
 
 func (h noteHandlers) tree(w http.ResponseWriter, r *http.Request) {

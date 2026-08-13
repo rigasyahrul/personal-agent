@@ -2,6 +2,7 @@ package fsroot_test
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,5 +100,30 @@ func TestReadFileRejectsBodyOverLimit(t *testing.T) {
 	defer r.Close()
 	if _, err := r.ReadFile("large.md", 10); !errors.Is(err, fsroot.ErrUnsafe) {
 		t.Fatalf("oversized ReadFile: %v", err)
+	}
+}
+
+func TestWriteFileNoReplaceRejectsCollisionAndSymlinkParent(t *testing.T) {
+	dir := t.TempDir()
+	r, err := fsroot.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := r.WriteFileNoReplace("docs/note.md", []byte("one"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.WriteFileNoReplace("docs/note.md", []byte("two"), 0600); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("collision: %v", err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "docs", "note.md"))
+	if string(b) != "one" {
+		t.Fatalf("overwritten: %q", b)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.WriteFileNoReplace("link/note.md", []byte("x"), 0600); !errors.Is(err, fsroot.ErrUnsafe) {
+		t.Fatalf("symlink: %v", err)
 	}
 }
