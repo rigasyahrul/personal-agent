@@ -151,29 +151,36 @@ func TestPromoteEndpointRejectsMalformedRequestsAndRequiresSecurity(t *testing.T
 
 func TestOperationStatusMatrix(t *testing.T) {
 	tests := []struct {
-		status, note, pending, badge string
+		name, status, note, pending, badge string
+		frozen                             bool
 	}{
-		{"accepted", "", "", "Promoting…"},
-		{"frozen", "", "", "Promoting…"},
-		{"path_reserved", "pending", "", "Promoting…"},
-		{"published_fs", "pending", "", "Promoting…"},
-		{"finalized", "ready", "", "Promoting…"},
-		{"review_enqueued", "ready", "pending", "Promoting…"},
-		{"completed", "ready", "completed", "Ready"},
-		{"failed", "failed", "", "Promote failed — Retry"},
+		{"accepted", "accepted", "", "", "Promoting…", false},
+		{"frozen", "frozen", "", "", "Promoting…", true},
+		{"path_reserved", "path_reserved", "pending", "", "Promoting…", true},
+		{"published_fs", "published_fs", "pending", "", "Promoting…", true},
+		{"finalized", "finalized", "ready", "", "Promoting…", true},
+		{"review_enqueued", "review_enqueued", "ready", "pending", "Promoting…", true},
+		{"completed", "completed", "ready", "completed", "Ready", true},
+		{"failed_before_reservation", "failed", "", "", "Promote failed — Retry", false},
+		{"failed_after_reservation", "failed", "failed", "", "Promote failed — Retry", true},
 	}
 	for _, tc := range tests {
-		t.Run(tc.status, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			f := newPromoteHTTPTest(t)
 			stamp := "2026-08-13T12:00:00Z"
-			noteID := "note-" + tc.status
+			noteID := "note-" + tc.name
 			if tc.note != "" {
 				_, err := f.db.Exec(`INSERT INTO notes(id,project_id,relative_path,content_sha256,byte_size,status,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, noteID, "p1", tc.status+".md", "sha", 1, tc.note, 0, stamp, stamp)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
-			_, err := f.db.Exec(`INSERT INTO promote_ops(id,request_key,request_fingerprint,session_id,workspace_path,target_project_id,target_relative_path,review_mode,note_id,frozen_sha256,frozen_size,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, "op", "key", "fp", "s1", "draft.md", "p1", tc.status+".md", "bites", noteID, "sha", 1, tc.status, stamp, stamp)
+			var frozenSHA any
+			var frozenSize any
+			if tc.frozen {
+				frozenSHA, frozenSize = "sha", 1
+			}
+			_, err := f.db.Exec(`INSERT INTO promote_ops(id,request_key,request_fingerprint,session_id,workspace_path,target_project_id,target_relative_path,review_mode,note_id,frozen_sha256,frozen_size,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, "op", "key", "fp", "s1", "draft.md", "p1", tc.name+".md", "bites", noteID, frozenSHA, frozenSize, tc.status, stamp, stamp)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -191,14 +198,57 @@ func TestOperationStatusMatrix(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 				t.Fatal(err)
 			}
-			if got.PublicationStatus != tc.status || got.Badge != tc.badge {
+			if got.PublicationStatus != tc.status || got.Badge != tc.badge || got.RetryCards {
 				t.Fatalf("got=%+v", got)
 			}
 			if (got.NoteStatus == nil) != (tc.note == "") || got.NoteStatus != nil && *got.NoteStatus != tc.note {
 				t.Fatalf("note status=%v", got.NoteStatus)
 			}
-			if (got.PendingStatus == nil) != (tc.pending == "") || got.PendingStatus != nil && (*got.PendingStatus != tc.pending || got.PendingID == nil || *got.PendingID != "pending-id") {
+			if (got.PendingStatus == nil) != (tc.pending == "") || tc.pending == "" && got.PendingID != nil || got.PendingStatus != nil && (*got.PendingStatus != tc.pending || got.PendingID == nil || *got.PendingID != "pending-id") {
 				t.Fatalf("pending=%v/%v", got.PendingID, got.PendingStatus)
+			}
+		})
+	}
+}
+
+func TestOperationStatusRejectsInconsistentDurableState(t *testing.T) {
+	tests := []struct {
+		name, status, note string
+		generation         bool
+	}{
+		{"path_reserved_missing_note", "path_reserved", "", false},
+		{"path_reserved_wrong_note", "path_reserved", "ready", false},
+		{"published_fs_missing_note", "published_fs", "", false},
+		{"published_fs_wrong_note", "published_fs", "ready", false},
+		{"finalized_missing_note", "finalized", "", false},
+		{"finalized_wrong_note", "finalized", "pending", false},
+		{"review_enqueued_missing_note", "review_enqueued", "", false},
+		{"review_enqueued_wrong_note", "review_enqueued", "pending", true},
+		{"completed_missing_note", "completed", "", false},
+		{"completed_wrong_note", "completed", "pending", true},
+		{"review_enqueued_missing_generation", "review_enqueued", "ready", false},
+		{"completed_missing_generation", "completed", "ready", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newPromoteHTTPTest(t)
+			stamp := "2026-08-13T12:00:00Z"
+			if tc.note != "" {
+				if _, err := f.db.Exec(`INSERT INTO notes(id,project_id,relative_path,content_sha256,byte_size,status,revision,created_at,updated_at) VALUES('n','p1','n.md','sha',1,?,0,?,?)`, tc.note, stamp, stamp); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := f.db.Exec(`INSERT INTO promote_ops(id,request_key,request_fingerprint,session_id,workspace_path,target_project_id,target_relative_path,review_mode,note_id,frozen_sha256,frozen_size,status,created_at,updated_at) VALUES('op','key','fp','s1','draft.md','p1','n.md','bites','n','sha',1,?,?,?)`, tc.status, stamp, stamp); err != nil {
+				t.Fatal(err)
+			}
+			if tc.generation {
+				if _, err := f.db.Exec(`INSERT INTO review_pending(id,note_id,source_sha256,generator_version,status,created_at,updated_at) VALUES('rp','n','sha','bites-v1','pending',?,?)`, stamp, stamp); err != nil {
+					t.Fatal(err)
+				}
+			}
+			w := projectAPIRequest(f.h, http.MethodGet, "/api/v1/operations/op", "", true, "")
+			if w.Code != http.StatusInternalServerError {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 			}
 		})
 	}
@@ -231,13 +281,30 @@ func TestOperationStatusBitesCopiesAndConsistency(t *testing.T) {
 			}
 		})
 	}
-	// A completed bites publication without its matching generation must never report Ready.
-	f := newPromoteHTTPTest(t)
-	stamp := "2026-08-13T12:00:00Z"
-	_, _ = f.db.Exec(`INSERT INTO notes(id,project_id,relative_path,content_sha256,byte_size,status,revision,created_at,updated_at) VALUES('n','p1','n.md','sha',1,'ready',0,?,?)`, stamp, stamp)
-	_, _ = f.db.Exec(`INSERT INTO direct_ops(id,request_key,request_fingerprint,target_project_id,target_relative_path,review_mode,note_id,frozen_sha256,frozen_size,status,created_at,updated_at) VALUES('bad','k','f','p1','n.md','bites','n','sha',1,'completed',?,?)`, stamp, stamp)
-	if got := projectAPIRequest(f.h, http.MethodGet, "/api/v1/operations/bad", "", true, "").Code; got != 500 {
-		t.Fatalf("inconsistent status=%d", got)
+}
+
+func TestOperationStatusPublicationBadgeTakesPriorityOverFailedCards(t *testing.T) {
+	for _, tc := range []struct {
+		status, note, badge string
+	}{
+		{"review_enqueued", "ready", "Promoting…"},
+		{"failed", "failed", "Promote failed — Retry"},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			f := newPromoteHTTPTest(t)
+			stamp := "2026-08-13T12:00:00Z"
+			_, _ = f.db.Exec(`INSERT INTO notes(id,project_id,relative_path,content_sha256,byte_size,status,revision,created_at,updated_at) VALUES('n','p1','n.md','sha',1,?,0,?,?)`, tc.note, stamp, stamp)
+			_, _ = f.db.Exec(`INSERT INTO promote_ops(id,request_key,request_fingerprint,session_id,workspace_path,target_project_id,target_relative_path,review_mode,note_id,frozen_sha256,frozen_size,status,created_at,updated_at) VALUES('op','key','fp','s1','draft.md','p1','n.md','bites','n','sha',1,?,?,?)`, tc.status, stamp, stamp)
+			_, _ = f.db.Exec(`INSERT INTO review_pending(id,note_id,source_sha256,generator_version,status,created_at,updated_at) VALUES('rp','n','sha','bites-v1','failed',?,?)`, stamp, stamp)
+			w := projectAPIRequest(f.h, http.MethodGet, "/api/v1/operations/op", "", true, "")
+			var got operationStatusDTO
+			if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+			if got.NoteStatus == nil || *got.NoteStatus != tc.note || got.PendingID == nil || *got.PendingID != "rp" || got.PendingStatus == nil || *got.PendingStatus != "failed" || !got.RetryCards || got.Badge != tc.badge {
+				t.Fatalf("got=%+v", got)
+			}
+		})
 	}
 }
 
