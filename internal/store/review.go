@@ -49,9 +49,39 @@ func RetryReviewPending(ctx context.Context, db *sql.DB, id string) error {
 		return err
 	}
 	if n != 1 {
+		var exists int
+		if err := db.QueryRowContext(ctx, `SELECT 1 FROM review_pending WHERE id=?`, id).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
 		return ErrConflict
 	}
 	return nil
+}
+
+func (s ReviewStore) Suspend(ctx context.Context, id string) error {
+	res, err := s.DB.ExecContext(ctx, `UPDATE review_items SET status='suspended' WHERE id=? AND status='active'`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 1 {
+		return nil
+	}
+	var status string
+	if err := s.DB.QueryRowContext(ctx, `SELECT status FROM review_items WHERE id=?`, id).Scan(&status); errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	if status == "suspended" {
+		return nil
+	}
+	return ErrConflict
 }
 
 func (s ReviewStore) Rate(ctx context.Context, itemID, requestKey string, expectedVersion int64, rating domain.Rating, durationMS int64) (RatedItem, error) {

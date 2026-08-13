@@ -9,6 +9,7 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	"github.com/rigasyahrul/personal-agent/internal/publish"
+	"github.com/rigasyahrul/personal-agent/internal/review"
 	"github.com/rigasyahrul/personal-agent/internal/store"
 )
 
@@ -47,6 +48,11 @@ func New(deps ServerDeps) http.Handler {
 	ch := &chatHandlers{sessions: sessions, messages: messages, runs: runs, runner: runner, dataDir: deps.DataDir}
 	auth := func(next http.Handler) http.Handler { return requireAuthAt(deps.DB, now, next) }
 	mutation := func(next http.Handler) http.Handler { return auth(RequireCSRF(next)) }
+	rh := reviewHandlers{db: deps.DB, queue: review.Queue{DB: deps.DB, Clock: deps.Clock}, store: store.ReviewStore{DB: deps.DB, Clock: deps.Clock}}
+	mux.Handle("GET /api/v1/review/queue", auth(http.HandlerFunc(rh.queueDue)))
+	mux.Handle("POST /api/v1/review/items/{id}/rate", mutation(http.HandlerFunc(rh.rate)))
+	mux.Handle("POST /api/v1/review/items/{id}/suspend", mutation(http.HandlerFunc(rh.suspend)))
+	mux.Handle("POST /api/v1/review/pending/{id}/retry", mutation(http.HandlerFunc(rh.retry)))
 	mux.Handle("GET /api/v1/models", auth(http.HandlerFunc(sh.modelsList)))
 	mux.Handle("GET /api/v1/projects/{id}/sessions", auth(http.HandlerFunc(sh.projectSessions)))
 	mux.Handle("POST /api/v1/projects/{id}/sessions", mutation(http.HandlerFunc(sh.projectSessions)))
