@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rigasyahrul/personal-agent/internal/fsroot"
+	"golang.org/x/sys/unix"
 )
 
 func TestRootRejectsSymlinksAndNonRegularFiles(t *testing.T) {
@@ -172,5 +173,72 @@ func TestWriteFileNoReplaceRejectsCollisionAndSymlinkParent(t *testing.T) {
 	}
 	if err := r.WriteFileNoReplace("link/note.md", []byte("x"), 0600); !errors.Is(err, fsroot.ErrUnsafe) {
 		t.Fatalf("symlink: %v", err)
+	}
+}
+
+func TestRootReadWriteEditMkdirAndTree(t *testing.T) {
+	r, err := fsroot.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := r.MkdirAll("drafts/chapter", 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.WriteFileAtomic("drafts/chapter/notes.txt", []byte("alpha beta"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.EditFileAtomic("drafts/chapter/notes.txt", "beta", "gamma"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.ReadFile("drafts/chapter/notes.txt", 1024)
+	if err != nil || string(got) != "alpha gamma" {
+		t.Fatalf("got %q, err %v", got, err)
+	}
+	entries, err := r.Tree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 || entries[2].Path != "drafts/chapter/notes.txt" || entries[2].Kind != "file" {
+		t.Fatalf("unexpected tree: %#v", entries)
+	}
+}
+
+func TestWriteFileAtomicRejectsSymlinkAndSpecialFile(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dir, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Mkfifo(filepath.Join(dir, "pipe"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := fsroot.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := r.WriteFileAtomic("escape/new", []byte("owned"), 0600); !errors.Is(err, fsroot.ErrUnsafe) {
+		t.Fatalf("symlink write: %v", err)
+	}
+	if err := r.WriteFileAtomic("pipe", []byte("owned"), 0600); !errors.Is(err, fsroot.ErrUnsafe) {
+		t.Fatalf("special replacement: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "new")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("outside file changed: %v", err)
+	}
+}
+
+func TestEditFileAtomicRequiresExactlyOneMatch(t *testing.T) {
+	r, err := fsroot.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := r.WriteFileAtomic("note.txt", []byte("same same"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.EditFileAtomic("note.txt", "same", "new"); err == nil {
+		t.Fatal("duplicate old text accepted")
 	}
 }

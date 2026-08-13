@@ -1,6 +1,7 @@
 package fsroot
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/rigasyahrul/personal-agent/internal/paths"
@@ -23,6 +25,12 @@ var (
 type Root struct {
 	root *os.Root
 	fd   int
+}
+
+type Entry struct {
+	Path string `json:"path"`
+	Kind string `json:"kind"`
+	Size int64  `json:"size,omitempty"`
 }
 
 func Open(name string) (*Root, error) {
@@ -114,6 +122,83 @@ func (r *Root) ReadFile(name string, max int64) ([]byte, error) {
 		return nil, ErrUnsafe
 	}
 	return b, nil
+}
+
+// WriteFileAtomic replaces a regular file using a temporary sibling on the
+// same filesystem. It never follows symlinks or replaces special nodes.
+func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error {
+	if err := valid(name); err != nil {
+		return err
+	}
+	if len(body) > paths.MaxMarkdownBytes {
+		return ErrUnsafe
+	}
+	dir := filepath.ToSlash(filepath.Dir(name))
+	if dir == "." {
+		dir = ""
+	}
+	parentFD := r.fd
+	var err error
+	if dir != "" {
+		parentFD, err = unix.Openat2(r.fd, dir, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS})
+		if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.EXDEV) || errors.Is(err, unix.ENOTDIR) {
+			return ErrUnsafe
+		}
+		if err != nil {
+			return err
+		}
+		defer unix.Close(parentFD)
+	}
+	final := filepath.Base(name)
+	var stat unix.Stat_t
+	if err := unix.Fstatat(parentFD, final, &stat, unix.AT_SYMLINK_NOFOLLOW); err == nil {
+		if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+			return ErrUnsafe
+		}
+	} else if !errors.Is(err, unix.ENOENT) {
+		return err
+	}
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return err
+	}
+	tmp := ".pa-write-" + hex.EncodeToString(random)
+	tfd, err := unix.Openat(parentFD, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, uint32(perm.Perm()))
+	if err != nil {
+		return err
+	}
+	remove := true
+	defer func() {
+		if remove {
+			_ = unix.Unlinkat(parentFD, tmp, 0)
+		}
+	}()
+	f := os.NewFile(uintptr(tfd), tmp)
+	if _, err = f.Write(body); err == nil {
+		err = f.Sync()
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if err := unix.Renameat(parentFD, tmp, parentFD, final); err != nil {
+		return err
+	}
+	remove = false
+	return unix.Fsync(parentFD)
+}
+
+func (r *Root) EditFileAtomic(name, old, replacement string) error {
+	b, err := r.ReadFile(name, paths.MaxMarkdownBytes)
+	if err != nil {
+		return err
+	}
+	if old == "" || bytes.Count(b, []byte(old)) != 1 {
+		return errors.New("old text must occur exactly once")
+	}
+	return r.WriteFileAtomic(name, bytes.Replace(b, []byte(old), []byte(replacement), 1), 0644)
 }
 
 func (r *Root) MkdirAll(name string, perm fs.FileMode) error {
@@ -253,4 +338,23 @@ func (r *Root) Walk(fn func(path string, info fs.FileInfo) error) error {
 		return nil
 	}
 	return walk(".")
+}
+
+func (r *Root) Tree() ([]Entry, error) {
+	var entries []Entry
+	err := r.Walk(func(name string, info fs.FileInfo) error {
+		kind := "file"
+		if info.IsDir() {
+			kind = "directory"
+		} else if !info.Mode().IsRegular() {
+			return ErrUnsafe
+		}
+		entries = append(entries, Entry{Path: name, Kind: kind, Size: info.Size()})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	return entries, nil
 }
