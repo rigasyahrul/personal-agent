@@ -44,7 +44,7 @@ func New(deps ServerDeps) http.Handler {
 	runs := &store.RunStore{DB: deps.DB, Now: now}
 	runner := &agent.Runner{DB: deps.DB, DataDir: deps.DataDir, Provider: deps.Provider, Messages: messages, Runs: runs, Sessions: sessions, Clock: deps.Clock}
 	sh := &sessionHandlers{sessions: sessions, models: deps.Models}
-	ch := &chatHandlers{sessions: sessions, messages: messages, runs: runs, runner: runner}
+	ch := &chatHandlers{sessions: sessions, messages: messages, runs: runs, runner: runner, dataDir: deps.DataDir}
 	auth := func(next http.Handler) http.Handler { return requireAuthAt(deps.DB, now, next) }
 	mutation := func(next http.Handler) http.Handler { return auth(RequireCSRF(next)) }
 	mux.Handle("GET /api/v1/models", auth(http.HandlerFunc(sh.modelsList)))
@@ -55,6 +55,8 @@ func New(deps ServerDeps) http.Handler {
 	mux.Handle("GET /api/v1/sessions/{id}/messages", auth(http.HandlerFunc(ch.messagesRoute)))
 	mux.Handle("POST /api/v1/sessions/{id}/messages", mutation(http.HandlerFunc(ch.messagesRoute)))
 	mux.Handle("GET /api/v1/sessions/{id}/runs/current", auth(http.HandlerFunc(ch.currentRun)))
+	mux.Handle("GET /api/v1/sessions/{id}/workspace/tree", auth(http.HandlerFunc(ch.workspaceTree)))
+	mux.Handle("GET /api/v1/sessions/{id}/workspace/file", auth(http.HandlerFunc(ch.workspaceFile)))
 	mux.Handle("GET /health", healthHandler(deps.DataDir))
 	if deps.Static != nil {
 		mux.Handle("GET /", http.FileServer(deps.Static))
