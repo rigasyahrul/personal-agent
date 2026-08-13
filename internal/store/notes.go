@@ -75,7 +75,7 @@ func (s *NoteStore) Tree(ctx context.Context, projectID string) ([]TreeEntry, er
 		if err := rows.Scan(&p, &id, &hash, &size); err != nil {
 			return nil, err
 		}
-		if _, err = paths.ValidateRelPath(p); err != nil || path.Ext(p) != ".md" || !hash.Valid || !size.Valid {
+		if _, err = paths.ValidateRelPath(p); err != nil || path.Ext(p) != ".md" || !hash.Valid || !size.Valid || size.Int64 < 0 || size.Int64 > paths.MaxMarkdownBytes {
 			return nil, ErrIntegrity
 		}
 		ids[p] = indexedNote{id: id, hash: hash.String, size: size.Int64}
@@ -97,7 +97,7 @@ func (s *NoteStore) Tree(ctx context.Context, projectID string) ([]TreeEntry, er
 		if !ok {
 			return ErrIntegrity
 		}
-		body, err := r.ReadFile(p)
+		body, err := r.ReadFile(p, paths.MaxMarkdownBytes)
 		if err != nil || fmt.Sprintf("%x", sha256.Sum256(body)) != indexed.hash || int64(len(body)) != indexed.size {
 			return ErrIntegrity
 		}
@@ -128,7 +128,7 @@ func (s *NoteStore) Get(ctx context.Context, id string) (NoteDocument, error) {
 	if err != nil {
 		return n, err
 	}
-	if _, err = paths.ValidateRelPath(n.RelativePath); err != nil || path.Ext(n.RelativePath) != ".md" || !hash.Valid || !size.Valid {
+	if _, err = paths.ValidateRelPath(n.RelativePath); err != nil || path.Ext(n.RelativePath) != ".md" || !hash.Valid || !size.Valid || size.Int64 < 0 || size.Int64 > paths.MaxMarkdownBytes {
 		return n, ErrIntegrity
 	}
 	n.ContentSHA256, n.ByteSize = hash.String, size.Int64
@@ -137,7 +137,7 @@ func (s *NoteStore) Get(ctx context.Context, id string) (NoteDocument, error) {
 		return n, ErrIntegrity
 	}
 	defer r.Close()
-	b, err := r.ReadFile(n.RelativePath)
+	b, err := r.ReadFile(n.RelativePath, paths.MaxMarkdownBytes)
 	if err != nil {
 		return n, ErrIntegrity
 	}

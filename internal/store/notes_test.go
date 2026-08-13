@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rigasyahrul/personal-agent/internal/layout"
+	"github.com/rigasyahrul/personal-agent/internal/paths"
 	"github.com/rigasyahrul/personal-agent/internal/store"
 	"github.com/rigasyahrul/personal-agent/internal/testutil"
 )
@@ -68,5 +69,82 @@ func TestNoteTreeRejectsUnsafeAndUnindexedNodes(t *testing.T) {
 	}
 	if _, err := store.NewNoteStore(db, d).Tree(context.Background(), "p1"); !errors.Is(err, store.ErrIntegrity) {
 		t.Fatalf("unindexed: %v", err)
+	}
+}
+
+func TestNoteGetRejectsSymlinkedNoteParent(t *testing.T) {
+	db, d := testutil.TempDB(t)
+	if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x')`); err != nil {
+		t.Fatal(err)
+	}
+	real := t.TempDir()
+	if err := os.MkdirAll(real, 0700); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("safe")
+	if err := os.WriteFile(filepath.Join(real, "note.md"), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	source := layout.SourceDir(layout.ProjectRoot(d, "", "p1"))
+	if err := os.MkdirAll(source, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(source, "guide")); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(body)
+	if _, err := db.Exec(`INSERT INTO notes(id,project_id,relative_path,content_sha256,byte_size,status,revision,created_at,updated_at) VALUES('n1','p1','guide/note.md',?,?,'ready',1,'x','x')`, fmt.Sprintf("%x", sum), len(body)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.NewNoteStore(db, d).Get(context.Background(), "n1"); !errors.Is(err, store.ErrIntegrity) {
+		t.Fatalf("symlinked note parent: %v", err)
+	}
+}
+
+func TestNoteGetRejectsInvalidSizesAndActualOversize(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		size int64
+		body []byte
+	}{
+		{name: "negative metadata", size: -1, body: []byte("x")},
+		{name: "oversized metadata", size: paths.MaxMarkdownBytes + 1, body: []byte("x")},
+		{name: "actual oversized body", size: paths.MaxMarkdownBytes, body: make([]byte, paths.MaxMarkdownBytes+1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, d := testutil.TempDB(t)
+			if tc.size < 0 {
+				if _, err := db.Exec(`PRAGMA ignore_check_constraints=ON`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, _ = db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x')`)
+			source := layout.SourceDir(layout.ProjectRoot(d, "", "p1"))
+			if err := os.MkdirAll(source, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(source, "note.md"), tc.body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			sum := sha256.Sum256(tc.body)
+			_, _ = db.Exec(`INSERT INTO notes(id,project_id,relative_path,content_sha256,byte_size,status,revision,created_at,updated_at) VALUES('n1','p1','note.md',?,?,'ready',1,'x','x')`, fmt.Sprintf("%x", sum), tc.size)
+			if _, err := store.NewNoteStore(db, d).Get(context.Background(), "n1"); !errors.Is(err, store.ErrIntegrity) {
+				t.Fatalf("Get: %v", err)
+			}
+		})
+	}
+}
+
+func TestNoteTreeRejectsInvalidWalkedFolderName(t *testing.T) {
+	db, d := testutil.TempDB(t)
+	if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x')`); err != nil {
+		t.Fatal(err)
+	}
+	source := layout.SourceDir(layout.ProjectRoot(d, "", "p1"))
+	if err := os.MkdirAll(filepath.Join(source, `bad\folder`), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.NewNoteStore(db, d).Tree(context.Background(), "p1"); !errors.Is(err, store.ErrIntegrity) {
+		t.Fatalf("invalid walked folder: %v", err)
 	}
 }

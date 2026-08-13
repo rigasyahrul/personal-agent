@@ -4,7 +4,9 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"math"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/rigasyahrul/personal-agent/internal/paths"
@@ -18,14 +20,28 @@ var (
 type Root struct{ root *os.Root }
 
 func Open(name string) (*Root, error) {
-	info, err := os.Lstat(name)
+	abs, err := filepath.Abs(name)
 	if err != nil {
 		return nil, err
 	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, ErrUnsafe
+	components := []string{}
+	for current := filepath.Clean(abs); ; current = filepath.Dir(current) {
+		parent := filepath.Dir(current)
+		if current == parent {
+			break
+		}
+		components = append(components, current)
 	}
-	r, err := os.OpenRoot(name)
+	for i := len(components) - 1; i >= 0; i-- {
+		info, err := os.Lstat(components[i])
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return nil, ErrUnsafe
+		}
+	}
+	r, err := os.OpenRoot(abs)
 	if err != nil {
 		return nil, err
 	}
@@ -41,23 +57,45 @@ func valid(name string) error {
 	return nil
 }
 
-func (r *Root) ReadFile(name string) ([]byte, error) {
+func (r *Root) ReadFile(name string, max int64) ([]byte, error) {
 	if err := valid(name); err != nil {
 		return nil, err
 	}
-	info, err := r.root.Lstat(name)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
+	if max < 0 || max == math.MaxInt64 {
 		return nil, ErrUnsafe
+	}
+	parts := strings.Split(name, "/")
+	current := ""
+	for i, part := range parts {
+		if current == "" {
+			current = part
+		} else {
+			current += "/" + part
+		}
+		info, err := r.root.Lstat(current)
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || (i < len(parts)-1 && !info.IsDir()) || (i == len(parts)-1 && !info.Mode().IsRegular()) {
+			return nil, ErrUnsafe
+		}
+		if i == len(parts)-1 && info.Size() > max {
+			return nil, ErrUnsafe
+		}
 	}
 	f, err := r.root.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return io.ReadAll(f)
+	b, err := io.ReadAll(io.LimitReader(f, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > max {
+		return nil, ErrUnsafe
+	}
+	return b, nil
 }
 
 func (r *Root) MkdirAll(name string, perm fs.FileMode) error {
@@ -107,6 +145,9 @@ func (r *Root) Walk(fn func(path string, info fs.FileInfo) error) error {
 			name := entry.Name()
 			if dir != "." {
 				name = dir + "/" + name
+			}
+			if err := valid(name); err != nil {
+				return err
 			}
 			info, err := r.root.Lstat(name)
 			if err != nil {
