@@ -14,8 +14,8 @@ import (
 
 type ProjectDTO struct {
 	ID           string `json:"id"`
-	VaultID      string `json:"vault_id,omitempty"`
-	VaultName    string `json:"vault_name,omitempty"`
+	VaultID      string `json:"vault_id"`
+	VaultName    string `json:"vault_name"`
 	Name         string `json:"name"`
 	NoteCount    int    `json:"note_count"`
 	SessionCount int    `json:"session_count"`

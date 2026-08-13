@@ -66,6 +66,23 @@ func TestProjectRoutesRequireAuthenticationAndCSRF(t *testing.T) {
 
 func TestVaultProjectAndHomeAPIs(t *testing.T) {
 	h, fake := newProjectAPITestServer(t)
+	unvaultedResponse := projectAPIRequest(h, http.MethodPost, "/api/v1/projects", `{"name":"Inbox","vault_id":null}`, true, testCSRF)
+	if unvaultedResponse.Code != http.StatusCreated {
+		t.Fatalf("create unvaulted project = %d %s", unvaultedResponse.Code, unvaultedResponse.Body.String())
+	}
+	var unvaulted map[string]any
+	if err := json.NewDecoder(unvaultedResponse.Body).Decode(&unvaulted); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"id", "vault_id", "vault_name", "name", "note_count", "session_count", "due_count"} {
+		if _, ok := unvaulted[key]; !ok {
+			t.Errorf("unvaulted project response missing %q: %#v", key, unvaulted)
+		}
+	}
+	if unvaulted["vault_id"] != "" || unvaulted["vault_name"] != "" {
+		t.Errorf("unvaulted project vault fields = %#v, %#v", unvaulted["vault_id"], unvaulted["vault_name"])
+	}
+
 	vaultResponse := projectAPIRequest(h, http.MethodPost, "/api/v1/vaults", `{"name":" Work "}`, true, testCSRF)
 	if vaultResponse.Code != http.StatusCreated {
 		t.Fatalf("create vault = %d %s", vaultResponse.Code, vaultResponse.Body.String())
