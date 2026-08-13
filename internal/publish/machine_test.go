@@ -444,8 +444,34 @@ func TestRecoverAllPromoteBitesDeduplicatesPendingGeneration(t *testing.T) {
 }
 
 func TestRecoverAllPromoteRejectsInvalidReviewEnqueuedState(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		update string
+	}{
+		{name: "wrong_project_id", update: `UPDATE review_items SET project_id='p2' WHERE note_id=?`},
+		{name: "wrong_source_revision", update: `UPDATE review_items SET source_revision=2 WHERE note_id=?`},
+		{name: "non_active_status", update: `UPDATE review_items SET status='suspended' WHERE note_id=?`},
+		{name: "wrong_scheduler_version", update: `UPDATE review_items SET scheduler_version='other' WHERE note_id=?`},
+	} {
+		t.Run("whole/"+tc.name, func(t *testing.T) {
+			_, db, m, in, _ := preparePromoteRecovery(t, "review_enqueued", "whole")
+			if _, err := db.Exec(`INSERT INTO projects(id,vault_id,name,created_at,updated_at) VALUES('p2','v1','Other','x','x')`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(tc.update, in.NoteID); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.RecoverAll(context.Background()); err == nil {
+				t.Fatal("expected malformed whole review state to fail recovery")
+			}
+			var status string
+			if err := db.QueryRow(`SELECT status FROM promote_ops WHERE id=?`, in.OpID).Scan(&status); err != nil || status != "review_enqueued" {
+				t.Fatalf("status=%q err=%v", status, err)
+			}
+		})
+	}
 	for _, mode := range []domain.ReviewMode{"whole", "bites"} {
-		t.Run(string(mode), func(t *testing.T) {
+		t.Run(string(mode)+"/missing", func(t *testing.T) {
 			_, db, m, in, _ := preparePromoteRecovery(t, "review_enqueued", mode)
 			if _, err := db.Exec(`DELETE FROM review_items WHERE note_id=?; DELETE FROM review_pending WHERE note_id=?`, in.NoteID, in.NoteID); err != nil {
 				t.Fatal(err)
