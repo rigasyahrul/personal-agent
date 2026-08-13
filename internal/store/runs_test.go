@@ -3,6 +3,8 @@ package store_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,7 +71,100 @@ func TestRunStoreRejectsMissingAndTerminalSessions(t *testing.T) {
 	if _, err := ss.DB.Exec(`UPDATE sessions SET status='terminal' WHERE id=?`, sessionID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := runs.BeginOrGet(context.Background(), sessionID, "key"); !errors.Is(err, store.ErrValidation) {
+	if _, _, err := runs.BeginOrGet(context.Background(), sessionID, "key"); !errors.Is(err, store.ErrSessionTerminal) {
 		t.Fatalf("terminal error = %v", err)
 	}
+}
+
+func TestRunStoreRetrySurvivesSessionTerminalization(t *testing.T) {
+	ss, sessionID := seedAgentSession(t)
+	runs := &store.RunStore{DB: ss.DB, Now: time.Now}
+	runID, existing, err := runs.BeginOrGet(context.Background(), sessionID, "key-1")
+	if err != nil || existing {
+		t.Fatalf("first = %q, %v, %v", runID, existing, err)
+	}
+	if _, err := ss.DB.Exec(`UPDATE sessions SET status='terminal' WHERE id=?`, sessionID); err != nil {
+		t.Fatal(err)
+	}
+	same, existing, err := runs.BeginOrGet(context.Background(), sessionID, "key-1")
+	if err != nil || !existing || same != runID {
+		t.Fatalf("retry = %q, %v, %v; want original run %q", same, existing, err, runID)
+	}
+	if _, _, err := runs.BeginOrGet(context.Background(), sessionID, "key-2"); !errors.Is(err, store.ErrSessionTerminal) {
+		t.Fatalf("different key error = %v", err)
+	}
+}
+
+func TestRunStoreConcurrentBeginOrGet(t *testing.T) {
+	const count = 20
+	t.Run("same key", func(t *testing.T) {
+		ss, sessionID := seedAgentSession(t)
+		runs := &store.RunStore{DB: ss.DB, Now: time.Now}
+		type result struct {
+			id       string
+			existing bool
+			err      error
+		}
+		results := make(chan result, count)
+		var wg sync.WaitGroup
+		for range count {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				id, existing, err := runs.BeginOrGet(context.Background(), sessionID, "same-key")
+				results <- result{id: id, existing: existing, err: err}
+			}()
+		}
+		wg.Wait()
+		close(results)
+		var id string
+		created := 0
+		for result := range results {
+			if result.err != nil {
+				t.Fatal(result.err)
+			}
+			if id == "" {
+				id = result.id
+			} else if result.id != id {
+				t.Fatalf("run ID = %q, want %q", result.id, id)
+			}
+			if !result.existing {
+				created++
+			}
+		}
+		if created != 1 {
+			t.Fatalf("created count = %d, want 1", created)
+		}
+	})
+
+	t.Run("different keys", func(t *testing.T) {
+		ss, sessionID := seedAgentSession(t)
+		runs := &store.RunStore{DB: ss.DB, Now: time.Now}
+		errs := make(chan error, count)
+		var wg sync.WaitGroup
+		for i := range count {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, _, err := runs.BeginOrGet(context.Background(), sessionID, fmt.Sprintf("key-%d", i))
+				errs <- err
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		created, busy := 0, 0
+		for err := range errs {
+			switch {
+			case err == nil:
+				created++
+			case errors.Is(err, store.ErrSessionBusy):
+				busy++
+			default:
+				t.Fatalf("unexpected error: %v", err)
+			}
+		}
+		if created != 1 || busy != count-1 {
+			t.Fatalf("created, busy = %d, %d; want 1, %d", created, busy, count-1)
+		}
+	})
 }

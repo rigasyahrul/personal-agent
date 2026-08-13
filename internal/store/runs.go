@@ -21,41 +21,52 @@ func (s *RunStore) BeginOrGet(ctx context.Context, sessionID, requestKey string)
 	if requestKey == "" {
 		return "", false, ErrValidation
 	}
-	var sessionStatus string
-	if err := s.DB.QueryRowContext(ctx, `SELECT status FROM sessions WHERE id=?`, sessionID).Scan(&sessionStatus); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", false, ErrNotFound
-		}
-		return "", false, err
-	}
-	if sessionStatus != "active" {
-		return "", false, ErrValidation
-	}
 	if run, err := s.byKey(ctx, sessionID, requestKey); err == nil {
 		return run.ID, true, nil
 	} else if !errors.Is(err, ErrNotFound) {
 		return "", false, err
 	}
-	if _, err := s.Current(ctx, sessionID); err == nil {
-		return "", false, ErrSessionBusy
-	} else if !errors.Is(err, ErrNotFound) {
-		return "", false, err
-	}
 
 	id, now := ids.NewID(), s.Now().UTC()
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO agent_runs(id,session_id,request_key,status,created_at) VALUES(?,?,?,'queued',?)`, id, sessionID, requestKey, formatTime(now))
+	result, err := s.DB.ExecContext(ctx, `INSERT INTO agent_runs(id,session_id,request_key,status,created_at)
+		SELECT ?,?,?, 'queued',? WHERE EXISTS(SELECT 1 FROM sessions WHERE id=? AND status='active')`,
+		id, sessionID, requestKey, formatTime(now), sessionID)
 	if err == nil {
-		return id, false, nil
+		count, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return "", false, rowsErr
+		}
+		if count == 1 {
+			return id, false, nil
+		}
+		return "", false, s.sessionAdmissionError(ctx, sessionID)
 	}
-	// A competing insert may have won either unique constraint. Query state
-	// rather than depending on driver-specific SQLite error text.
+	// A competing insert may have won either unique constraint. Query durable
+	// state rather than depending on driver-specific SQLite error text.
 	if run, lookupErr := s.byKey(ctx, sessionID, requestKey); lookupErr == nil {
 		return run.ID, true, nil
+	}
+	if admissionErr := s.sessionAdmissionError(ctx, sessionID); admissionErr != nil {
+		return "", false, admissionErr
 	}
 	if _, lookupErr := s.Current(ctx, sessionID); lookupErr == nil {
 		return "", false, ErrSessionBusy
 	}
 	return "", false, err
+}
+
+func (s *RunStore) sessionAdmissionError(ctx context.Context, sessionID string) error {
+	var status string
+	if err := s.DB.QueryRowContext(ctx, `SELECT status FROM sessions WHERE id=?`, sessionID).Scan(&status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if status != "active" {
+		return ErrSessionTerminal
+	}
+	return nil
 }
 
 func (s *RunStore) Current(ctx context.Context, sessionID string) (domain.AgentRun, error) {
