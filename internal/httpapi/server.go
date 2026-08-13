@@ -25,6 +25,7 @@ func New(deps ServerDeps) http.Handler {
 		BootstrapToken: deps.BootstrapToken,
 		SecureCookies:  deps.SecureCookies,
 	})
+	SettingsRoutes(mux, deps.DB, deps.Clock)
 	mux.Handle("GET /health", healthHandler(deps.DataDir))
 	mux.HandleFunc("GET /api/v1/home", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

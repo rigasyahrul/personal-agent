@@ -1,0 +1,6 @@
+import{APIError,get}from'./api.js';import{route}from'./router.js';import{render as home}from'./pages/home.js';import{renderBootstrap,renderLogin}from'./pages/setup.js';import{render as settings}from'./pages/settings.js';
+const root=document.querySelector('#app'),health=document.querySelector('#health'),nav=document.querySelector('#nav');
+async function authenticated(){try{await get('/api/v1/auth/me');return true}catch(error){if(error instanceof APIError&&error.status===401)return false;throw error}}
+async function renderPage(){try{const setup=await get('/api/v1/setup/status');if(!setup.bootstrapped){nav.hidden=true;renderBootstrap(root,boot);return}if(!await authenticated()){nav.hidden=true;renderLogin(root,boot);return}nav.hidden=false;await(route()==='settings'?settings:home)(root)}catch(error){root.textContent=error.message}}
+async function boot(){location.hash='home';await renderPage()}
+get('/health').then(value=>health.textContent=`Storage ${value.storage_writable?'ready':'unavailable'}`).catch(error=>health.textContent=error.message);window.addEventListener('hashchange',renderPage);renderPage();

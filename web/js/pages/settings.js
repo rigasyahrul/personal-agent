@@ -1,0 +1,3 @@
+import{get}from'../api.js';
+export async function render(root){const settings=await get('/api/v1/settings');root.innerHTML=`<h2>Settings</h2><dl><dt>Timezone</dt><dd>${escapeHTML(settings.timezone)}</dd><dt>Default provider</dt><dd>${escapeHTML(settings.default_provider||'Not set')}</dd><dt>Default model</dt><dd>${escapeHTML(settings.default_model_id||'Not set')}</dd><dt>Backup schedule</dt><dd>${escapeHTML(settings.backup_schedule)}</dd></dl><p class="muted">Settings controls will be expanded in later tasks.</p>`}
+function escapeHTML(value){const span=document.createElement('span');span.textContent=value;return span.innerHTML}
