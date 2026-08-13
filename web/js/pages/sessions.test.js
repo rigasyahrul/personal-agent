@@ -4,6 +4,8 @@ import {createSessionsPage} from './sessions.js'
 import {parseRoute} from '../router.js'
 import {TestDocument,TestElement,findText} from '../test-dom.mjs'
 
+globalThis.document = new TestDocument()
+
 class Root {
   constructor() { this.renders = []; this.innerHTML = '' }
   set innerHTML(value) {
@@ -17,6 +19,7 @@ class Root {
     } : null
     this.sendButton = value.includes('data-chat') ? {disabled: /<button disabled>Send<\/button>/.test(value)} : null
     this.workspace = value.includes('data-workspace-panel') ? {} : null
+    this.operationHost = value.includes('data-operation-statuses') ? new TestElement('div') : null
     this.sessionButtons = [...value.matchAll(/data-session="([^"]+)"/g)].map(match => ({dataset: {session: match[1]}}))
   }
   get innerHTML() { return this.html }
@@ -28,6 +31,7 @@ class Root {
     if (selector === '[data-back]') return this.back
     if (selector === 'form[data-chat] button') return this.sendButton
     if (selector === '[data-workspace-panel]') return this.workspace
+    if (selector === '[data-operation-statuses]') return this.operationHost
     return null
   }
   querySelectorAll(selector) { return selector === '[data-session]' ? this.sessionButtons : [] }
@@ -375,4 +379,44 @@ test('promote submit remains bound to captured file and stable attempt across fa
   assert.equal(findText(dialog,'missing file').getAttribute('role'),'alert');assert.equal(target.value,'target.md')
   fail=false;await form.onsubmit({preventDefault(){}})
   assert.equal(calls[1][2],'key-1');assert.equal(document.body.children.length,0)
+})
+
+test('promote dialog actual cancel, native close, back, and session switch handlers clean up stale forms',async()=>{
+  const document=new TestDocument(),root=new Root(),promotions=[];let save
+  const renderWorkspace=async value=>{const panel=new TestElement('section');panel.querySelector=selector=>selector==='[data-promote]'?panel.children.find(child=>Object.hasOwn(child.dataset,'promote'))||null:null;value.container.querySelector=selector=>selector==='.workspace-panel'?panel:null;value.onFileSelected({path:'draft.md',kind:'file'});save=panel.children[0]}
+  const api=async path=>path==='/api/v1/projects/p'?{name:'P'}:path==='/api/v1/models'?{models:[]}:path==='/api/v1/projects/p/sessions'?[]:path.endsWith('/messages')?[]:null
+  const page=createSessionsPage({root,document,dialogHost:document.body,projectID:'p',renderWorkspace,workspaceAPI:{},api,promote:async(...args)=>{promotions.push(args);return{operation_id:'op'}},setInterval:()=>1,clearInterval(){}})
+  await page.openChat({id:'one',title:'One',provider:'p',model_id:'m',tool_grants:{workspace_files:true}})
+  save.click();await new Promise(resolve=>setImmediate(resolve));let dialog=document.body.children[0],stale=dialog.querySelector('form');findText(dialog,'Cancel').click();assert.equal(document.body.children.length,0);await stale.onsubmit({preventDefault(){}});assert.equal(promotions.length,0)
+  save.click();await new Promise(resolve=>setImmediate(resolve));dialog=document.body.children[0];dialog.close();assert.equal(document.body.children.length,0);save.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(document.body.children.length,1,'a fresh Save opens exactly one dialog')
+  stale=document.body.children[0].querySelector('form');root.back.listeners.get('click')({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));assert.equal(document.body.children.length,0);await stale.onsubmit({preventDefault(){}});assert.equal(promotions.length,0)
+  await page.openChat({id:'one',title:'One',provider:'p',model_id:'m',tool_grants:{workspace_files:true}});save.click();await new Promise(resolve=>setImmediate(resolve));stale=document.body.children[0].querySelector('form');await page.openChat({id:'two',title:'Two',provider:'p',model_id:'m'});assert.equal(document.body.children.length,0);await stale.onsubmit({preventDefault(){}});assert.equal(promotions.length,0)
+})
+
+test('retry cards actual rendered clicks deduplicate, survive rerender, recover from failure, and repoll',async()=>{
+  const unhandled=[],listener=reason=>unhandled.push(reason);process.on('unhandledRejection',listener)
+  try{
+    const root=new Root(),retryGates=[deferred(),deferred()],results=[{operation_id:'op',badge:'Cards failed — Retry cards',pending_id:'pending',retry_cards:true},{operation_id:'op',badge:'Ready'}];let retries=0,polls=0
+    const page=createSessionsPage({root,document:new TestDocument(),storage:{getItem:()=> '["op"]',setItem(){}},projectID:'p',api:async path=>path.endsWith('/messages')?[]:null,getOperation:async()=>{polls++;return results.shift()||{operation_id:'op',badge:'Ready'}},retryPending:async()=>{const gate=retryGates[retries++];return gate.promise},setInterval:()=>1,clearInterval(){}})
+    await page.openChat({id:'s',title:'S',provider:'p',model_id:'m'});await new Promise(resolve=>setImmediate(resolve));let button=findText(root.operationHost,'Retry cards');assert.ok(button)
+    button.click();button.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(retries,1);await page.poll();button=findText(root.operationHost,'Retry cards');assert.equal(button.disabled,true)
+    retryGates[0].reject(new Error('retry failed'));await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));assert.match(root.textContent,/retry failed/);button=findText(root.operationHost,'Retry cards');assert.equal(button.disabled,false)
+    button.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(retries,2);retryGates[1].resolve();await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));assert.ok(polls>=2);assert.equal(findText(root.operationHost,'Retry cards'),undefined);assert.deepEqual(unhandled,[])
+  }finally{process.off('unhandledRejection',listener)}
+})
+
+test('operation polling contains rejection, retries, coalesces one follow-up, and ignores switched session',async()=>{
+  const root=new Root(),first=deferred(),second=deferred();let calls=0,fail=true
+  const page=createSessionsPage({root,document:new TestDocument(),storage:{getItem:key=>key.endsWith(':old')?'["op"]':'[]'},projectID:'p',api:async path=>path.endsWith('/messages')?[]:null,getOperation:async()=>{calls++;if(calls===1)return first.promise;if(fail){fail=false;throw new Error('operation down')}return second.promise},setInterval:()=>1,clearInterval(){}})
+  const opening=page.openChat({id:'old',title:'Old',provider:'p',model_id:'m'});await new Promise(resolve=>setImmediate(resolve));page.poll();page.poll();page.poll();first.resolve({operation_id:'op',badge:'Promoting…'});await opening;await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,2,'many triggers queue only one follow-up operation cycle');await new Promise(resolve=>setImmediate(resolve));assert.match(root.textContent,/operation down/)
+  const retry=page.poll();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,3);const switched=page.openChat({id:'new',title:'New',provider:'p',model_id:'m'});second.resolve({operation_id:'op',badge:'Ready'});await Promise.all([retry,switched]);await new Promise(resolve=>setImmediate(resolve));assert.match(root.textContent,/New/);assert.equal(findText(root.operationHost,'Ready'),undefined);assert.doesNotMatch(root.textContent,/operation down/)
+  page.destroy();await new Promise(resolve=>setImmediate(resolve));assert.equal(findText(root.operationHost,'Ready'),undefined)
+})
+
+test('changed promote form payload receives a new idempotency key after unchanged retry',async()=>{
+  const document=new TestDocument(),root=new Root(),calls=[];let save,key=0
+  const renderWorkspace=async value=>{const panel=new TestElement('section');panel.querySelector=selector=>selector==='[data-promote]'?panel.children[0]||null:null;value.container.querySelector=selector=>selector==='.workspace-panel'?panel:null;value.onFileSelected({path:'draft.md',kind:'file'});save=panel.children[0]}
+  const page=createSessionsPage({root,document,projectID:'p',renderWorkspace,workspaceAPI:{},randomUUID:()=>`key-${++key}`,api:async path=>path==='/api/v1/projects/p'?{name:'P'}:path.endsWith('/messages')?[]:null,promote:async(...args)=>{calls.push(args);throw new Error('no')},setInterval:()=>1,clearInterval(){}})
+  await page.openChat({id:'s',title:'S',provider:'p',model_id:'m',tool_grants:{workspace_files:true}});save.click();await new Promise(resolve=>setImmediate(resolve));const dialog=document.body.children[0],form=dialog.querySelector('form'),target=dialog.querySelector('input');target.value='one.md';await form.onsubmit({preventDefault(){}});await form.onsubmit({preventDefault(){}});target.value='two.md';const whole=dialog.querySelectorAll('input').find(input=>input.value==='whole');dialog.querySelectorAll('input').forEach(input=>input.checked=false);whole.checked=true;await form.onsubmit({preventDefault(){}})
+  assert.equal(calls[0][2],'key-1');assert.equal(calls[1][2],'key-1');assert.deepEqual(calls[2],['s',{workspace_path:'draft.md',target_relative_path:'two.md',review_mode:'whole'},'key-2'])
 })

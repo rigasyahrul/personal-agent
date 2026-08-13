@@ -7,9 +7,10 @@ export class TestElement {
   setAttribute(name,value){this.attributes.set(name,String(value))}
   getAttribute(name){return this.attributes.get(name)??null}
   addEventListener(type,handler){this.listeners.set(type,handler)}
+  dispatchEvent(event){event.target??=this;event.currentTarget=this;return this.listeners.get(event.type)?.(event)}
   click(){return (this.onclick||this.listeners.get('click'))?.({preventDefault(){},currentTarget:this,target:this})}
   showModal(){this.open=true}
-  close(){this.open=false;this.listeners.get('close')?.()}
+  close(){this.open=false;this.dispatchEvent({type:'close'})}
   matches(selector){if(selector==='[name=review_mode]:checked')return this.name==='review_mode'&&this.checked;if(selector.startsWith('.'))return this.className.split(' ').includes(selector.slice(1));if(selector.startsWith('[')){const name=selector.slice(1,-1).split('=')[0];return name.startsWith('data-')?Object.hasOwn(this.dataset,name.slice(5)):this.attributes.has(name)}return this.tagName===selector.toUpperCase()}
   querySelector(selector){return [...this.walk()].find(node=>node.matches?.(selector))||null}
   querySelectorAll(selector){return [...this.walk()].filter(node=>node.matches?.(selector))}
