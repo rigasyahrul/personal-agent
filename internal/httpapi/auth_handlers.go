@@ -63,8 +63,13 @@ func AuthRoutes(mux *http.ServeMux, deps AuthDeps) {
 			return
 		}
 		var passwordHash string
-		if err := deps.DB.QueryRowContext(r.Context(), "SELECT password_hash FROM owner WHERE id=1").Scan(&passwordHash); err != nil || !auth.CheckPassword(passwordHash, input.Password) {
+		err := deps.DB.QueryRowContext(r.Context(), "SELECT password_hash FROM owner WHERE id=1").Scan(&passwordHash)
+		if errors.Is(err, sql.ErrNoRows) || err == nil && !auth.CheckPassword(passwordHash, input.Password) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if err != nil {
+			http.Error(w, "database error", http.StatusInternalServerError)
 			return
 		}
 		sessionToken, csrfToken := auth.NewSessionToken(), auth.NewSessionToken()

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 
@@ -23,8 +24,13 @@ func requireAuthAt(db *sql.DB, now func() time.Time, next http.Handler) http.Han
 			return
 		}
 		var encodedExpiry string
-		if err := db.QueryRowContext(r.Context(), "SELECT expires_at FROM auth_sessions WHERE token_hash=?", auth.TokenHash(cookie.Value)).Scan(&encodedExpiry); err != nil {
+		err = db.QueryRowContext(r.Context(), "SELECT expires_at FROM auth_sessions WHERE token_hash=?", auth.TokenHash(cookie.Value)).Scan(&encodedExpiry)
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if err != nil {
+			http.Error(w, "database error", http.StatusInternalServerError)
 			return
 		}
 		expires, err := time.Parse(time.RFC3339Nano, encodedExpiry)

@@ -58,3 +58,66 @@ Reviewed the complete diff for contract scope, handler ordering, error mappings,
 ## Concerns
 
 None. Task 6 still needs to wire `AuthRoutes` into the application, as intentionally excluded here.
+
+## Fix round 1
+
+### Changed files
+
+- `internal/httpapi/auth_handlers.go`
+- `internal/httpapi/middleware.go`
+- `internal/httpapi/auth_handlers_test.go`
+- `.superpowers/sdd/2026-08-12-personal-agent-v1/task-5-report.md`
+
+### Covering tests
+
+- `TestLoginReturnsInternalServerErrorOnDatabaseFailure`
+- `TestRequireAuthReturnsInternalServerErrorOnDatabaseFailure`
+- Existing `TestBootstrapLoginMeLogoutAndCSRF` preserves 401 coverage for invalid credentials and missing/deleted sessions.
+
+### RED
+
+Command:
+
+```text
+/tmp/go1.24.6/go/bin/go test ./internal/httpapi -run 'Test(Login|RequireAuth)ReturnsInternalServerErrorOnDatabaseFailure' -v
+```
+
+Output (`exitCode: 1`):
+
+```text
+=== RUN   TestLoginReturnsInternalServerErrorOnDatabaseFailure
+    auth_handlers_test.go:146: login database failure status = 401, want 500
+--- FAIL: TestLoginReturnsInternalServerErrorOnDatabaseFailure (0.01s)
+=== RUN   TestRequireAuthReturnsInternalServerErrorOnDatabaseFailure
+    auth_handlers_test.go:165: session database failure status = 401, want 500
+--- FAIL: TestRequireAuthReturnsInternalServerErrorOnDatabaseFailure (0.01s)
+FAIL
+FAIL github.com/rigasyahrul/personal-agent/internal/httpapi 0.025s
+FAIL
+```
+
+### GREEN
+
+Focused command:
+
+```text
+/tmp/go1.24.6/go/bin/go test ./internal/httpapi -run 'Test(Login|RequireAuth)ReturnsInternalServerErrorOnDatabaseFailure' -v
+```
+
+Output (`exitCode: 0`): both covering tests passed; package passed in `0.024s`.
+
+Full command:
+
+```text
+/tmp/go1.24.6/go/bin/go test ./...
+```
+
+Output (`exitCode: 0`): all packages passed, including `internal/httpapi` in `0.550s`. `git diff --check` also passed.
+
+### Commit
+
+This fix-round commit; its SHA is the value of `git rev-parse HEAD` after commit (also reported in the task result).
+
+### Self-review
+
+The two query sites now classify only `sql.ErrNoRows` as an authentication miss (401) and return 500 for every other scan error. Closed-database tests deterministically exercise non-`ErrNoRows` failures. Invalid passwords, absent owners, missing cookies, and missing/deleted sessions retain their existing 401 behavior. The diff contains no later-task work or unrelated refactoring.

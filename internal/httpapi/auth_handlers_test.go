@@ -129,3 +129,39 @@ func TestAuthRoutesUseInjectedClockForExpiry(t *testing.T) {
 		t.Fatalf("expired session status = %d", w.Code)
 	}
 }
+
+func TestLoginReturnsInternalServerErrorOnDatabaseFailure(t *testing.T) {
+	d, _ := testutil.TempDB(t)
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	AuthRoutes(mux, AuthDeps{DB: d, Clock: &clock.FakeClock{T: time.Unix(1000, 0).UTC()}})
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{"password":"long-enough-password"}`))
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("login database failure status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestRequireAuthReturnsInternalServerErrorOnDatabaseFailure(t *testing.T) {
+	d, _ := testutil.TempDB(t)
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("next handler called")
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	r.AddCookie(&http.Cookie{Name: "pa_session", Value: "token"})
+	w := httptest.NewRecorder()
+
+	RequireAuth(d, next).ServeHTTP(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("session database failure status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
