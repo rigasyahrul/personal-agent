@@ -26,6 +26,8 @@ type ServerDeps struct {
 	Provider       agent.Provider
 	Backup         *backup.Service
 	Barrier        *backup.Barrier
+	// BackupSinkConfigured is a non-secret boolean for Settings UI.
+	BackupSinkConfigured bool
 }
 
 func New(deps ServerDeps) http.Handler {
@@ -39,7 +41,7 @@ func New(deps ServerDeps) http.Handler {
 		BootstrapToken: deps.BootstrapToken,
 		SecureCookies:  deps.SecureCookies,
 	})
-	SettingsRoutes(mux, deps.DB, deps.Clock)
+	SettingsRoutes(mux, deps.DB, deps.Clock, deps.Backup, deps.BackupSinkConfigured)
 	ProjectRoutes(mux, deps.DB, deps.DataDir, deps.Clock, deps.Barrier)
 	NoteRoutes(mux, deps.DB, deps.DataDir, deps.Clock, deps.Publish)
 	now := func() time.Time { return deps.Clock.Now().UTC() }
@@ -53,6 +55,10 @@ func New(deps ServerDeps) http.Handler {
 	mutation := func(next http.Handler) http.Handler { return auth(RequireCSRF(next)) }
 	rh := reviewHandlers{db: deps.DB, queue: review.Queue{DB: deps.DB, Clock: deps.Clock}, store: store.ReviewStore{DB: deps.DB, Clock: deps.Clock}}
 	ph := promoteHandlers{db: deps.DB, machine: deps.Publish, sessions: sessions}
+	bh := backupHandlers{service: deps.Backup}
+	// Backup POST must NOT go through Barrier.Mutate middleware — Service.Run takes Snapshot.
+	mux.Handle("GET /api/v1/backups", auth(http.HandlerFunc(bh.list)))
+	mux.Handle("POST /api/v1/backups", mutation(http.HandlerFunc(bh.create)))
 	mux.Handle("POST /api/v1/sessions/{id}/promote", mutation(http.HandlerFunc(ph.create)))
 	mux.Handle("GET /api/v1/operations/{id}", auth(http.HandlerFunc(ph.status)))
 	mux.Handle("GET /api/v1/review/queue", auth(http.HandlerFunc(rh.queueDue)))

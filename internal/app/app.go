@@ -17,6 +17,7 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/httpapi"
 	"github.com/rigasyahrul/personal-agent/internal/publish"
 	"github.com/rigasyahrul/personal-agent/internal/review"
+	"github.com/rigasyahrul/personal-agent/internal/store"
 )
 
 type App struct {
@@ -53,23 +54,25 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 	provider := &agent.OpenAICompat{APIKey: cfg.OpenAIAPIKey, BaseURL: cfg.OpenAIBaseURL}
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
+	sinkConfigured := cfg.BackupS3Bucket != ""
 	application := &App{
 		db:      db,
 		cancel:  cancelWorkers,
 		Barrier: barrier,
 		Backup:  backupSvc,
 		handler: httpapi.New(httpapi.ServerDeps{
-			DB:             db,
-			DataDir:        cfg.DataDir,
-			Clock:          realClock,
-			BootstrapToken: cfg.BootstrapToken,
-			SecureCookies:  cfg.SecureCookies,
-			Static:         http.Dir("web"),
-			Publish:        machine,
-			Models:         cfg.Models,
-			Provider:       provider,
-			Backup:         backupSvc,
-			Barrier:        barrier,
+			DB:                   db,
+			DataDir:              cfg.DataDir,
+			Clock:                realClock,
+			BootstrapToken:       cfg.BootstrapToken,
+			SecureCookies:        cfg.SecureCookies,
+			Static:               http.Dir("web"),
+			Publish:              machine,
+			Models:               cfg.Models,
+			Provider:             provider,
+			Backup:               backupSvc,
+			Barrier:              barrier,
+			BackupSinkConfigured: sinkConfigured,
 		}),
 	}
 	biteWorker := &review.BiteWorker{
@@ -84,6 +87,11 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	go func() {
 		defer application.workers.Done()
 		runBiteWorker(workerCtx, biteWorker, time.Second)
+	}()
+	application.workers.Add(1)
+	go func() {
+		defer application.workers.Done()
+		runDailyBackupScheduler(workerCtx, db, backupSvc, realClock)
 	}()
 
 	return application, nil
@@ -114,6 +122,66 @@ func runBiteWorker(ctx context.Context, worker *review.BiteWorker, pollInterval 
 			timer.Stop()
 			return
 		case <-timer.C:
+		}
+	}
+}
+
+// runDailyBackupScheduler fires backup.Service.Run at next local 03:00 when schedule is daily.
+// Missed ticks catch up at most once on startup (immediate run if past 03:00 and none today).
+func runDailyBackupScheduler(ctx context.Context, db *sql.DB, svc *backup.Service, clk clock.Clock) {
+	settings := store.SettingsStore{DB: db}
+	var lastRunDay string
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		value, err := settings.Get(ctx)
+		if err != nil || value.BackupSchedule != "daily" {
+			timer := time.NewTimer(time.Minute)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			continue
+		}
+		loc := time.UTC
+		if value.Timezone != "" {
+			if l, lerr := time.LoadLocation(value.Timezone); lerr == nil {
+				loc = l
+			}
+		}
+		now := clk.Now().In(loc)
+		dayKey := now.Format("2006-01-02")
+		next := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, loc)
+		if !now.Before(next) {
+			// Past today's 03:00: run once if not already run today, then wait until tomorrow 03:00.
+			if lastRunDay != dayKey {
+				_, _ = svc.Run(ctx)
+				lastRunDay = dayKey
+			}
+			next = next.Add(24 * time.Hour)
+		}
+		wait := next.Sub(now)
+		if wait < time.Second {
+			wait = time.Second
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+			if ctx.Err() != nil {
+				return
+			}
+			// Re-check schedule still daily.
+			value, err = settings.Get(ctx)
+			if err == nil && value.BackupSchedule == "daily" {
+				_, _ = svc.Run(ctx)
+				lastRunDay = clk.Now().In(loc).Format("2006-01-02")
+			}
 		}
 	}
 }

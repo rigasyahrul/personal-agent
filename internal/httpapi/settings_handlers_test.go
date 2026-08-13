@@ -52,8 +52,11 @@ func TestSettingsRoutesAuthCSRFAndUpdate(t *testing.T) {
 	if err := json.NewDecoder(get.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if get.Code != http.StatusOK || body["timezone"] != "Asia/Jakarta" || body["backup_schedule"] != "daily" || len(body) != 4 {
+	if get.Code != http.StatusOK || body["timezone"] != "Asia/Jakarta" || body["backup_schedule"] != "daily" {
 		t.Fatalf("GET = %d %#v", get.Code, body)
+	}
+	if _, ok := body["backup"]; !ok {
+		t.Fatalf("settings missing backup summary: %#v", body)
 	}
 	if got := request(http.MethodPut, `{"timezone":"bad","backup_schedule":"off"}`, true, "csrf").Code; got != http.StatusBadRequest {
 		t.Fatalf("invalid PUT = %d", got)

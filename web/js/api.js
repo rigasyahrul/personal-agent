@@ -12,3 +12,5 @@ export const reviewQueue=scope=>request(`/api/v1/review/queue?scope=${encodeURIC
 export const rateReviewItem=(itemID,payload)=>request(`/api/v1/review/items/${encodeURIComponent(itemID)}/rate`,{method:'POST',body:payload})
 export const suspendReviewItem=itemID=>request(`/api/v1/review/items/${encodeURIComponent(itemID)}/suspend`,{method:'POST',body:{}})
 export const retryReviewPending=pendingID=>request(`/api/v1/review/pending/${encodeURIComponent(pendingID)}/retry`,{method:'POST',body:{}})
+export const listBackups=()=>request('/api/v1/backups')
+export const backupNow=()=>request('/api/v1/backups',{method:'POST',body:'{}'})
