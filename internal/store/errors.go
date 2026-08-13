@@ -5,4 +5,5 @@ import "errors"
 var (
 	ErrNotFound   = errors.New("not found")
 	ErrValidation = errors.New("validation")
+	ErrIntegrity  = errors.New("note integrity check failed")
 )

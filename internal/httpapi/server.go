@@ -26,6 +26,7 @@ func New(deps ServerDeps) http.Handler {
 	})
 	SettingsRoutes(mux, deps.DB, deps.Clock)
 	ProjectRoutes(mux, deps.DB, deps.DataDir, deps.Clock)
+	NoteRoutes(mux, deps.DB, deps.DataDir, deps.Clock)
 	mux.Handle("GET /health", healthHandler(deps.DataDir))
 	if deps.Static != nil {
 		mux.Handle("GET /", http.FileServer(deps.Static))

@@ -147,7 +147,11 @@ func (h projectHandlers) projectDTOs(r *http.Request, projects []domain.Project)
 	}
 	dtos := make([]ProjectDTO, len(projects))
 	for i, project := range projects {
-		dtos[i] = ProjectDTO{ID: project.ID, VaultID: project.VaultID, VaultName: vaultNames[project.VaultID], Name: project.Name}
+		noteCount, err := h.projects.ReadyNoteCount(r.Context(), project.ID)
+		if err != nil {
+			return nil, err
+		}
+		dtos[i] = ProjectDTO{ID: project.ID, VaultID: project.VaultID, VaultName: vaultNames[project.VaultID], Name: project.Name, NoteCount: noteCount}
 	}
 	return dtos, nil
 }

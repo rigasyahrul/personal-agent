@@ -22,6 +22,12 @@ func NewProjectStore(db *sql.DB, dataDir string, c clock.Clock) *ProjectStore {
 	return &ProjectStore{db: db, dataDir: dataDir, clock: c}
 }
 
+func (s *ProjectStore) ReadyNoteCount(ctx context.Context, projectID string) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notes WHERE project_id=? AND status='ready'`, projectID).Scan(&count)
+	return count, err
+}
+
 func (s *ProjectStore) Create(ctx context.Context, name, vaultID string) (domain.Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {

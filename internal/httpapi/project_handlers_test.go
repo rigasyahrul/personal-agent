@@ -126,6 +126,25 @@ func TestVaultProjectAndHomeAPIs(t *testing.T) {
 	}
 }
 
+func TestProjectNoteCountIncludesOnlyReadyNotes(t *testing.T) {
+	db, dataDir := testutil.TempDB(t)
+	now := time.Now().UTC()
+	stamp := now.Format(time.RFC3339Nano)
+	for _, statement := range []string{"INSERT INTO owner(id,password_hash,created_at,updated_at) VALUES(1,'x','x','x')", "INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','" + stamp + "','" + stamp + "')", "INSERT INTO notes(id,project_id,relative_path,status,revision,created_at,updated_at) VALUES('ready','p1','r.md','ready',1,'x','x'),('pending','p1','p.md','pending',0,'x','x')"} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec("INSERT INTO auth_sessions(token_hash,csrf_token,expires_at,created_at) VALUES(?,?,?,'x')", auth.TokenHash(testSession), testCSRF, now.Add(time.Hour).Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+	h := New(ServerDeps{DB: db, DataDir: dataDir, Clock: &clock.FakeClock{T: now}})
+	got := projectAPIRequest(h, "GET", "/api/v1/projects/p1", "", true, "")
+	if got.Code != 200 || !bytes.Contains(got.Body.Bytes(), []byte(`"note_count":1`)) {
+		t.Fatalf("count = %d %s", got.Code, got.Body.String())
+	}
+}
+
 func TestProjectAPIErrors(t *testing.T) {
 	h, _ := newProjectAPITestServer(t)
 	for _, tc := range []struct {
