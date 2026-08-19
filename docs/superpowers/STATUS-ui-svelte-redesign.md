@@ -8,7 +8,7 @@
 | Phase | Tasks | Depends | Parallel-safe | Status | Branch | Worker thread | Review | Updated |
 |-------|-------|---------|---------------|--------|--------|---------------|--------|---------|
 | A Tooling + HMR | 1–8 | — | no | done | impl/ui-svelte-phase-A-tooling | [T-01a01a3a…](https://ampcode.com/threads/T-01a01a3a-4307-76ff-8bd6-65817aad385f) **grok45** | [T-01a01a42…](https://ampcode.com/threads/T-01a01a42-acdd-743a-a719-28f204dabc84) YES | 2026-08-19 |
-| B Shell + auth | 10–15 | A | no | running | impl/ui-svelte-phase-B-shell-auth | [T-01a01a47…](https://ampcode.com/threads/T-01a01a47-f505-74fe-8f89-5a94ff94e556) **grok45** | | 2026-08-19 |
+| B Shell + auth | 10–15 | A | no | done | impl/ui-svelte-phase-B-shell-auth | [T-01a01a47…](https://ampcode.com/threads/T-01a01a47-f505-74fe-8f89-5a94ff94e556) **grok45** | [T-01a01a50…](https://ampcode.com/threads/T-01a01a50-27ca-77f9-a0d1-e3dbd04f8018) YES | 2026-08-19 |
 | C Global grids | 20–25 | B | no | todo | | | | |
 | D Vault context | 30–35 | C | no | todo | | | | |
 | E Project surfaces | 40–46 | D | no | todo | | | | |
@@ -26,6 +26,10 @@
 | 2026-08-19 | consulting-grok-review YES (no Critical/Important): https://ampcode.com/threads/T-01a01a42-acdd-743a-a719-28f204dabc84 |
 | 2026-08-19 | Phase A FF-merged to main @ `fab962f`. |
 | 2026-08-19 | Phase B dispatched → grok45 worker https://ampcode.com/threads/T-01a01a47-f505-74fe-8f89-5a94ff94e556 branch `impl/ui-svelte-phase-B-shell-auth` (Tasks 10–15). |
+| 2026-08-19 | Phase B worker DONE @ `00bbb46` — tasks 10–15, 40 web tests, branch pushed. |
+| 2026-08-19 | Master verify B: make web-test 40/40 + web-build + go packages green (Node 22). |
+| 2026-08-19 | consulting-grok-review B YES (no Critical/Important): https://ampcode.com/threads/T-01a01a50-27ca-77f9-a0d1-e3dbd04f8018 |
+| 2026-08-19 | Phase B FF-merged to main @ `00bbb46`. |
 
 ## Active blockers
 _None._
@@ -41,6 +45,7 @@ Spawn workers with `amp -m grok45 -ox --no-archive-after-execute ...`. High-stak
 | Phase | HEAD | Notes |
 |-------|------|-------|
 | A | `fab962f` | Tooling + docker HMR; Svelte scaffold; PA_UI_DEV_PROXY |
+| B | `00bbb46` | Router, shell context, API CSRF, AppShell, auth outside shell, tokens |
 
 ## Final ship gate (master)
 
