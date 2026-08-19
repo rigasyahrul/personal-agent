@@ -7,7 +7,7 @@
 
 | Phase | Tasks | Depends | Parallel-safe | Status | Branch | Worker thread | Review | Updated |
 |-------|-------|---------|---------------|--------|--------|---------------|--------|---------|
-| A Tooling + HMR | 1–8 | — | no | running | impl/ui-svelte-phase-A-tooling | [T-01a01a3a…](https://ampcode.com/threads/T-01a01a3a-4307-76ff-8bd6-65817aad385f) **grok45** | | 2026-08-19 |
+| A Tooling + HMR | 1–8 | — | no | done | impl/ui-svelte-phase-A-tooling | [T-01a01a3a…](https://ampcode.com/threads/T-01a01a3a-4307-76ff-8bd6-65817aad385f) **grok45** | [T-01a01a42…](https://ampcode.com/threads/T-01a01a42-acdd-743a-a719-28f204dabc84) YES | 2026-08-19 |
 | B Shell + auth | 10–15 | A | no | todo | | | | |
 | C Global grids | 20–25 | B | no | todo | | | | |
 | D Vault context | 30–35 | C | no | todo | | | | |
@@ -21,6 +21,10 @@
 |------|--------|
 | 2026-08-19 | Master started (thread T-01a01a38-e05a-74e6-9e81-dc97622bab29). Baseline origin/main @ `8911240` (handoff); plan/spec/compound on main (`20b62cd`, `d3a2d3a`, `d962894`). Board created. |
 | 2026-08-19 | Phase A dispatched → grok45 worker https://ampcode.com/threads/T-01a01a3a-4307-76ff-8bd6-65817aad385f branch `impl/ui-svelte-phase-A-tooling` (Tasks 1–8). |
+| 2026-08-19 | Phase A worker DONE @ `fab962f` — tasks 1–8, branch pushed. |
+| 2026-08-19 | Master verify: make web-test + go test ./... green (Node 22). |
+| 2026-08-19 | consulting-grok-review YES (no Critical/Important): https://ampcode.com/threads/T-01a01a42-acdd-743a-a719-28f204dabc84 |
+| 2026-08-19 | Phase A FF-merged to main @ `fab962f`. |
 
 ## Active blockers
 _None._
@@ -35,7 +39,7 @@ Spawn workers with `amp -m grok45 -ox --no-archive-after-execute ...`. High-stak
 
 | Phase | HEAD | Notes |
 |-------|------|-------|
-| _(none yet)_ | | |
+| A | `fab962f` | Tooling + docker HMR; Svelte scaffold; PA_UI_DEV_PROXY |
 
 ## Final ship gate (master)
 
