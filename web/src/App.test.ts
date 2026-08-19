@@ -1,10 +1,12 @@
-import { render, screen } from '@testing-library/svelte'
-import { describe, expect, it } from 'vitest'
-import App from './App.svelte'
+// web/src/App.test.ts
+import { cleanup, render, screen, waitFor } from '@testing-library/svelte';
+import { afterEach, expect, it, vi } from 'vitest';
+import App from './App.svelte';
 
-describe('App', () => {
-  it('renders the application heading', () => {
-    render(App)
-    expect(screen.getByRole('heading', { name: 'Personal Agent' })).toBeInTheDocument()
-  })
-})
+afterEach(cleanup);
+
+it('renders login without authenticated chrome', async () => {
+  render(App, { props: { authLoader: vi.fn().mockResolvedValue({ status: 'login' }) } });
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument());
+  expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
+});
