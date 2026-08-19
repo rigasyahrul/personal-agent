@@ -12,6 +12,7 @@ If there is even a small chance a Superpowers skill applies, invoke it with the 
 - Bugs / unexpected behavior → `systematic-debugging` first
 - Implementing a planned task → `test-driven-development` (and related plan/execution skills)
 - About to claim done → `verification-before-completion`
+- After non-trivial work / user asks to compound → `compounding-engineering`
 
 Announce which skill you are using, then follow it exactly.
 
@@ -24,6 +25,8 @@ Announce which skill you are using, then follow it exactly.
 - `using-git-worktrees` / `finishing-a-development-branch`
 - `requesting-code-review` / `receiving-code-review`
 - `dispatching-parallel-agents` / `writing-skills`
+- `compounding-engineering` — after a unit of work: append lesson + codify into AGENTS.md / tests / skills
+- `synthesize-memory` — promote recurring lessons (3+) into durable standing rules
 
 ## Compounding engineering (keep it simple)
 
@@ -36,7 +39,7 @@ Pattern: [Compounding Engineering](https://www.agentic-patterns.com/patterns/com
 | **Lessons learned** | **`docs/memory/YYYY-MM-DD-lessons.md`** (one file; append) |
 | Standing rules | **This file** (short bullets below) |
 
-After non-trivial work or a user correction: append a lesson under `docs/memory/`, and add a standing bullet here if it should load every session.
+After non-trivial work or a user correction: run **`compounding-engineering`** (append lesson under `docs/memory/`, standing bullet here if it should load every session). Periodically run **`synthesize-memory`** when lessons recur.
 
 ### Standing rules
 
