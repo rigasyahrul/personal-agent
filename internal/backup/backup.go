@@ -204,14 +204,12 @@ func (s *Service) local(ctx context.Context, run domain.BackupRun) (string, stri
 		return "", "", err
 	}
 
-	if err := sealTree(work); err != nil {
-		return "", "", err
-	}
+	// Seal only after rename. Darwin rejects rename/RemoveAll of a directory
+	// whose own write bits were cleared (Linux allows same-parent rename).
 	if err := os.Rename(work, final); err != nil {
 		return "", "", err
 	}
 	cleanup = false
-	// Re-seal after rename in case of umask/FS quirks on the directory itself.
 	if err := sealTree(final); err != nil {
 		return "", "", err
 	}

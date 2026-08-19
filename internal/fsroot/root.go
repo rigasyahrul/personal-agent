@@ -39,24 +39,22 @@ func Open(name string) (*Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	components := []string{}
-	for current := filepath.Clean(abs); ; current = filepath.Dir(current) {
-		parent := filepath.Dir(current)
-		if current == parent {
-			break
-		}
-		components = append(components, current)
+	// Resolve directory-name symlinks (macOS /var → /private/var, user links)
+	// before opening. os.OpenRoot follows them too; we pin the FD to the final
+	// real directory. Escape via symlinks *inside* the root is still blocked by
+	// per-path Lstat checks and os.Root.
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return nil, err
 	}
-	for i := len(components) - 1; i >= 0; i-- {
-		info, err := os.Lstat(components[i])
-		if err != nil {
-			return nil, err
-		}
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return nil, ErrUnsafe
-		}
+	info, err := os.Lstat(resolved)
+	if err != nil {
+		return nil, err
 	}
-	r, err := os.OpenRoot(abs)
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, ErrUnsafe
+	}
+	r, err := os.OpenRoot(resolved)
 	if err != nil {
 		return nil, err
 	}
@@ -199,12 +197,12 @@ func (r *Root) WriteFileAtomic(name string, body []byte, perm fs.FileMode) error
 	// Exchange keeps the prior destination available at tmp so its type can be
 	// validated after the atomic commit operation. If a special node won the
 	// race after Lstat, put it back rather than replacing it.
-	if err := unix.Renameat2(parentFD, tmp, parentFD, final, unix.RENAME_EXCHANGE); err != nil {
+	if err := exchangeRename(parentFD, tmp, parentFD, final); err != nil {
 		return err
 	}
 	oldInfo, err := parent.Lstat(tmp)
 	if err != nil || !oldInfo.Mode().IsRegular() {
-		if restoreErr := unix.Renameat2(parentFD, tmp, parentFD, final, unix.RENAME_EXCHANGE); restoreErr != nil {
+		if restoreErr := exchangeRename(parentFD, tmp, parentFD, final); restoreErr != nil {
 			return restoreErr
 		}
 		return ErrUnsafe

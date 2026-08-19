@@ -88,7 +88,7 @@ func TestWriteFileNoReplaceConcurrentWriters(t *testing.T) {
 	}
 }
 
-func TestOpenRejectsSymlinkedAbsoluteParent(t *testing.T) {
+func TestOpenThroughSymlinkedAbsoluteParentPinsRealDirectory(t *testing.T) {
 	parent := t.TempDir()
 	real := filepath.Join(parent, "real")
 	if err := os.MkdirAll(filepath.Join(real, "root"), 0700); err != nil {
@@ -98,8 +98,17 @@ func TestOpenRejectsSymlinkedAbsoluteParent(t *testing.T) {
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fsroot.Open(filepath.Join(link, "root")); !errors.Is(err, fsroot.ErrUnsafe) {
+	r, err := fsroot.Open(filepath.Join(link, "root"))
+	if err != nil {
 		t.Fatalf("Open through symlinked parent: %v", err)
+	}
+	defer r.Close()
+	if err := r.WriteFileAtomic("note.md", []byte("pinned"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(real, "root", "note.md"))
+	if err != nil || string(got) != "pinned" {
+		t.Fatalf("write must land on resolved root: body=%q err=%v", got, err)
 	}
 }
 

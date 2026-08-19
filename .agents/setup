@@ -29,8 +29,9 @@ if [[ -z "$current" ]] || [[ "$(printf '%s\n' "$required" "$current" | sort -V |
       mkdir -p "$install_parent"
     fi
   fi
-  "${privilege[@]}" rm -rf "$install_parent/go"
-  "${privilege[@]}" tar -C "$install_parent" -xzf /tmp/go.tgz
+  # Bash 3.2 (macOS) treats "${empty[@]}" as unbound under set -u.
+  ${privilege[@]+"${privilege[@]}"} rm -rf "$install_parent/go"
+  ${privilege[@]+"${privilege[@]}"} tar -C "$install_parent" -xzf /tmp/go.tgz
   rm -f /tmp/go.tgz
   export PATH="$install_parent/go/bin:$PATH"
 
