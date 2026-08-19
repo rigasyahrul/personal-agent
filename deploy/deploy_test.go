@@ -11,9 +11,9 @@ import (
 func TestDeploymentFiles(t *testing.T) {
 	checks := map[string][]string{
 		"Dockerfile":             {"node:22-alpine AS web-build", "npm ci", "npm run build", "golang:1.24", "CMD", "/app/web/dist"},
-		"Dockerfile.dev":         {"golang:1.24", "air", "deploy/air.toml"},
+		"Dockerfile.dev":         {"node:22-alpine", "golang:1.24", "air", "dev-entrypoint.sh"},
 		"docker-compose.yml":     {"personal-agent:", "caddy:", "pa-data:", "OPENAI_API_KEY", "OPENAI_BASE_URL", "PA_MODELS"},
-		"docker-compose.dev.yml": {"Dockerfile.dev", "air", "..:/src", "go-mod-cache:", "deploy/air.toml"},
+		"docker-compose.dev.yml": {"Dockerfile.dev", "..:/src", "go-mod-cache:", "PA_UI_DEV_PROXY: http://127.0.0.1:5173", "dev-entrypoint"},
 		"air.toml":               {"go build", "./cmd/personal-agent", "tmp/personal-agent"},
 		"Caddyfile":              {"reverse_proxy personal-agent:8080"},
 		".env.example":           {"BOOTSTRAP_TOKEN=", "PA_DOMAIN=", "OPENAI_API_KEY=", "OPENAI_BASE_URL=", "PA_MODELS="},
@@ -56,9 +56,10 @@ func TestComposeDevOverrideMountsFullRepo(t *testing.T) {
 	for _, required := range []string{
 		"Dockerfile.dev",
 		"..:/src",
-		"deploy/air.toml",
 		"go-mod-cache:",
 		"PA_DATA_DIR: /data",
+		"PA_UI_DEV_PROXY: http://127.0.0.1:5173",
+		"dev-entrypoint",
 	} {
 		if !strings.Contains(dev, required) {
 			t.Errorf("docker-compose.dev.yml missing %q", required)

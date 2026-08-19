@@ -1,14 +1,11 @@
-# Dev image: full Go toolchain + air for live API reload.
-# Production stays on deploy/Dockerfile (baked binary + web).
-FROM golang:1.24-alpine
+FROM node:22-alpine
 
-RUN apk add --no-cache git ca-certificates curl \
-    && go install github.com/air-verse/air@v1.61.7
-
+RUN apk add --no-cache go=~1.24 git ca-certificates curl \
+    && GOBIN=/usr/local/bin go install github.com/air-verse/air@v1.61.7
+COPY deploy/dev-entrypoint.sh /usr/local/bin/dev-entrypoint
+RUN chmod +x /usr/local/bin/dev-entrypoint
 WORKDIR /src
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
     CMD curl -sf http://127.0.0.1:8080/health >/dev/null || exit 1
-
-# air.toml is bind-mounted from the host via compose.dev.yml
-CMD ["air", "-c", "deploy/air.toml"]
+CMD ["dev-entrypoint"]

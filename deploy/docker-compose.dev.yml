@@ -10,18 +10,17 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.dev
     working_dir: /src
-    command: ["air", "-c", "deploy/air.toml"]
+    command: ["dev-entrypoint"]
     volumes:
       - pa-data:/data
-      # Full repo: Go source rebuilds via air; web/ is served live from cwd.
+      # Full repo: Air reloads Go; Vite reads web/src directly for HMR.
       - ..:/src
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
     environment:
       PA_DATA_DIR: /data
       PA_ADDR: :8080
-      # Serve static UI from the mounted repo (matches local go run layout).
-      # App defaults to http.Dir("web") relative to working_dir=/src.
+      PA_UI_DEV_PROXY: http://127.0.0.1:5173
     restart: unless-stopped
 
 volumes:
