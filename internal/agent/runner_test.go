@@ -16,7 +16,6 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/testutil"
 )
 
-
 func waitRunTerminal(t *testing.T, runner *Runner, runs *store.RunStore, runID string) domain.AgentRun {
 	t.Helper()
 	runner.Wait()
@@ -421,7 +420,6 @@ func TestRunnerReadAndAppendFailuresTerminalizeRun(t *testing.T) {
 	}
 }
 
-
 type blockingChatProvider struct {
 	started chan struct{}
 	release chan struct{}
@@ -433,7 +431,6 @@ func (p *blockingChatProvider) Chat(context.Context, ChatRequest) (ChatResponse,
 	<-p.release
 	return ChatResponse{Content: "answer"}, nil
 }
-
 
 func TestTwoTabsOneAgentRunDifferentKeys(t *testing.T) {
 	provider := &blockingChatProvider{started: make(chan struct{}), release: make(chan struct{})}
@@ -522,4 +519,3 @@ func TestTwoTabsOneAgentRunSameKeyIsIdempotent(t *testing.T) {
 	close(provider.release)
 	runner.Wait()
 }
-

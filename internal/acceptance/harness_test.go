@@ -127,19 +127,19 @@ func (s *memSink) Upload(_ context.Context, localDir, objectPrefix string) error
 }
 
 type harness struct {
-	t        *testing.T
-	dataDir  string
-	cfg      config.Config
-	app      *app.App
-	server   *httptest.Server
-	client   *http.Client
-	csrf     string
-	db       *sql.DB
-	projectID string
-	provider *fakeProvider
-	bites    *fakeBites
-	sink     *memSink
-	clk      *clock.FakeClock
+	t            *testing.T
+	dataDir      string
+	cfg          config.Config
+	app          *app.App
+	server       *httptest.Server
+	client       *http.Client
+	csrf         string
+	db           *sql.DB
+	projectID    string
+	provider     *fakeProvider
+	bites        *fakeBites
+	sink         *memSink
+	clk          *clock.FakeClock
 	crash        string
 	rateVersions map[string]int64
 }

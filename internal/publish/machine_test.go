@@ -377,11 +377,11 @@ func TestRecoverAfterPublishedFileBeforeFinalization(t *testing.T) {
 	}
 }
 
-func preparePromoteRecovery(t *testing.T, status string, mode domain.ReviewMode) (string, *sql.DB, publish.Machine, publish.PublishInput, string) {
+func preparePromoteRecovery(t *testing.T, status string, mode domain.ReviewMode) (string, *sql.DB, *publish.Machine, publish.PublishInput, string) {
 	t.Helper()
 	d, db, c, in := promoteFixture(t)
 	in.ReviewMode = mode
-	m := publish.Machine{DB: db, DataDir: d, Clock: c}
+	m := &publish.Machine{DB: db, DataDir: d, Clock: c}
 	if _, _, err := m.Run(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}
