@@ -203,7 +203,7 @@ make help
 
 Expected: same menu as bare `make` (compare with `diff <(make) <(make help)` — empty diff).
 
-- [ ] **Step 4: Verify named targets still work**
+- [x] **Step 4: Verify named targets still work**
 
 Run:
 
@@ -230,7 +230,7 @@ make -n lint
 
 Expected: prints the would-be recipes without error (`go run ./cmd/personal-agent`, and lint’s fmt-check + vet chain).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Makefile README.md
