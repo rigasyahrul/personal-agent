@@ -39,17 +39,23 @@ func AuthRoutes(mux *http.ServeMux, deps AuthDeps) {
 			Password string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || len(input.Password) < 12 {
-			http.Error(w, "invalid request", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid bootstrap request")
 			return
 		}
-		err := auth.Bootstrap(r.Context(), deps.DB, deps.BootstrapToken, input.Token, input.Password, deps.Clock.Now())
+		// Accept bootstrap token via Authorization: Bearer or JSON body (UI).
+		provided := input.Token
+		if authz := r.Header.Get("Authorization"); len(authz) > 7 && (authz[:7] == "Bearer " || authz[:7] == "bearer ") {
+			provided = authz[7:]
+		}
+		err := auth.Bootstrap(r.Context(), deps.DB, deps.BootstrapToken, provided, input.Password, deps.Clock.Now())
 		switch {
-		case errors.Is(err, auth.ErrBootstrapped):
-			http.Error(w, "already bootstrapped", http.StatusConflict)
+		case errors.Is(err, auth.ErrOwnerExists), errors.Is(err, auth.ErrBootstrapped):
+			// Never reveal whether the bootstrap token was correct after owner exists.
+			writeError(w, http.StatusConflict, "owner_exists", "owner already exists")
 		case errors.Is(err, auth.ErrBootstrapToken):
-			http.Error(w, "forbidden", http.StatusForbidden)
+			writeError(w, http.StatusForbidden, "invalid_bootstrap_token", "invalid bootstrap token")
 		case err != nil:
-			http.Error(w, "database error", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "internal_error", "database error")
 		default:
 			w.WriteHeader(http.StatusCreated)
 		}

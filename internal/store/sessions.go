@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/rigasyahrul/personal-agent/internal/config"
@@ -15,12 +16,50 @@ import (
 
 const defaultToolGrantsJSON = `{"workspace_files":false}`
 
+// SessionLocks serializes per-session mutations (promote and delete).
+type SessionLocks struct {
+	mu   sync.Mutex
+	byID map[string]*sessionLock
+}
+
+type sessionLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+func NewSessionLocks() *SessionLocks {
+	return &SessionLocks{byID: make(map[string]*sessionLock)}
+}
+
+// Lock acquires the keyed session lock and returns an unlock function.
+func (s *SessionLocks) Lock(id string) func() {
+	s.mu.Lock()
+	l := s.byID[id]
+	if l == nil {
+		l = &sessionLock{}
+		s.byID[id] = l
+	}
+	l.refs++
+	s.mu.Unlock()
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		s.mu.Lock()
+		l.refs--
+		if l.refs == 0 {
+			delete(s.byID, id)
+		}
+		s.mu.Unlock()
+	}
+}
+
 type SessionStore struct {
 	DB      *sql.DB
 	DataDir string
 	Now     func() time.Time
 	Models  []config.ModelRef
 	Barrier MutBarrier
+	Locks   *SessionLocks
 }
 
 type CreateSessionInput struct {
@@ -117,6 +156,10 @@ func (s *SessionStore) Get(ctx context.Context, id string) (domain.Session, erro
 }
 
 func (s *SessionStore) Delete(ctx context.Context, id string) error {
+	if s.Locks != nil {
+		unlock := s.Locks.Lock(id)
+		defer unlock()
+	}
 	return s.withBarrier(func() error { return s.delete(ctx, id) })
 }
 
@@ -166,6 +209,8 @@ func (s *SessionStore) delete(ctx context.Context, id string) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	// Tombstone is durable; workspace removal is best-effort under the session lock.
+	// Failures leave the terminal tombstone so no new mutation can begin.
 	return os.RemoveAll(workspace)
 }
 

@@ -1,33 +1,105 @@
 # Personal Agent
 
-Self-hosted, single-owner learning dashboard. Development requires Go 1.24+; deployment can use Docker Compose.
+Self-hosted, single-owner learning dashboard. Promote session notes into a durable project library, review with SM-2-lite, and back up the data directory. Development requires **Go 1.24+**; deployment can use Docker Compose with optional Caddy TLS.
+
+## Non-goals (v1)
+
+- Multi-user / multi-tenant auth
+- General shell or host filesystem access for the agent
+- FTS search, vault browser, or mobile clients
+- Automatic public internet exposure without HTTPS
+
+## Prerequisites
+
+- Go **1.24+** (`go version`)
+- Optional: Docker Compose for packaged deployment
+- Optional: OpenAI-compatible API key for chat and bite generation
 
 ## Development
 
-Run the test suite and start the server:
+```sh
+make test
+make lint
+make run
+```
+
+Or:
 
 ```sh
 go test ./...
-BOOTSTRAP_TOKEN='replace-with-at-least-32-random-characters' go run ./cmd/personal-agent
+BOOTSTRAP_TOKEN='replace-with-at-least-32-random-characters' \
+  PA_SECURE_COOKIES=false \
+  PA_MODELS=openai:test \
+  go run ./cmd/personal-agent
 ```
 
-The app listens on port 8080. Runtime state defaults to `./data`; set `PA_DATA_DIR` to use another writable location. Bootstrap the owner once, then log in.
+The app listens on **`:8080`**. Runtime state defaults to `./data` (`PA_DATA_DIR`).
+
+### Amp orb
+
+`.amp/services.yaml` starts the app for orb development:
+
+```sh
+amp orb services ensure
+```
+
+It sets `PA_DATA_DIR=.amp/state/personal-agent`, `PA_ADDR=:8080`, `PA_SECURE_COOKIES=false`, a dev `BOOTSTRAP_TOKEN`, and health-checks `/health`.
+
+### First-run bootstrap
+
+1. Open `http://127.0.0.1:8080` (or the orb portal URL).
+2. Enter the `BOOTSTRAP_TOKEN` and an owner password (12+ characters).
+3. Log in. Bootstrap is **one-time**; a second attempt returns `409 owner_exists`.
+
+## Configuration
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `BOOTSTRAP_TOKEN` | yes (first run) | ≥32 random characters; never commit real values |
+| `PA_DATA_DIR` | no | default `./data` |
+| `PA_ADDR` | no | default `:8080` |
+| `PA_SECURE_COOKIES` | no | default secure; set `false` only for plain HTTP localhost |
+| `PA_MODELS` | no | `provider:model_id,...` e.g. `openai:gpt-4o-mini` |
+| `OPENAI_API_KEY` | no | needed for live chat/bites |
+| `OPENAI_BASE_URL` | no | OpenAI-compatible base URL |
+| `PA_BACKUP_S3_BUCKET` | no | enables S3 directory upload after local bundle |
+
+**Warning:** Domain deployment requires **HTTPS** and `PA_SECURE_COOKIES=true`. Never expose plain HTTP with secure cookies disabled on an untrusted network.
 
 ## Docker Compose
 
-Copy the environment template, replace the bootstrap token, and start the app:
-
 ```sh
 cp deploy/.env.example deploy/.env
+# Set BOOTSTRAP_TOKEN. Keep PA_SECURE_COOKIES=false for local plain HTTP.
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up --build
 ```
 
-Compose persists application state in the `pa-data` volume mounted at `/data`. It passes credentials through environment variables and does not bake them into the image.
+Compose persists state in the `pa-data` volume (`PA_DATA_DIR` at `/data`). Configure models with `OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, and `PA_MODELS`.
 
-Model configuration uses `OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, and `PA_MODELS`, a comma-separated list of `provider:model_id` pairs. Keep API keys and the bootstrap token out of source control.
-
-The template defaults to `PA_SECURE_COOKIES=false` so login works over local plain HTTP; Compose publishes the app only on `127.0.0.1`. This mode is unsafe on an untrusted network. For a real domain, set `PA_DOMAIN`, set `PA_SECURE_COOKIES=true`, and start the Caddy TLS reverse proxy:
+For a real domain with Caddy TLS:
 
 ```sh
+# PA_DOMAIN=agent.example.com
+# PA_SECURE_COOKIES=true
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml --profile domain up --build
 ```
+
+## Data layout
+
+```
+$PA_DATA_DIR/
+  db/personal-agent.sqlite
+  files/…          # project source + session workspaces
+  staging/…        # publication staging
+  backups/local/…  # directory bundles
+```
+
+## Docs
+
+- Design: [`docs/superpowers/specs/2026-08-12-personal-agent-design.md`](docs/superpowers/specs/2026-08-12-personal-agent-design.md)
+- Deploy: [`docs/ops/deploy.md`](docs/ops/deploy.md)
+- Backup / restore: [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md)
+
+## License
+
+See [`LICENSE`](LICENSE).

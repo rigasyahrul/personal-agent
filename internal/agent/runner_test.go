@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,16 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/store"
 	"github.com/rigasyahrul/personal-agent/internal/testutil"
 )
+
+func waitRunTerminal(t *testing.T, runner *Runner, runs *store.RunStore, runID string) domain.AgentRun {
+	t.Helper()
+	runner.Wait()
+	run, err := runs.ByID(context.Background(), runID)
+	if err != nil {
+		t.Fatalf("ByID: %v", err)
+	}
+	return run
+}
 
 type fakeProvider struct {
 	calls int
@@ -80,6 +91,7 @@ func TestRunnerDoesNotAdvertiseToolsWithoutGrant(t *testing.T) {
 	if _, err := runner.Start(context.Background(), sessionID, "request", "write x"); err != nil {
 		t.Fatal(err)
 	}
+	runner.Wait()
 	if len(provider.requests) != 1 || len(provider.requests[0].Tools) != 0 {
 		t.Fatalf("tools leaked: %#v", provider.requests)
 	}
@@ -98,6 +110,7 @@ func TestRunnerExecutesRootedToolsAndPreservesProtocol(t *testing.T) {
 	if _, err := runner.Start(context.Background(), sessionID, "request", "save it"); err != nil {
 		t.Fatal(err)
 	}
+	runner.Wait()
 	if len(provider.requests) != 2 || len(provider.requests[0].Tools) != 4 {
 		t.Fatalf("requests = %#v", provider.requests)
 	}
@@ -130,6 +143,7 @@ func TestRunnerRejectsHostileAndUnknownToolArgumentsSafely(t *testing.T) {
 			if _, err := runner.Start(context.Background(), sessionID, call.ID, "try"); err != nil {
 				t.Fatal(err)
 			}
+			runner.Wait()
 			history, _ := messages.List(context.Background(), sessionID)
 			content := history[2].Content
 			if !strings.Contains(content, "error") || strings.Contains(content, runner.DataDir) || strings.Contains(content, "/etc/") {
@@ -156,9 +170,10 @@ func TestRunnerRejectsInvalidToolCallIDsBeforePersistenceOrExecution(t *testing.
 			runner, sessionID, runs, messages := toolRunner(t, provider, true)
 
 			runID, err := runner.Start(context.Background(), sessionID, "invalid-"+tc.name, "try invalid calls")
-			if err == nil {
-				t.Fatal("Start succeeded")
+			if err != nil {
+				t.Fatalf("Start admission error = %v", err)
 			}
+			runner.Wait()
 			run, lookupErr := runs.ByID(context.Background(), runID)
 			if lookupErr != nil || run.Status != domain.AgentRunStatusFailed {
 				t.Fatalf("run = %#v, %v", run, lookupErr)
@@ -187,12 +202,16 @@ func TestRunnerToolRoundLimitTerminalizesRun(t *testing.T) {
 	provider := &scriptedProvider{responses: responses}
 	runner, sessionID, runs, _ := toolRunner(t, provider, true)
 	runID, err := runner.Start(context.Background(), sessionID, "limit", "loop")
-	if err == nil || !strings.Contains(err.Error(), "tool round limit") {
-		t.Fatalf("error = %v", err)
+	if err != nil {
+		t.Fatalf("Start admission error = %v", err)
 	}
+	runner.Wait()
 	run, lookupErr := runs.ByID(context.Background(), runID)
 	if lookupErr != nil || run.Status != domain.AgentRunStatusFailed || len(provider.requests) != 8 {
 		t.Fatalf("run/requests = %#v/%d, %v", run, len(provider.requests), lookupErr)
+	}
+	if run.Error == nil || !strings.Contains(*run.Error, "tool round limit") {
+		t.Fatalf("run error = %#v", run.Error)
 	}
 }
 
@@ -207,6 +226,7 @@ func TestRunnerStartIsSynchronousIdempotentAndUsesImmutableModel(t *testing.T) {
 	if err != nil || retryID != runID {
 		t.Fatalf("retry = %q, %v", retryID, err)
 	}
+	runner.Wait()
 	if provider.calls != 1 || provider.req.Model != "gpt-fixed" || len(provider.req.Messages) != 1 || provider.req.Messages[0].Content != "question" || len(provider.req.Tools) != 0 {
 		t.Fatalf("provider calls/request = %d, %#v", provider.calls, provider.req)
 	}
@@ -242,9 +262,10 @@ func TestRunnerFailuresTerminalizeAdmittedRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			runner, sessionID, runs, messages := seededRunner(t, tc.parameters, tc.provider)
 			runID, err := runner.Start(context.Background(), sessionID, "request", "saved question")
-			if err == nil {
-				t.Fatal("Start succeeded")
+			if err != nil {
+				t.Fatalf("Start admission error = %v", err)
 			}
+			runner.Wait()
 			run, lookupErr := runs.ByID(context.Background(), runID)
 			if lookupErr != nil || run.Status != domain.AgentRunStatusFailed || run.Error == nil {
 				t.Fatalf("run = %#v, %v", run, lookupErr)
@@ -258,12 +279,24 @@ func TestRunnerFailuresTerminalizeAdmittedRun(t *testing.T) {
 }
 
 type completionFailingRuns struct {
-	RunStore
+	inner         *store.RunStore
 	completionErr error
 	failureErr    error
 	failedCalls   int
 }
 
+func (s *completionFailingRuns) Admit(ctx context.Context, sessionID, requestKey, userMessage string, now time.Time) (store.RunAdmission, error) {
+	return s.inner.Admit(ctx, sessionID, requestKey, userMessage, now)
+}
+func (s *completionFailingRuns) BeginOrGet(ctx context.Context, sessionID, requestKey string) (string, bool, error) {
+	return s.inner.BeginOrGet(ctx, sessionID, requestKey)
+}
+func (s *completionFailingRuns) MarkRunning(ctx context.Context, runID string) error {
+	return s.inner.MarkRunning(ctx, runID)
+}
+func (s *completionFailingRuns) ByID(ctx context.Context, runID string) (domain.AgentRun, error) {
+	return s.inner.ByID(ctx, runID)
+}
 func (s *completionFailingRuns) MarkDone(ctx context.Context, runID, status, message string) error {
 	if status == domain.AgentRunStatusCompleted {
 		return s.completionErr
@@ -274,19 +307,20 @@ func (s *completionFailingRuns) MarkDone(ctx context.Context, runID, status, mes
 			return s.failureErr
 		}
 	}
-	return s.RunStore.MarkDone(ctx, runID, status, message)
+	return s.inner.MarkDone(ctx, runID, status, message)
 }
 
 func TestRunnerCompletionFailureAttemptsFailureTerminalization(t *testing.T) {
 	runner, sessionID, runs, _ := seededRunner(t, `{}`, &fakeProvider{})
 	completionErr := errors.New("complete failed")
-	wrapped := &completionFailingRuns{RunStore: runner.Runs, completionErr: completionErr}
+	wrapped := &completionFailingRuns{inner: runs, completionErr: completionErr}
 	runner.Runs = wrapped
 
 	runID, err := runner.Start(context.Background(), sessionID, "request", "question")
-	if !errors.Is(err, completionErr) {
-		t.Fatalf("Start error = %v, want completion error", err)
+	if err != nil {
+		t.Fatalf("Start admission error = %v", err)
 	}
+	runner.Wait()
 	if wrapped.failedCalls != 1 {
 		t.Fatalf("failed MarkDone calls = %d, want 1", wrapped.failedCalls)
 	}
@@ -297,16 +331,17 @@ func TestRunnerCompletionFailureAttemptsFailureTerminalization(t *testing.T) {
 }
 
 func TestRunnerCompletionFailureJoinsFailureTerminalizationError(t *testing.T) {
-	runner, sessionID, _, _ := seededRunner(t, `{}`, &fakeProvider{})
+	runner, sessionID, runs, _ := seededRunner(t, `{}`, &fakeProvider{})
 	completionErr := errors.New("complete failed")
 	failureErr := errors.New("failure terminalization failed")
-	wrapped := &completionFailingRuns{RunStore: runner.Runs, completionErr: completionErr, failureErr: failureErr}
+	wrapped := &completionFailingRuns{inner: runs, completionErr: completionErr, failureErr: failureErr}
 	runner.Runs = wrapped
 
 	_, err := runner.Start(context.Background(), sessionID, "request", "question")
-	if !errors.Is(err, completionErr) || !errors.Is(err, failureErr) {
-		t.Fatalf("Start error = %v, want joined completion and terminalization errors", err)
+	if err != nil {
+		t.Fatalf("Start admission error = %v", err)
 	}
+	runner.Wait()
 	if wrapped.failedCalls != 1 {
 		t.Fatalf("failed MarkDone calls = %d, want 1", wrapped.failedCalls)
 	}
@@ -326,9 +361,10 @@ func TestRunnerSessionReadFailurePrecedesMessagesAndProvider(t *testing.T) {
 	runner.Sessions = failingSessionReader{err: errors.New("session read failed")}
 
 	runID, err := runner.Start(context.Background(), sessionID, "request", "question")
-	if err == nil {
-		t.Fatal("Start succeeded")
+	if err != nil {
+		t.Fatalf("Start admission error = %v", err)
 	}
+	runner.Wait()
 	if len(messages.items) != 0 || provider.calls != 0 {
 		t.Fatalf("messages/provider calls = %d/%d, want 0/0", len(messages.items), provider.calls)
 	}
@@ -364,21 +400,122 @@ func TestRunnerReadAndAppendFailuresTerminalizeRun(t *testing.T) {
 		name     string
 		messages *failingMessages
 	}{
-		{name: "user append", messages: &failingMessages{failAppend: 1}},
+		// User message is written inside store.Admit; Messages is only used after admission.
 		{name: "history read", messages: &failingMessages{failAppend: -1, failList: true}},
-		{name: "assistant append", messages: &failingMessages{failAppend: 2}},
+		{name: "assistant append", messages: &failingMessages{failAppend: 1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runner, sid, runs, _ := seededRunner(t, `{}`, &fakeProvider{})
 			runner.Messages = tc.messages
 			runID, err := runner.Start(context.Background(), sid, "request", "question")
-			if err == nil {
-				t.Fatal("Start succeeded")
+			if err != nil {
+				t.Fatalf("Start admission error = %v", err)
 			}
+			runner.Wait()
 			run, lookupErr := runs.ByID(context.Background(), runID)
 			if lookupErr != nil || run.Status != domain.AgentRunStatusFailed {
 				t.Fatalf("run = %#v, %v", run, lookupErr)
 			}
 		})
 	}
+}
+
+type blockingChatProvider struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (p *blockingChatProvider) Chat(context.Context, ChatRequest) (ChatResponse, error) {
+	p.once.Do(func() { close(p.started) })
+	<-p.release
+	return ChatResponse{Content: "answer"}, nil
+}
+
+func TestTwoTabsOneAgentRunDifferentKeys(t *testing.T) {
+	provider := &blockingChatProvider{started: make(chan struct{}), release: make(chan struct{})}
+	runner, sessionID, runs, _ := seededRunner(t, `{}`, provider)
+	db := runner.DB
+	type result struct {
+		id  string
+		err error
+	}
+	start := make(chan struct{})
+	out := make(chan result, 2)
+	for _, key := range []string{"tab-a", "tab-b"} {
+		key := key
+		go func() {
+			<-start
+			id, err := runner.Start(context.Background(), sessionID, key, "explain this")
+			out <- result{id, err}
+		}()
+	}
+	close(start)
+	a, b := <-out, <-out
+	busy := 0
+	started := 0
+	for _, got := range []result{a, b} {
+		switch {
+		case got.err == nil:
+			started++
+		case errors.Is(got.err, ErrSessionBusy):
+			busy++
+		default:
+			t.Fatalf("unexpected result: id=%q err=%v", got.id, got.err)
+		}
+	}
+	if started != 1 || busy != 1 {
+		t.Fatalf("started=%d busy=%d, want 1 and 1", started, busy)
+	}
+	// Ensure provider is unblocked and run finishes.
+	select {
+	case <-provider.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("provider never started")
+	}
+	close(provider.release)
+	runner.Wait()
+	_ = runs
+	_ = db
+}
+
+func TestTwoTabsOneAgentRunSameKeyIsIdempotent(t *testing.T) {
+	provider := &blockingChatProvider{started: make(chan struct{}), release: make(chan struct{})}
+	runner, sessionID, _, _ := seededRunner(t, `{}`, provider)
+	start := make(chan struct{})
+	ids := make(chan string, 2)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			id, err := runner.Start(context.Background(), sessionID, "same-key", "explain this")
+			ids <- id
+			errs <- err
+		}()
+	}
+	close(start)
+	id1, id2 := <-ids, <-ids
+	if err1, err2 := <-errs, <-errs; err1 != nil || err2 != nil {
+		t.Fatalf("errors = %v, %v", err1, err2)
+	}
+	if id1 == "" || id1 != id2 {
+		t.Fatalf("run IDs = %q, %q", id1, id2)
+	}
+	var runs, userMessages int
+	if err := runner.DB.QueryRow(`SELECT count(*) FROM agent_runs WHERE session_id=?`, sessionID).Scan(&runs); err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.DB.QueryRow(`SELECT count(*) FROM messages WHERE session_id=? AND role='user'`, sessionID).Scan(&userMessages); err != nil {
+		t.Fatal(err)
+	}
+	if runs != 1 || userMessages != 1 {
+		t.Fatalf("runs=%d user_messages=%d, want 1 and 1", runs, userMessages)
+	}
+	select {
+	case <-provider.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("provider never started")
+	}
+	close(provider.release)
+	runner.Wait()
 }

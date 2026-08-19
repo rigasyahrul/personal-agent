@@ -1,0 +1,13 @@
+services:
+  personal-agent:
+    command: go run ./cmd/personal-agent
+    working_dir: .
+    environment:
+      PA_DATA_DIR: .amp/state/personal-agent
+      PA_ADDR: :8080
+      PA_SECURE_COOKIES: "false"
+      PA_MODELS: openai:test
+      BOOTSTRAP_TOKEN: dev-only-change-me
+    port: 8080
+    healthcheck:
+      path: /health

@@ -149,7 +149,7 @@ func (h *chatHandlers) messagesRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	runID, err := h.runner.Start(r.Context(), sid, in.RequestKey, in.Content)
-	if errors.Is(err, store.ErrSessionBusy) {
+	if errors.Is(err, agent.ErrSessionBusy) || errors.Is(err, store.ErrSessionBusy) {
 		apiError(w, 409, "session_busy")
 		return
 	}
@@ -162,9 +162,12 @@ func (h *chatHandlers) messagesRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		jsonResponse(w, 502, map[string]string{"run_id": runID, "error": "provider_unavailable"})
+		// Admission itself failed before a run was created.
+		internalError(w)
 		return
 	}
+	// Start is asynchronous: provider failures terminalize the run in the background.
+	// Clients observe status via /runs/current and message history.
 	jsonResponse(w, 202, map[string]string{"run_id": runID})
 }
 

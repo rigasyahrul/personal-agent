@@ -45,14 +45,23 @@ func New(deps ServerDeps) http.Handler {
 	ProjectRoutes(mux, deps.DB, deps.DataDir, deps.Clock, deps.Barrier)
 	NoteRoutes(mux, deps.DB, deps.DataDir, deps.Clock, deps.Publish, deps.Barrier)
 	now := func() time.Time { return deps.Clock.Now().UTC() }
-	sessions := &store.SessionStore{DB: deps.DB, DataDir: deps.DataDir, Now: now, Models: deps.Models, Barrier: deps.Barrier}
+	if deps.Publish != nil && deps.Publish.SessionLocks == nil {
+		deps.Publish.SessionLocks = store.NewSessionLocks()
+	}
+	var sessionLocks *store.SessionLocks
+	if deps.Publish != nil {
+		sessionLocks = deps.Publish.SessionLocks
+	} else {
+		sessionLocks = store.NewSessionLocks()
+	}
+	sessions := &store.SessionStore{DB: deps.DB, DataDir: deps.DataDir, Now: now, Models: deps.Models, Barrier: deps.Barrier, Locks: sessionLocks}
 	messages := &store.MessageStore{DB: deps.DB, Now: now}
 	runs := &store.RunStore{DB: deps.DB, Now: now}
 	runner := &agent.Runner{DB: deps.DB, DataDir: deps.DataDir, Provider: deps.Provider, Messages: messages, Runs: runs, Sessions: sessions, Clock: deps.Clock, Barrier: deps.Barrier}
 	sh := &sessionHandlers{sessions: sessions, models: deps.Models}
 	ch := &chatHandlers{sessions: sessions, messages: messages, runs: runs, runner: runner, dataDir: deps.DataDir}
 	auth := func(next http.Handler) http.Handler { return requireAuthAt(deps.DB, now, next) }
-	mutation := func(next http.Handler) http.Handler { return auth(RequireCSRF(next)) }
+	mutation := func(next http.Handler) http.Handler { return securedMutation(deps.DB, now, next) }
 	rh := reviewHandlers{db: deps.DB, queue: review.Queue{DB: deps.DB, Clock: deps.Clock}, store: store.ReviewStore{DB: deps.DB, Clock: deps.Clock}}
 	ph := promoteHandlers{db: deps.DB, machine: deps.Publish, sessions: sessions}
 	bh := backupHandlers{service: deps.Backup}
