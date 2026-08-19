@@ -71,3 +71,9 @@ export function routeToHash(route: AppRoute): string {
     case 'settings': return '#/settings';
   }
 }
+
+export function navigate(hash: string): void {
+  if (typeof location === 'undefined') return
+  location.hash = hash.startsWith('#') ? hash.slice(1) : hash
+}
+

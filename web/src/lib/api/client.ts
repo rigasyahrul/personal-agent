@@ -48,4 +48,10 @@ export async function request<T = unknown>(path: string, options: RequestOptions
 
 export const get = <T>(path: string) => request<T>(path);
 export const mutate = <T>(path: string, method: string, body: unknown) => request<T>(path, { method, body });
-export const api = <T>(path: string, options?: RequestOptions) => request<T>(`/api/v1${path}`, options);
+export const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body });
+
+/** Typed client used by route pages (paths include /api/v1 prefix). */
+export const api = {
+  get: <T>(path: string) => request<T>(path) as Promise<T>,
+  post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }) as Promise<T>,
+};
