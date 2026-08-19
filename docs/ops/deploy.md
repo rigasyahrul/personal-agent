@@ -33,6 +33,25 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up --build
 
 Compose publishes the app on `127.0.0.1:8080` and mounts the `pa-data` volume at `/data`.
 
+### Live-reload development (one service)
+
+Production compose uses a baked image (`deploy/Dockerfile`). For local coding where **both** Go API and `web/` should pick up host edits without rebuild/recreate:
+
+```sh
+make docker-dev
+# stop: make docker-dev-down
+```
+
+`docker-compose.dev.yml` is an **override** of the base compose file (ports, env, `pa-data`). You always pass both `-f` flags; `make docker-dev` does that for you.
+
+| Piece | Behavior |
+|-------|----------|
+| `deploy/Dockerfile.dev` | Go 1.24 + `air` |
+| `deploy/air.toml` | rebuild `./cmd/personal-agent` on `.go` changes |
+| `deploy/docker-compose.dev.yml` | mount `..:/src`, module/build caches, same `pa-data` |
+
+Static UI is `http.Dir("web")` from `/src/web` (bind-mounted). Hard-refresh the browser after JS/CSS edits. Stop the stack before switching back to plain production compose on the same port.
+
 ### Persistent volume checks
 
 - Confirm the volume is writable by the container user.

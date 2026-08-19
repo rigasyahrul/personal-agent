@@ -1,0 +1,20 @@
+# Air config for compose dev profile (paths relative to /src = repo root).
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "./tmp/personal-agent"
+  cmd = "go build -o ./tmp/personal-agent ./cmd/personal-agent"
+  delay = 500
+  exclude_dir = ["tmp", "data", "docs", "web", "deploy", ".git", ".agents", ".amp"]
+  exclude_regex = ["_test\\.go$"]
+  include_ext = ["go"]
+  kill_delay = "2s"
+  send_interrupt = true
+  stop_on_error = true
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

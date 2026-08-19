@@ -1,6 +1,10 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help test lint fmt-check run build
+.PHONY: help test lint fmt-check run build docker-dev docker-dev-down docker-dev-logs
+
+COMPOSE_ENV := --env-file deploy/.env
+COMPOSE_PROD := -f deploy/docker-compose.yml
+COMPOSE_DEV := $(COMPOSE_PROD) -f deploy/docker-compose.dev.yml
 
 # Print targets whose names appear in TARGETS (space-padded list), with ## descriptions.
 # Usage: $(call print-help-section, target1 target2 ...)
@@ -23,7 +27,7 @@ help: ## Show command help
 	@echo " --- Common ---"
 	@$(call print-help-section,help)
 	@echo " --- Development ---"
-	@$(call print-help-section,test lint fmt-check run build)
+	@$(call print-help-section,test lint fmt-check run build docker-dev docker-dev-down docker-dev-logs)
 
 test: ## Run all Go tests
 	go test ./...
@@ -40,3 +44,13 @@ run: ## Run the app (go run)
 
 build: ## Build ./cmd/personal-agent
 	go build ./cmd/personal-agent
+
+docker-dev: ## Live-reload Docker (API+web); needs deploy/.env
+	@test -f deploy/.env || (echo "Create deploy/.env first: cp deploy/.env.example deploy/.env"; exit 1)
+	docker compose $(COMPOSE_ENV) $(COMPOSE_DEV) up --build
+
+docker-dev-down: ## Stop live-reload Docker stack
+	docker compose $(COMPOSE_ENV) $(COMPOSE_DEV) down
+
+docker-dev-logs: ## Tail live-reload Docker logs
+	docker compose $(COMPOSE_ENV) $(COMPOSE_DEV) logs -f personal-agent

@@ -52,6 +52,9 @@ After non-trivial work or a user correction: run **`compounding-engineering`** (
 - **Darwin is a first-class test target for FS/shell.** Linux-only rename APIs, bash-4 empty arrays, “reject any ancestor symlink”, and chmod-immutable-before-rename all break macOS `make test`. Platform-split syscalls; resolve root path with `EvalSymlinks` then block links *inside* the root; seal trees only after rename. → `docs/memory/2026-08-12-lessons.md` (2026-08-19 macOS gaps)
 - **Makefile UX:** `.DEFAULT_GOAL` is `help`. Public targets need `## description`, a `.PHONY` entry, and inclusion in the matching `print-help-section` list. Do not let bare `make` run tests/build. Root binary from `make build` is gitignored (`/personal-agent`). → `docs/memory/2026-08-12-lessons.md`
 - **Skill tool miss ≠ skip.** If Amp’s Skill tool says a skill in this file / `.agents/skills/` is “not found”, `Read .agents/skills/<name>/SKILL.md` and follow it (especially `compounding-engineering`, `synthesize-memory`). → `docs/memory/2026-08-12-lessons.md`
+- **Polled SPA UIs:** never `innerHTML`-replace a focused composer/input on every poll. Patch messages/status/disabled in place; full shell rebuild only on session switch / missing shell. Keep a focus regression test. → `docs/memory/2026-08-12-lessons.md` (2026-08-19 sessions focus)
+- **UI fix ≠ served fix.** If user hits `localhost:8080`, check who listens (`lsof`/Docker) and that served asset bytes match the edit (`curl …/js/…`) before claiming success. Baked images do not see host `web/` until rebuild or a dev mount.
+- **Docker local loop:** prod compose stays image-baked (no host source mounts). Live API+web = `make docker-dev` (`docker-compose.yml` + `docker-compose.dev.yml` override, `air`, `..:/src`). Do not put live mounts on the prod compose file. → `docs/memory/2026-08-12-lessons.md`, `docs/ops/deploy.md`
 
 ## Notes for Amp orbs
 

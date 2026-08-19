@@ -7,20 +7,71 @@ import {TestDocument,TestElement,findText} from '../test-dom.mjs'
 globalThis.document = new TestDocument()
 
 class Root {
-  constructor() { this.renders = []; this.innerHTML = '' }
+  constructor() { this.renders = []; this.innerHTML = ''; this.activeMessage = null; this.messageList = null; this.runStatus = null }
   set innerHTML(value) {
     this.renders.push(value)
     this.html = value
-    this.chatForm = value.includes('data-chat') ? {elements: {message: {value: this.chatForm?.elements.message.value || ''}}} : null
+    const previous = this.chatForm?.elements?.message
+    const message = value.includes('data-chat') ? {
+      value: previous?.value || '',
+      selectionStart: 0,
+      selectionEnd: 0,
+      focus: () => { this.activeMessage = message },
+    } : null
+    if (this.activeMessage && this.activeMessage !== message) this.activeMessage = null
+    this.chatForm = message ? {elements: {message}} : null
     this.newForm = value.includes('data-new') ? {elements: {title: {value: ''}, model: {value: '0'}, workspace_files: {checked: false}}} : null
     this.back = value.includes('data-back') ? {
       listeners: new Map(),
       addEventListener: (type, handler) => { this.back.listeners.set(type, handler) },
     } : null
-    this.sendButton = value.includes('data-chat') ? {disabled: /<button disabled>Send<\/button>/.test(value)} : null
+    const previousDisabled = this.sendButton?.disabled
+    this.sendButton = value.includes('data-chat') ? {
+      get disabled() { return this._disabled },
+      set disabled(next) {
+        this._disabled = Boolean(next)
+        const host = this.root
+        if (!host?.html) return
+        host.html = host.html.replace(/<form data-chat>[\s\S]*?<\/form>/, form => form.replace(/<button[^>]*>Send<\/button>/, `<button${this._disabled ? ' disabled' : ''}>Send</button>`))
+      },
+      _disabled: previousDisabled ?? /<button disabled>Send<\/button>/.test(value),
+      root: this,
+    } : null
     this.workspace = value.includes('data-workspace-panel') ? {} : null
     this.operationHost = value.includes('data-operation-statuses') ? new TestElement('div') : null
-    this.chatAlert = value.includes('data-chat-alert') ? new TestElement('p') : null
+    this.chatAlert = value.includes('data-chat-alert') ? {
+      set textContent(text) {
+        this.text = text
+        const host = this.root
+        if (!host?.html) return
+        host.html = host.html.replace(/data-chat-alert[^>]*>[\s\S]*?<\/p>/, match => match.replace(/>[\s\S]*<\/p>/, `>${text}</p>`))
+      },
+      get textContent() { return this.text || '' },
+      text: (value.match(/data-chat-alert[^>]*>([\s\S]*?)<\/p>/) || [,''])[1],
+      root: this,
+    } : null
+    this.messageList = value.includes('class="messages"') ? {
+      set innerHTML(html) {
+        this.html = html
+        const host = this.root
+        if (!host) return
+        host.html = host.html.replace(/<ol class="messages">[\s\S]*?<\/ol>/, `<ol class="messages">${html}</ol>`)
+      },
+      get innerHTML() { return this.html || '' },
+      html: (value.match(/<ol class="messages">([\s\S]*?)<\/ol>/) || [,''])[1],
+      root: this,
+    } : null
+    this.runStatus = value.includes('run-status') ? {
+      set textContent(text) {
+        this.text = text
+        const host = this.root
+        if (!host) return
+        host.html = host.html.replace(/class="run-status"[^>]*>[\s\S]*?<\/p>/, match => match.replace(/>[\s\S]*<\/p>/, `>${text}</p>`))
+      },
+      get textContent() { return this.text || '' },
+      text: (value.match(/class="run-status"[^>]*>([\s\S]*?)<\/p>/) || [,''])[1],
+      root: this,
+    } : null
     this.sessionButtons = [...value.matchAll(/data-session="([^"]+)"/g)].map(match => ({dataset: {session: match[1]}}))
   }
   get innerHTML() { return this.html }
@@ -34,9 +85,12 @@ class Root {
     if (selector === '[data-workspace-panel]') return this.workspace
     if (selector === '[data-operation-statuses]') return this.operationHost
     if (selector === '[data-chat-alert]') return this.chatAlert
+    if (selector === 'ol.messages') return this.messageList
+    if (selector === '.run-status') return this.runStatus
     return null
   }
   querySelectorAll(selector) { return selector === '[data-session]' ? this.sessionButtons : [] }
+  contains(node) { return node != null && (node === this || node === this.chatForm?.elements?.message) }
 }
 
 const deferred = () => {
@@ -69,6 +123,50 @@ test('chat submit posts once with one stable key while polling and preserves his
   assert.doesNotMatch(root.innerHTML, /<b>kept<\/b>/)
   assert.match(root.textContent, /AI unavailable/)
   assert.equal(root.querySelector('[name=message]').value, 'hello draft')
+})
+
+test('polling does not steal message focus or selection while typing, and restores them when chat content changes', async () => {
+  let messages = [{sequence: 1, role: 'user', content: 'hello'}]
+  let run = null
+  const api = async path => {
+    if (path.endsWith('/messages')) return messages
+    if (path.endsWith('/runs/current')) return run
+    return null
+  }
+  const root = new Root()
+  const document = {
+    get activeElement() { return root.activeMessage },
+  }
+  const page = createSessionsPage({root, api, projectID: 'p', document, setInterval: () => 1, clearInterval() {}})
+  await page.openChat({id: 's', title: 'S', provider: 'p', model_id: 'm'})
+  const firstInput = root.querySelector('[name=message]')
+  firstInput.value = 'typing here'
+  firstInput.selectionStart = 6
+  firstInput.selectionEnd = 11
+  firstInput.focus()
+  const rendersBefore = root.renders.length
+
+  await page.poll()
+  assert.equal(root.renders.length, rendersBefore, 'unchanged poll must not rebuild chat DOM')
+  assert.equal(root.querySelector('[name=message]'), firstInput)
+  assert.equal(document.activeElement, firstInput)
+  assert.equal(firstInput.value, 'typing here')
+  assert.equal(firstInput.selectionStart, 6)
+  assert.equal(firstInput.selectionEnd, 11)
+
+  messages = [...messages, {sequence: 2, role: 'assistant', content: 'reply'}]
+  run = {status: 'running'}
+  await page.poll()
+  const nextInput = root.querySelector('[name=message]')
+  assert.equal(root.renders.length, rendersBefore, 'message/run updates must patch in place, not rebuild shell')
+  assert.equal(nextInput, firstInput, 'textarea node stays alive across poll updates')
+  assert.equal(document.activeElement, firstInput, 'focus stays on the same message field')
+  assert.equal(firstInput.value, 'typing here')
+  assert.equal(firstInput.selectionStart, 6)
+  assert.equal(firstInput.selectionEnd, 11)
+  assert.match(root.textContent, /reply/)
+  assert.match(root.textContent, /Run: running/)
+  assert.equal(root.querySelector('form[data-chat] button').disabled, true)
 })
 
 test('list uses configured model selection and explicit grants, and empty models show setup only', async () => {

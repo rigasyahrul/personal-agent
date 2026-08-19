@@ -11,6 +11,9 @@
 # `make build` output at repo root
 /personal-agent
 
+# air / compose-dev build output
+/tmp/
+
 # Test binary, built with `go test -c`
 *.test
 

@@ -1,0 +1,14 @@
+# Dev image: full Go toolchain + air for live API reload.
+# Production stays on deploy/Dockerfile (baked binary + web).
+FROM golang:1.24-alpine
+
+RUN apk add --no-cache git ca-certificates curl \
+    && go install github.com/air-verse/air@v1.61.7
+
+WORKDIR /src
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
+    CMD curl -sf http://127.0.0.1:8080/health >/dev/null || exit 1
+
+# air.toml is bind-mounted from the host via compose.dev.yml
+CMD ["air", "-c", "deploy/air.toml"]

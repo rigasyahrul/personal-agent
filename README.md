@@ -78,6 +78,28 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up --build
 
 Compose persists state in the `pa-data` volume (`PA_DATA_DIR` at `/data`). Configure models with `OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, and `PA_MODELS`.
 
+### Live-reload development (API + web)
+
+Production compose bakes the binary and `web/` into the image. For day-to-day coding against one Docker service with hot reload:
+
+```sh
+# one-time: cp deploy/.env.example deploy/.env  (set BOOTSTRAP_TOKEN)
+make docker-dev
+```
+
+Equivalent raw compose (dev file is an **override** — it still needs the base file for ports/env/data):
+
+```sh
+docker compose --env-file deploy/.env \
+  -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up --build
+```
+
+- Mounts the full repo at `/src` and runs [`air`](https://github.com/air-verse/air) (`deploy/air.toml`) so Go API changes rebuild/restart automatically.
+- Serves `web/` from the mounted tree — hard-refresh the browser after UI edits (no image rebuild).
+- Reuses the same `pa-data` volume and `.env` as production compose.
+- Do **not** run plain production `up` and the dev override on `:8080` at the same time.
+- Stop: `make docker-dev-down` · logs: `make docker-dev-logs`
+
 For a real domain with Caddy TLS:
 
 ```sh

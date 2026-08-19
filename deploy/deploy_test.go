@@ -10,12 +10,15 @@ import (
 
 func TestDeploymentFiles(t *testing.T) {
 	checks := map[string][]string{
-		"Dockerfile":         {"golang:1.24", "CMD", "/app/web"},
-		"docker-compose.yml": {"personal-agent:", "caddy:", "pa-data:", "OPENAI_API_KEY", "OPENAI_BASE_URL", "PA_MODELS"},
-		"Caddyfile":          {"reverse_proxy personal-agent:8080"},
-		".env.example":       {"BOOTSTRAP_TOKEN=", "PA_DOMAIN=", "OPENAI_API_KEY=", "OPENAI_BASE_URL=", "PA_MODELS="},
-		"../README.md":       {"docker compose", "PA_MODELS", "PA_DATA_DIR"},
-		"../.agents/setup":   {"1.24"},
+		"Dockerfile":             {"golang:1.24", "CMD", "/app/web"},
+		"Dockerfile.dev":         {"golang:1.24", "air", "deploy/air.toml"},
+		"docker-compose.yml":     {"personal-agent:", "caddy:", "pa-data:", "OPENAI_API_KEY", "OPENAI_BASE_URL", "PA_MODELS"},
+		"docker-compose.dev.yml": {"Dockerfile.dev", "air", "..:/src", "go-mod-cache:", "deploy/air.toml"},
+		"air.toml":               {"go build", "./cmd/personal-agent", "tmp/personal-agent"},
+		"Caddyfile":              {"reverse_proxy personal-agent:8080"},
+		".env.example":           {"BOOTSTRAP_TOKEN=", "PA_DOMAIN=", "OPENAI_API_KEY=", "OPENAI_BASE_URL=", "PA_MODELS="},
+		"../README.md":           {"docker compose", "PA_MODELS", "PA_DATA_DIR", "docker-compose.dev.yml"},
+		"../.agents/setup":       {"1.24"},
 	}
 
 	for file, needed := range checks {
@@ -39,6 +42,30 @@ func TestComposeDefaultsAreSafeForLocalHTTP(t *testing.T) {
 	}
 	if !strings.Contains(contents, "PA_SECURE_COOKIES: ${PA_SECURE_COOKIES:-false}") {
 		t.Error("docker-compose.yml must disable secure cookies by default for local HTTP")
+	}
+	// Production compose must stay image-baked (no host source mounts).
+	for _, forbidden := range []string{"../web:", "..:/src", "Dockerfile.dev"} {
+		if strings.Contains(contents, forbidden) {
+			t.Errorf("docker-compose.yml production service must not include %q (use docker-compose.dev.yml)", forbidden)
+		}
+	}
+}
+
+func TestComposeDevOverrideMountsFullRepo(t *testing.T) {
+	dev := readFile(t, "docker-compose.dev.yml")
+	for _, required := range []string{
+		"Dockerfile.dev",
+		"..:/src",
+		"deploy/air.toml",
+		"go-mod-cache:",
+		"PA_DATA_DIR: /data",
+	} {
+		if !strings.Contains(dev, required) {
+			t.Errorf("docker-compose.dev.yml missing %q", required)
+		}
+	}
+	if strings.Contains(dev, `profiles:`) {
+		t.Error("dev override should be selected via -f docker-compose.dev.yml, not a compose profile on the same file")
 	}
 }
 

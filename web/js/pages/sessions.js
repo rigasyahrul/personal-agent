@@ -48,6 +48,7 @@ export function createSessionsPage({
   let pollFailed = false
   let selectedFile = null, promoteAttempt = null, operations = [], operationResults = new Map(), promoteDialog = null
   let operationPollPromise = null, operationPollQueued = false
+  let renderedSessionID = null
   const retryingPending = new Set()
 
   function current(generation) { return !destroyed && isCurrent() && generation === chatGeneration }
@@ -56,6 +57,7 @@ export function createSessionsPage({
     stopPolling()
     closePromoteDialog()
     session = null
+    renderedSessionID = null
     operationError = ''
     const generation = ++chatGeneration
     const [configured, sessions] = await Promise.all([
@@ -95,12 +97,74 @@ export function createSessionsPage({
     renderList()
   }
 
-  function renderChat(preserveDraft = true) {
-    const draft = preserveDraft ? root.querySelector('[name=message]')?.value || '' : ''
-    const workspace = workspaceEnabled(session) ? '<aside data-workspace-panel></aside>' : ''
-    root.innerHTML = `<div class="session-layout"><section class="sessions-chat"><button type="button" data-back>Sessions</button><div class="page-heading"><h2>${esc(session.title)}</h2><span class="model-badge">${esc(session.provider)}:${esc(session.model_id)}</span></div><div data-operation-statuses></div><ol class="messages">${[...messages].sort((a, b) => a.sequence - b.sequence).map(message => `<li class="message message-${esc(message.role)}"><strong>${esc(message.role)}</strong><p>${esc(message.content)}</p></li>`).join('')}</ol><p class="run-status" role="status" aria-live="polite">${run ? `Run: ${esc(run.status)}` : 'Idle'}</p><p class="error" role="alert" data-chat-alert>${esc(chatErrorText())}</p><form data-chat><label>Message<textarea name="message" required></textarea></label><button ${sending || run ? 'disabled' : ''}>Send</button></form></section>${workspace}</div>`
+  function messagesEqual(left, right) {
+    if (left === right) return true
+    if (!left || !right || left.length !== right.length) return false
+    for (let index = 0; index < left.length; index++) {
+      const a = left[index], b = right[index]
+      if (a?.sequence !== b?.sequence || a?.role !== b?.role || a?.content !== b?.content) return false
+    }
+    return true
+  }
+
+  function runStatusOf(value) { return value?.status ?? null }
+  function messageListHTML() {
+    return [...messages].sort((a, b) => a.sequence - b.sequence).map(message => `<li class="message message-${esc(message.role)}"><strong>${esc(message.role)}</strong><p>${esc(message.content)}</p></li>`).join('')
+  }
+  function runStatusText() { return run ? `Run: ${run.status}` : 'Idle' }
+  function sendDisabled() { return Boolean(sending || run) }
+
+  function captureComposer(preserveDraft) {
     const input = root.querySelector('[name=message]')
-    if (input) input.value = draft
+    if (!input) return {draft: '', hadFocus: false, selectionStart: null, selectionEnd: null}
+    const hadFocus = document?.activeElement === input
+    return {
+      draft: preserveDraft ? (input.value || '') : '',
+      hadFocus,
+      selectionStart: hadFocus ? input.selectionStart ?? null : null,
+      selectionEnd: hadFocus ? input.selectionEnd ?? null : null,
+    }
+  }
+
+  function restoreComposer(input, composer) {
+    if (!input || !composer) return
+    input.value = composer.draft
+    if (!composer.hadFocus) return
+    input.focus?.()
+    if (composer.selectionStart == null) return
+    try {
+      if (typeof input.setSelectionRange === 'function') input.setSelectionRange(composer.selectionStart, composer.selectionEnd ?? composer.selectionStart)
+      else {
+        input.selectionStart = composer.selectionStart
+        input.selectionEnd = composer.selectionEnd ?? composer.selectionStart
+      }
+    } catch { /* selection APIs are best-effort across hosts */ }
+  }
+
+  // Patch live chat chrome without replacing the message textarea (keeps focus/caret).
+  function patchChat(options = {}) {
+    const form = root.querySelector('form[data-chat]')
+    if (!form || renderedSessionID !== session?.id) return false
+    const list = root.querySelector('ol.messages')
+    if (list) list.innerHTML = messageListHTML()
+    const status = root.querySelector('.run-status')
+    if (status) status.textContent = runStatusText()
+    updateChatAlert()
+    const button = root.querySelector('form[data-chat] button')
+    if (button) button.disabled = sendDisabled()
+    if (options.clearDraft) {
+      const input = root.querySelector('[name=message]')
+      if (input) input.value = ''
+    }
+    return true
+  }
+
+  function renderChat(preserveDraft = true) {
+    const composer = captureComposer(preserveDraft)
+    const workspace = workspaceEnabled(session) ? '<aside data-workspace-panel></aside>' : ''
+    root.innerHTML = `<div class="session-layout"><section class="sessions-chat"><button type="button" data-back>Sessions</button><div class="page-heading"><h2>${esc(session.title)}</h2><span class="model-badge">${esc(session.provider)}:${esc(session.model_id)}</span></div><div data-operation-statuses></div><ol class="messages">${messageListHTML()}</ol><p class="run-status" role="status" aria-live="polite">${esc(runStatusText())}</p><p class="error" role="alert" data-chat-alert>${esc(chatErrorText())}</p><form data-chat><label>Message<textarea name="message" required></textarea></label><button ${sendDisabled() ? 'disabled' : ''}>Send</button></form></section>${workspace}</div>`
+    renderedSessionID = session?.id ?? null
+    restoreComposer(root.querySelector('[name=message]'), composer)
     root.querySelector('[data-back]')?.addEventListener('click', () => { void list().catch(listError => { if (!destroyed && isCurrent()) root.innerHTML = `<p class="error" role="alert">${esc(listError.message)}</p>` }) })
     root.querySelector('form[data-chat]').onsubmit = send
     renderOperations()
@@ -109,9 +173,17 @@ export function createSessionsPage({
   function chatErrorText(){return [operationError,error].filter(Boolean).join(' — ')}
   function updateChatAlert(){const alert=root.querySelector('[data-chat-alert]');if(alert)alert.textContent=chatErrorText()}
   function renderOperations(){const host=root.querySelector('[data-operation-statuses]');if(!host||!document?.createElement)return;host.replaceChildren(...operations.map(id=>operationResults.has(id)?operationBadge(operationResults.get(id),op=>retryCards(op),{retryDisabled:retryingPending.has(operationResults.get(id).pending_id)}):document.createTextNode('Promoting…')))}
+  function paintChat(preserveDraft = true, options = {}) {
+    if (root.querySelector('form[data-chat]') && renderedSessionID === session?.id) {
+      if (options.clearDraft || !preserveDraft) patchChat({clearDraft: true})
+      else patchChat()
+      return
+    }
+    renderChat(preserveDraft)
+  }
   function saveOperations(){try{storage?.setItem(operationStorageKey(session.id),JSON.stringify(operations))}catch{}}
   async function pollOperations(){if(!session||destroyed)return;operationPollQueued=true;if(operationPollPromise)return operationPollPromise;operationPollPromise=(async()=>{while(operationPollQueued){operationPollQueued=false;const id=session?.id,generation=chatGeneration;if(!id)continue;const active=operations.filter(operationID=>{const value=operationResults.get(operationID);return !value||!['Ready','Promote failed — Retry','Cards failed — Retry cards'].includes(value.badge)});let failed=false,nextOperationError='';await Promise.all(active.map(async operationID=>{try{const value=await getOperation(operationID);if(current(generation)&&session?.id===id)operationResults.set(operationID,value)}catch(reason){if(current(generation)&&session?.id===id){nextOperationError=reason.message;failed=true}}}));if(current(generation)&&session?.id===id){operationError=failed?nextOperationError:'';updateChatAlert();renderOperations()}}})().finally(()=>{operationPollPromise=null});return operationPollPromise}
-  async function retryCards(op){const pendingID=op?.pending_id;if(!op?.retry_cards||!pendingID||retryingPending.has(pendingID))return;const generation=chatGeneration,id=session?.id;retryingPending.add(pendingID);renderOperations();try{await retryPending(pendingID);if(current(generation)&&session?.id===id)operationResults.delete(op.operation_id)}catch(reason){if(current(generation)&&session?.id===id){error=reason.message;renderChat()}}finally{retryingPending.delete(pendingID);if(current(generation)&&session?.id===id){renderOperations();await pollOperations()}}}
+  async function retryCards(op){const pendingID=op?.pending_id;if(!op?.retry_cards||!pendingID||retryingPending.has(pendingID))return;const generation=chatGeneration,id=session?.id;retryingPending.add(pendingID);renderOperations();try{await retryPending(pendingID);if(current(generation)&&session?.id===id)operationResults.delete(op.operation_id)}catch(reason){if(current(generation)&&session?.id===id){error=reason.message;paintChat()}}finally{retryingPending.delete(pendingID);if(current(generation)&&session?.id===id){renderOperations();await pollOperations()}}}
 
   function closePromoteDialog(){const dialog=promoteDialog;promoteDialog=null;if(!dialog)return;try{if(dialog.open)dialog.close()}catch{}dialog.remove?.()}
 
@@ -144,19 +216,27 @@ export function createSessionsPage({
             api(`/api/v1/sessions/${pathID(id)}/runs/current`),
           ])
           if (current(generation) && session?.id === id) {
-            messages = nextMessages || []
+            const nextList = nextMessages || []
+            const messagesChanged = !messagesEqual(messages, nextList)
+            const runChanged = runStatusOf(run) !== runStatusOf(nextRun)
+            const clearingError = pollFailed && Boolean(error)
+            const needsShell = !root.querySelector('form[data-chat]') || renderedSessionID !== id
+            const desiredDisabled = Boolean(sending || nextRun)
+            const sendStateChanged = Boolean(root.querySelector('form[data-chat]')) && renderedSessionID === id && Boolean(root.querySelector('form[data-chat] button')?.disabled) !== desiredDisabled
+            messages = nextList
             run = nextRun
             if (pollFailed) error = ''
             pollFailed = false
-            renderChat()
+            if (needsShell) renderChat()
+            else if (messagesChanged || runChanged || sendStateChanged || clearingError) patchChat()
             void pollOperations()
-            if (workspaceEnabled(session)) await refreshWorkspace(generation, id)
+            if (workspaceEnabled(session) && (needsShell || messagesChanged)) await refreshWorkspace(generation, id)
           }
         } catch (pollError) {
           if (current(generation) && session?.id === id) {
             error = pollError.message
             pollFailed = true
-            renderChat()
+            paintChat()
           }
         }
       }
@@ -176,10 +256,10 @@ export function createSessionsPage({
     const token = {}
     sendToken = token
     const key = randomUUID()
-    renderChat()
+    paintChat()
     try {
       await api(`/api/v1/sessions/${pathID(id)}/messages`, {method: 'POST', body: {content, request_key: key}})
-      if (sendToken === token && current(generation) && session?.id === id) renderChat(false)
+      if (sendToken === token && current(generation) && session?.id === id) paintChat(false, {clearDraft: true})
     } catch (sendError) {
       if (sendToken === token && current(generation) && session?.id === id) {
         error = sendError.message
@@ -189,7 +269,7 @@ export function createSessionsPage({
       if (sendToken === token && current(generation) && session?.id === id) {
         sending = false
         sendToken = null
-        renderChat()
+        paintChat()
         await poll()
       }
     }
@@ -200,6 +280,7 @@ export function createSessionsPage({
     closePromoteDialog()
     destroyed = false
     session = value
+    renderedSessionID = null
     error = ''
     operationError = ''
     pollFailed = false
@@ -214,6 +295,6 @@ export function createSessionsPage({
   }
 
   function stopPolling() { if (timer !== null) clearInterval(timer); timer = null }
-  function destroy() { destroyed = true; ++chatGeneration; stopPolling(); closePromoteDialog();retryingPending.clear();operationPollQueued=false;error='';operationError='';session = null }
+  function destroy() { destroyed = true; ++chatGeneration; stopPolling(); closePromoteDialog();retryingPending.clear();operationPollQueued=false;error='';operationError='';session = null; renderedSessionID = null }
   return {list, openChat, poll, destroy}
 }

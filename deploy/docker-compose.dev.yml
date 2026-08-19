@@ -1,0 +1,29 @@
+# Live-reload override for local development (API + web as one service).
+# Usage:
+#   docker compose --env-file deploy/.env \
+#     -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up --build
+#
+# Do not combine with a plain production up on the same :8080 port.
+services:
+  personal-agent:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.dev
+    working_dir: /src
+    command: ["air", "-c", "deploy/air.toml"]
+    volumes:
+      - pa-data:/data
+      # Full repo: Go source rebuilds via air; web/ is served live from cwd.
+      - ..:/src
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      PA_DATA_DIR: /data
+      PA_ADDR: :8080
+      # Serve static UI from the mounted repo (matches local go run layout).
+      # App defaults to http.Dir("web") relative to working_dir=/src.
+    restart: unless-stopped
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
