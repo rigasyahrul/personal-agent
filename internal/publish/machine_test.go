@@ -826,7 +826,7 @@ func TestSessionDeleteDuringPromoteHasNoOrphanReadyNote(t *testing.T) {
 	machine := &publish.Machine{DB: db, DataDir: d, Clock: c, SessionLocks: locks}
 	reachedFreeze := make(chan struct{})
 	continuePromote := make(chan struct{})
-	machine.AfterTransition = func(status string) {
+	machine.AfterTransition = func(status string) error {
 		if status == "frozen" {
 			select {
 			case <-reachedFreeze:
@@ -836,6 +836,7 @@ func TestSessionDeleteDuringPromoteHasNoOrphanReadyNote(t *testing.T) {
 			}
 			<-continuePromote
 		}
+		return nil
 	}
 	promoteDone := make(chan error, 1)
 	go func() {

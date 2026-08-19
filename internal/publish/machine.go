@@ -54,9 +54,15 @@ type Machine struct {
 	// SessionLocks serializes promote against session delete for the same session.
 	SessionLocks *store.SessionLocks
 	// AfterTransition is a test-only hook invoked after a committed status transition.
-	AfterTransition func(status string)
-	mu              sync.Mutex
+	// A non-nil error aborts further resume steps (simulates crash after durable commit).
+	AfterTransition func(status string) error
+	// CrashAfter, when non-empty, makes resume return ErrCrashSimulated after that status commits.
+	CrashAfter string
+	mu         sync.Mutex
 }
+
+// ErrCrashSimulated is returned when CrashAfter / AfterTransition aborts resume after a commit.
+var ErrCrashSimulated = errors.New("simulated crash after publication transition")
 
 func validComponent(s string) bool {
 	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, `/\`) && !strings.ContainsRune(s, 0)
@@ -374,8 +380,7 @@ func (m *Machine) advance(ctx context.Context, id, from, to string) error {
 		return err
 	}
 	if n == 1 {
-		m.fireAfterTransition(to)
-		return nil
+		return m.fireAfterTransition(to)
 	}
 	o, err = m.operationByID(ctx, o.Kind, id)
 	if err != nil {
@@ -387,10 +392,16 @@ func (m *Machine) advance(ctx context.Context, id, from, to string) error {
 	return fmt.Errorf("operation transition %s to %s affected %d rows", from, to, n)
 }
 
-func (m *Machine) fireAfterTransition(status string) {
+func (m *Machine) fireAfterTransition(status string) error {
 	if m.AfterTransition != nil {
-		m.AfterTransition(status)
+		if err := m.AfterTransition(status); err != nil {
+			return err
+		}
 	}
+	if m.CrashAfter != "" && status == m.CrashAfter {
+		return ErrCrashSimulated
+	}
+	return nil
 }
 func (m *Machine) fail(ctx context.Context, o store.DirectOperation, cause error) error {
 	tx, err := m.DB.BeginTx(ctx, nil)
@@ -459,8 +470,8 @@ func (m *Machine) resume(ctx context.Context, o store.DirectOperation) error {
 				if err = m.advance(ctx, o.ID, "accepted", "frozen"); err != nil {
 					return err
 				}
-			} else {
-				m.fireAfterTransition("frozen")
+			} else if err := m.fireAfterTransition("frozen"); err != nil {
+				return err
 			}
 		case "frozen":
 			if err := m.reserve(ctx, o); err != nil {
@@ -549,7 +560,10 @@ func (m *Machine) reserve(ctx context.Context, o store.DirectOperation) error {
 	if n != 1 {
 		return fmt.Errorf("reserve transition affected %d rows", n)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return m.fireAfterTransition("path_reserved")
 }
 func (m *Machine) root(ctx context.Context, o store.DirectOperation) (*fsroot.Root, error) {
 	var vault sql.NullString
@@ -689,7 +703,10 @@ func (m *Machine) finalize(ctx context.Context, o store.DirectOperation) error {
 	} else if n != 1 {
 		return fmt.Errorf("finalize transition affected %d rows: %w", n, err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return m.fireAfterTransition("finalized")
 }
 func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 	tx, err := m.DB.BeginTx(ctx, nil)
@@ -735,5 +752,8 @@ func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 	} else if n != 1 {
 		return fmt.Errorf("enqueue transition affected %d rows: %w", n, err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return m.fireAfterTransition("review_enqueued")
 }
