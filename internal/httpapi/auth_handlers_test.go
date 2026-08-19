@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/rigasyahrul/personal-agent/internal/auth"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
+	"github.com/rigasyahrul/personal-agent/internal/config"
 	"github.com/rigasyahrul/personal-agent/internal/testutil"
 )
 
@@ -163,5 +165,148 @@ func TestRequireAuthReturnsInternalServerErrorOnDatabaseFailure(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("session database failure status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
+// httpFixture wraps the full server for security boundary tests.
+type httpFixture struct {
+	t              *testing.T
+	handler        http.Handler
+	db             *sql.DB
+	bootstrapToken string
+	clock          *clock.FakeClock
+}
+
+func newHTTPFixture(t *testing.T) *httpFixture {
+	t.Helper()
+	db, dir := testutil.TempDB(t)
+	now := time.Unix(2000, 0).UTC()
+	fake := &clock.FakeClock{T: now}
+	token := "dev-bootstrap-token-32chars-min!!"
+	h := New(ServerDeps{
+		DB:             db,
+		DataDir:        dir,
+		Clock:          fake,
+		BootstrapToken: token,
+		SecureCookies:  false,
+		Models:         []config.ModelRef{{Provider: "openai", ModelID: "test"}},
+	})
+	return &httpFixture{t: t, handler: h, db: db, bootstrapToken: token, clock: fake}
+}
+
+func (fx *httpFixture) request(method, path, body string, cookies []*http.Cookie) *httptest.ResponseRecorder {
+	return fx.requestWithHeaders(method, path, body, cookies, nil)
+}
+
+func (fx *httpFixture) requestWithHeaders(method, path, body string, cookies []*http.Cookie, headers map[string]string) *httptest.ResponseRecorder {
+	fx.t.Helper()
+	var r *http.Request
+	if body != "" {
+		r = httptest.NewRequest(method, path, bytes.NewBufferString(body))
+		r.Header.Set("Content-Type", "application/json")
+	} else {
+		r = httptest.NewRequest(method, path, nil)
+	}
+	for _, c := range cookies {
+		r.AddCookie(c)
+	}
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
+	w := httptest.NewRecorder()
+	fx.handler.ServeHTTP(w, r)
+	return w
+}
+
+func (fx *httpFixture) login(t *testing.T) (*http.Cookie, *http.Cookie) {
+	t.Helper()
+	// Ensure owner exists.
+	if res := fx.requestWithHeaders("POST", "/api/v1/setup/bootstrap", `{"password":"first secure password"}`, nil, map[string]string{"Authorization": "Bearer " + fx.bootstrapToken}); res.Code != http.StatusCreated && res.Code != http.StatusConflict {
+		t.Fatalf("bootstrap status=%d body=%s", res.Code, res.Body.String())
+	}
+	res := fx.loginPassword("first secure password")
+	if res.Code != http.StatusOK && res.Code != http.StatusNoContent {
+		t.Fatalf("login status=%d body=%s", res.Code, res.Body.String())
+	}
+	var session, csrf *http.Cookie
+	for _, c := range res.Result().Cookies() {
+		switch c.Name {
+		case "pa_session":
+			session = c
+		case "pa_csrf":
+			csrf = c
+		}
+	}
+	if session == nil || csrf == nil {
+		t.Fatal("missing auth cookies")
+	}
+	return session, csrf
+}
+
+func (fx *httpFixture) loginPassword(password string) *httptest.ResponseRecorder {
+	return fx.request("POST", "/api/v1/auth/login", `{"password":`+mustJSON(password)+`}`, nil)
+}
+
+func mustJSON(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+func TestUnauthenticatedMutationsReturn401(t *testing.T) {
+	fx := newHTTPFixture(t)
+	tests := []struct{ method, path, body string }{
+		{"PUT", "/api/v1/settings", `{"timezone":"UTC"}`},
+		{"POST", "/api/v1/projects", `{"name":"x"}`},
+		{"POST", "/api/v1/projects/p1/folders", `{"path":"x"}`},
+		{"POST", "/api/v1/projects/p1/direct-notes", `{"path":"x.md","body":"x"}`},
+		{"POST", "/api/v1/projects/p1/sessions", `{"title":"x","provider":"openai","model_id":"test"}`},
+		{"DELETE", "/api/v1/sessions/s1", ``},
+		{"POST", "/api/v1/sessions/s1/messages", `{"content":"x","request_key":"k"}`},
+		{"POST", "/api/v1/sessions/s1/promote", `{"path":"x.md","target_path":"notes/x.md","review_mode":"whole","request_key":"k"}`},
+		{"POST", "/api/v1/review/items/r1/rate", `{"rating":"good","request_key":"k"}`},
+		{"POST", "/api/v1/review/items/r1/suspend", `{}`},
+		{"POST", "/api/v1/review/pending/p1/retry", `{}`},
+		{"POST", "/api/v1/backups", `{}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			res := fx.request(tc.method, tc.path, tc.body, nil)
+			if res.Code != http.StatusUnauthorized {
+				t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
+			}
+		})
+	}
+}
+
+func TestCSRFFailureReturns403(t *testing.T) {
+	fx := newHTTPFixture(t)
+	session, csrf := fx.login(t)
+	// Missing CSRF header.
+	res := fx.request("POST", "/api/v1/projects", `{"name":"x"}`, []*http.Cookie{session, csrf})
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("missing header status=%d body=%s", res.Code, res.Body.String())
+	}
+	reqCookies := []*http.Cookie{session, {Name: "pa_csrf", Value: "cookie-value"}}
+	res = fx.requestWithHeaders("POST", "/api/v1/projects", `{"name":"x"}`, reqCookies, map[string]string{"X-CSRF-Token": "header-value"})
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("mismatch status=%d body=%s", res.Code, res.Body.String())
+	}
+}
+
+func TestBootstrapTakeoverBlockedWhenOwnerExists(t *testing.T) {
+	fx := newHTTPFixture(t)
+	first := fx.requestWithHeaders("POST", "/api/v1/setup/bootstrap", `{"password":"first secure password"}`, nil, map[string]string{"Authorization": "Bearer " + fx.bootstrapToken})
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	second := fx.requestWithHeaders("POST", "/api/v1/setup/bootstrap", `{"password":"attacker password"}`, nil, map[string]string{"Authorization": "Bearer " + fx.bootstrapToken})
+	if second.Code != http.StatusConflict {
+		t.Fatalf("second status=%d body=%s", second.Code, second.Body.String())
+	}
+	if fx.loginPassword("first secure password").Code != http.StatusNoContent {
+		t.Fatal("original owner password no longer works")
+	}
+	if fx.loginPassword("attacker password").Code == http.StatusNoContent {
+		t.Fatal("takeover password was accepted")
 	}
 }
