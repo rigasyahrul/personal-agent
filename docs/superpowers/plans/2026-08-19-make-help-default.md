@@ -39,7 +39,7 @@
 - Consumes: existing target recipes unchanged (`go test ./...`, `go vet`, gofmt check, `go run`, `go build`)
 - Produces: `.DEFAULT_GOAL := help`; public targets `help`, `test`, `lint`, `fmt-check`, `run`, `build` each with `##` description; sectioned help output
 
-- [ ] **Step 1: Replace `Makefile` with annotated targets and sectioned help**
+- [x] **Step 1: Replace `Makefile` with annotated targets and sectioned help**
 
 Write the entire `Makefile` as follows (tabs before recipe lines are required):
 
@@ -147,7 +147,7 @@ build: ## Build ./cmd/personal-agent
 
 4. **Tabs:** Recipe lines must start with a real tab character, not spaces.
 
-- [ ] **Step 2: Update README Development section**
+- [x] **Step 2: Update README Development section**
 
 In `README.md`, change the Development block from:
 
@@ -177,7 +177,7 @@ make run
 
 Do not remove the longer `go test` / `go run` env example that follows.
 
-- [ ] **Step 3: Verify bare `make` prints help and does not run tests**
+- [x] **Step 3: Verify bare `make` prints help and does not run tests**
 
 Run:
 

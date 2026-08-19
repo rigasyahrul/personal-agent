@@ -17,6 +17,8 @@ Self-hosted, single-owner learning dashboard. Promote session notes into a durab
 
 ## Development
 
+`make` or `make help` lists common targets.
+
 ```sh
 make test
 make lint
