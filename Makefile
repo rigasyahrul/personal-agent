@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help test lint fmt-check run build docker-dev docker-dev-down docker-dev-logs
+.PHONY: help test lint fmt-check run build web-install web-build web-test docker-dev docker-dev-down docker-dev-logs
 
 COMPOSE_ENV := --env-file deploy/.env
 COMPOSE_PROD := -f deploy/docker-compose.yml
@@ -27,7 +27,7 @@ help: ## Show command help
 	@echo " --- Common ---"
 	@$(call print-help-section,help)
 	@echo " --- Development ---"
-	@$(call print-help-section,test lint fmt-check run build docker-dev docker-dev-down docker-dev-logs)
+	@$(call print-help-section,test lint fmt-check run build web-install web-build web-test docker-dev docker-dev-down docker-dev-logs)
 
 test: ## Run all Go tests
 	go test ./...
@@ -42,8 +42,17 @@ fmt-check: ## Fail if any .go file needs gofmt
 run: ## Run the app (go run)
 	go run ./cmd/personal-agent
 
-build: ## Build ./cmd/personal-agent
+build: web-build ## Build web assets and ./cmd/personal-agent
 	go build ./cmd/personal-agent
+
+web-install: ## Install locked web dependencies
+	npm --prefix web ci
+
+web-build: web-install ## Build the production Svelte UI
+	npm --prefix web run build
+
+web-test: web-install ## Run web unit tests
+	npm --prefix web test
 
 docker-dev: ## Live-reload Docker (API+web); needs deploy/.env
 	@test -f deploy/.env || (echo "Create deploy/.env first: cp deploy/.env.example deploy/.env"; exit 1)
