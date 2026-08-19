@@ -50,6 +50,8 @@ After non-trivial work or a user correction: run **`compounding-engineering`** (
 - **v1 execution:** master thread = `docs/superpowers/HANDOFF-master-execution.md` + board `STATUS-v1.md`. Workers implement phases; master coordinates merge/ship.
 - **High-stakes review on workers:** **`consulting-grok-review`** via a **new Grok 4.5 thread** (`amp --mode grok45 -ox -x '…'` + `reviewer-prompt` contract). Do **not** use built-in `oracle` or Task/OpenAI subagents (no ChatGPT). Never substitute silent self-review. → `docs/memory/2026-08-12-lessons.md`
 - **Darwin is a first-class test target for FS/shell.** Linux-only rename APIs, bash-4 empty arrays, “reject any ancestor symlink”, and chmod-immutable-before-rename all break macOS `make test`. Platform-split syscalls; resolve root path with `EvalSymlinks` then block links *inside* the root; seal trees only after rename. → `docs/memory/2026-08-12-lessons.md` (2026-08-19 macOS gaps)
+- **Makefile UX:** `.DEFAULT_GOAL` is `help`. Public targets need `## description`, a `.PHONY` entry, and inclusion in the matching `print-help-section` list. Do not let bare `make` run tests/build. Root binary from `make build` is gitignored (`/personal-agent`). → `docs/memory/2026-08-12-lessons.md`
+- **Skill tool miss ≠ skip.** If Amp’s Skill tool says a skill in this file / `.agents/skills/` is “not found”, `Read .agents/skills/<name>/SKILL.md` and follow it (especially `compounding-engineering`, `synthesize-memory`). → `docs/memory/2026-08-12-lessons.md`
 
 ## Notes for Amp orbs
 

@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# `make build` output at repo root
+/personal-agent
+
 # Test binary, built with `go test -c`
 *.test
 
