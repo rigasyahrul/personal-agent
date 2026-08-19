@@ -1,5 +1,11 @@
-FROM golang:1.24-alpine AS build
+FROM node:22-alpine AS web-build
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
 
+FROM golang:1.24-alpine AS go-build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -13,8 +19,8 @@ RUN apk add --no-cache ca-certificates \
     && chown app:app /data
 USER app
 WORKDIR /app
-COPY --from=build /personal-agent /usr/local/bin/personal-agent
-COPY --chown=app:app web /app/web
+COPY --from=go-build /personal-agent /usr/local/bin/personal-agent
+COPY --from=web-build --chown=app:app /src/web/dist /app/web/dist
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1

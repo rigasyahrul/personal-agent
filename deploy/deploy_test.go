@@ -10,7 +10,7 @@ import (
 
 func TestDeploymentFiles(t *testing.T) {
 	checks := map[string][]string{
-		"Dockerfile":             {"golang:1.24", "CMD", "/app/web"},
+		"Dockerfile":             {"node:22-alpine AS web-build", "npm ci", "npm run build", "golang:1.24", "CMD", "/app/web/dist"},
 		"Dockerfile.dev":         {"golang:1.24", "air", "deploy/air.toml"},
 		"docker-compose.yml":     {"personal-agent:", "caddy:", "pa-data:", "OPENAI_API_KEY", "OPENAI_BASE_URL", "PA_MODELS"},
 		"docker-compose.dev.yml": {"Dockerfile.dev", "air", "..:/src", "go-mod-cache:", "deploy/air.toml"},
@@ -148,6 +148,16 @@ chmod +x "$parent/go/bin/go"
 	cmd.Env = append(os.Environ(), "HOME="+home, "PATH=/usr/bin:/bin")
 	if output, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(output), "go1.24.0") {
 		t.Fatalf("future shell did not select persisted Go: %v\n%s", err, output)
+	}
+}
+
+func TestProductionImageCopiesOnlyBuiltWebAssets(t *testing.T) {
+	dockerfile := readFile(t, "Dockerfile")
+	if !strings.Contains(dockerfile, "COPY --from=web-build --chown=app:app /src/web/dist /app/web/dist") {
+		t.Fatal("production image must copy Vite dist")
+	}
+	if strings.Contains(dockerfile, "COPY --chown=app:app web /app/web") {
+		t.Fatal("production image must not copy web sources")
 	}
 }
 
