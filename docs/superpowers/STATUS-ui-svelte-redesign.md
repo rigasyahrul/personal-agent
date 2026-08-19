@@ -9,7 +9,7 @@
 |-------|-------|---------|---------------|--------|--------|---------------|--------|---------|
 | A Tooling + HMR | 1–8 | — | no | done | impl/ui-svelte-phase-A-tooling | [T-01a01a3a…](https://ampcode.com/threads/T-01a01a3a-4307-76ff-8bd6-65817aad385f) **grok45** | [T-01a01a42…](https://ampcode.com/threads/T-01a01a42-acdd-743a-a719-28f204dabc84) YES | 2026-08-19 |
 | B Shell + auth | 10–15 | A | no | done | impl/ui-svelte-phase-B-shell-auth | [T-01a01a47…](https://ampcode.com/threads/T-01a01a47-f505-74fe-8f89-5a94ff94e556) **grok45** | [T-01a01a50…](https://ampcode.com/threads/T-01a01a50-27ca-77f9-a0d1-e3dbd04f8018) YES | 2026-08-19 |
-| C Global grids | 20–25 | B | no | todo | | | | |
+| C Global grids | 20–25 | B | no | running | impl/ui-svelte-phase-C-global-grids | [T-01a01a54…](https://ampcode.com/threads/T-01a01a54-0d40-769f-ad58-587595e51efa) **grok45** | | 2026-08-19 |
 | D Vault context | 30–35 | C | no | todo | | | | |
 | E Project surfaces | 40–46 | D | no | todo | | | | |
 | F Review + harden | 50–55 | E | no | todo | | | | |
@@ -30,6 +30,7 @@
 | 2026-08-19 | Master verify B: make web-test 40/40 + web-build + go packages green (Node 22). |
 | 2026-08-19 | consulting-grok-review B YES (no Critical/Important): https://ampcode.com/threads/T-01a01a50-27ca-77f9-a0d1-e3dbd04f8018 |
 | 2026-08-19 | Phase B FF-merged to main @ `00bbb46`. |
+| 2026-08-19 | Phase C dispatched → grok45 worker https://ampcode.com/threads/T-01a01a54-0d40-769f-ad58-587595e51efa branch `impl/ui-svelte-phase-C-global-grids` (Tasks 20–25). |
 
 ## Active blockers
 _None._
