@@ -55,11 +55,15 @@ Every compounding run MUST update the project's lessons log. This is the durable
 
 **This repo's convention (overrides the generic multi-file diary):**
 
-- **One file:** append under `docs/memory/YYYY-MM-DD-lessons.md` (currently `docs/memory/2026-08-12-lessons.md`). Do **not** create a new dated file per task unless the user asks.
-- **Section template** (append; keep short and factual):
+- **One stable file:** `docs/memory/lessons.md` only. Do **not** create `YYYY-MM-DD-lessons.md` per task/session.
+- **Newest first:** prepend the new `###` section under `## Lessons (newest first)`.
+- **Index:** update the topic → latest-lesson row in the file’s Index table for each touched tag.
+- **Section template** (keep short and factual):
 
 ```markdown
 ### YYYY-MM-DD — <short title>
+
+**Tags:** tag1, tag2
 
 **Task:** <one line>
 
@@ -71,7 +75,7 @@ Every compounding run MUST update the project's lessons log. This is the durable
 ```
 
 - If an entry already covers the same learning, update or supersede it (note supersession) rather than duplicating.
-- Standing rules that should load every session go in **`AGENTS.md`** (short bullets), with a pointer back to the lesson.
+- Standing rules that should load every session go in **`AGENTS.md`** (short bullets), with a pointer back to the lesson. Do **not** expect agents to re-read the full diary every session.
 
 **Periodic synthesis:** when a pattern appears in **3 or more** independent lessons, promote it via the `synthesize-memory` skill into durable artifacts (standing bullets, hooks, tests). Diaries/lessons capture; synthesis compounds.
 
@@ -108,6 +112,6 @@ Codification has real costs (see the trade-offs in the pattern doc). Actively av
 
 ## Output
 
-1. A short plan: list the artifacts you'll create/update — starting with the lesson section in `docs/memory/*-lessons.md` — and the one-line reason each one compounds.
-2. Append/update the lesson first, then create or edit the other artifacts (`AGENTS.md` bullet, skill, test, hook), matching existing project conventions.
-3. Finish with the single command (or one concrete next step) that proves the new artifacts work — e.g. run the new test or hook — and confirm the lesson path.
+1. A short plan: list the artifacts you'll create/update — starting with the lesson section in `docs/memory/lessons.md` — and the one-line reason each one compounds.
+2. Prepend/update the lesson first (newest first + Index), then create or edit the other artifacts (`AGENTS.md` bullet, skill, test, hook), matching existing project conventions.
+3. Finish with the single command (or one concrete next step) that proves the new artifacts work — e.g. run the new test or hook — and confirm the lesson path is `docs/memory/lessons.md`.

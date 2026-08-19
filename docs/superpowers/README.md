@@ -12,4 +12,4 @@ Design specs and implementation plans from Superpowers skills.
 | `HANDOFF-master-execution.md` | **Master coordinator** — spawn workers, board, ship gate |
 | `STATUS-v1.md` | Execution board for v1 phases (master-owned) |
 
-**Lessons / compounding notes** are not here — see `docs/memory/YYYY-MM-DD-lessons.md`.
+**Lessons / compounding notes** are not here — see `docs/memory/lessons.md`.

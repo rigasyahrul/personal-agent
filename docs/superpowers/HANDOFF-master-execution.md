@@ -4,7 +4,7 @@
 **Role:** One **master** Amp thread coordinates the project. It does **not** implement bulk application code itself. It spawns, tracks, reviews, and ships via **worker** threads (and in-thread subagents when cheaper).  
 **Plan SoT:** `docs/superpowers/plans/2026-08-12-personal-agent-v1.md`  
 **Spec SoT:** `docs/superpowers/specs/2026-08-12-personal-agent-design.md`  
-**Lessons:** `docs/memory/2026-08-12-lessons.md` + `AGENTS.md`
+**Lessons:** `docs/memory/lessons.md` + `AGENTS.md`
 
 ---
 
@@ -46,7 +46,7 @@ docs/superpowers/HANDOFF-master-execution.md
 - Drive the approved plan phase-by-phase:
   docs/superpowers/plans/2026-08-12-personal-agent-v1.md
 - Spec SoT: docs/superpowers/specs/2026-08-12-personal-agent-design.md
-- Lessons: docs/memory/2026-08-12-lessons.md and AGENTS.md
+- Lessons: docs/memory/lessons.md and AGENTS.md
 - Do NOT re-brainstorm product. Do NOT rewrite the plan unless blocked.
 - Prefer NOT writing bulk app code in this thread. Coordinate workers.
 
@@ -116,7 +116,7 @@ Use Superpowers. Load using-superpowers, then:
 - Follow plan Interfaces / Global Constraints.
 - Go 1.24+, module github.com/rigasyahrul/personal-agent.
 - Ship = push your branch (and PR/merge only if master asked).
-- Append lessons only for real mistakes: docs/memory/YYYY-MM-DD-lessons.md
+- Prepend lessons only for real mistakes: docs/memory/lessons.md (newest first + Index)
 - Standing rules: AGENTS.md
 
 ## Process
@@ -212,7 +212,7 @@ When all phases `done`:
 | Design approved | `docs/superpowers/specs/2026-08-12-personal-agent-design.md` |
 | Plan approved (Oracle) | `docs/superpowers/plans/2026-08-12-personal-agent-v1.md` |
 | Plan lock / drafts | `…-v1-lock.md`, `…-v1-drafts/` |
-| Lessons + AGENTS rules | `docs/memory/2026-08-12-lessons.md`, `AGENTS.md` |
+| Lessons + AGENTS rules | `docs/memory/lessons.md`, `AGENTS.md` |
 | Greenfield app | still no `go.mod` until Phase 1 |
 
 ---

@@ -12,7 +12,7 @@ allowed-tools:
 
 # Synthesize Memory
 
-Implements the synthesis tier of the *Memory Synthesis from Execution Logs* pattern. The `compounding-engineering` skill appends lesson sections under `docs/memory/*-lessons.md`; this skill periodically reads across those lessons, finds what recurs, and promotes it into durable artifacts. Lessons capture; synthesis compounds.
+Implements the synthesis tier of the *Memory Synthesis from Execution Logs* pattern. The `compounding-engineering` skill prepends lesson sections under `docs/memory/lessons.md`; this skill periodically reads across those lessons, finds what recurs, and promotes it into durable artifacts. Lessons capture; synthesis compounds.
 
 > Source of truth: @memory-synthesis-from-execution-logs.md and `../compounding-engineering/compounding-engineering-pattern.md`.
 
@@ -28,10 +28,10 @@ If there are fewer than ~5 independent lesson sections, say the corpus is too sm
 
 ```bash
 ls docs/memory/
-# Primary: docs/memory/2026-08-12-lessons.md (one file; ### sections)
+# Primary: docs/memory/lessons.md (one stable file; ### sections, newest first + Index)
 ```
 
-Read every `###` lesson section. Prefer the project's one-file format (`**Wrong**` / `**What worked**` / `**Rule**` / `**Codified into**`). If multi-file diary entries with `synthesized: false` frontmatter exist, include those too.
+Read every `###` lesson section (and the Index). Prefer the project's one-file format (`**Tags**` / `**Wrong**` / `**What worked**` / `**Rule**` / `**Codified into**`). If multi-file diary entries with `synthesized: false` frontmatter exist, include those too.
 
 Also skim `AGENTS.md` standing rules — you need them in Step 3 to detect contradictions.
 
@@ -62,8 +62,8 @@ Rules:
 
 ## Step 4 — Mark and report
 
-1. In the lessons file, mark promoted sections with a short note under the section (e.g. `**Synthesized:** YYYY-MM-DD → AGENTS.md / …`) so the next run does not re-promote blindly.
-2. Append a short synthesis report section (`### YYYY-MM-DD — memory synthesis`) listing: sections reviewed, patterns promoted (with artifact paths), the watch list, and anything pruned or superseded.
+1. In `docs/memory/lessons.md`, mark promoted sections with a short note under the section (e.g. `**Synthesized:** YYYY-MM-DD → AGENTS.md / …`) so the next run does not re-promote blindly.
+2. Prepend a short synthesis report section (`### YYYY-MM-DD — memory synthesis`) under Lessons (newest first), listing: sections reviewed, patterns promoted (with artifact paths), the watch list, and anything pruned or superseded. Refresh the Index.
 3. Prune only if the user asks: move long-superseded material to `docs/memory/archive/` — never delete; the evidence trail matters.
 
 ## Guard against the failure modes

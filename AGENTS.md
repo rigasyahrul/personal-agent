@@ -36,25 +36,28 @@ Pattern: [Compounding Engineering](https://www.agentic-patterns.com/patterns/com
 |------|--------|
 | Specs | `docs/superpowers/specs/YYYY-MM-DD-*-design.md` |
 | Plans (+ optional lock/drafts) | `docs/superpowers/plans/YYYY-MM-DD-*.md` |
-| **Lessons learned** | **`docs/memory/YYYY-MM-DD-lessons.md`** (one file; append) |
+| **Lessons learned** | **`docs/memory/lessons.md`** (one stable file; newest first) |
 | Standing rules | **This file** (short bullets below) |
 
-After non-trivial work or a user correction: run **`compounding-engineering`** (append lesson under `docs/memory/`, standing bullet here if it should load every session). Periodically run **`synthesize-memory`** when lessons recur.
+**Memory layers:** Standing rules here load every session. `docs/memory/lessons.md` is on-demand evidence (compound / synthesize / repeated trap) — do not dump the whole diary into every prompt.
+
+After non-trivial work or a user correction: run **`compounding-engineering`** (prepend lesson under `docs/memory/lessons.md`, standing bullet here if it should load every session). Periodically run **`synthesize-memory`** when lessons recur.
 
 ### Standing rules
 
-- **Ship = push.** Commit is not enough. After ship/done/archive: `git push`, confirm not `ahead of origin`, then archive the thread. → details in `docs/memory/2026-08-12-lessons.md`
-- **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is lessons only.
-- **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; Oracle until Approved. → `docs/memory/2026-08-12-lessons.md`
+- **Ship = push.** Commit is not enough. After ship/done/archive: `git push`, confirm not `ahead of origin`, then archive the thread. → `docs/memory/lessons.md`
+- **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is lessons only (`docs/memory/lessons.md`).
+- **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; high-stakes review until Approved. → `docs/memory/lessons.md`
 - **No extra doc trees** (`docs/solutions/`, process/planning splits) unless the user asks. Prefer one lessons file + AGENTS.md.
+- **Lessons path is stable:** always `docs/memory/lessons.md`. Prepend newest-first; refresh the Index. Never create per-session `YYYY-MM-DD-lessons.md`.
 - **v1 execution:** master thread = `docs/superpowers/HANDOFF-master-execution.md` + board `STATUS-v1.md`. Workers implement phases; master coordinates merge/ship.
-- **High-stakes review on workers:** **`consulting-grok-review`** via a **new Grok 4.5 thread** (`amp --mode grok45 -ox -x '…'` + `reviewer-prompt` contract). Do **not** use built-in `oracle` or Task/OpenAI subagents (no ChatGPT). Never substitute silent self-review. → `docs/memory/2026-08-12-lessons.md`
-- **Darwin is a first-class test target for FS/shell.** Linux-only rename APIs, bash-4 empty arrays, “reject any ancestor symlink”, and chmod-immutable-before-rename all break macOS `make test`. Platform-split syscalls; resolve root path with `EvalSymlinks` then block links *inside* the root; seal trees only after rename. → `docs/memory/2026-08-12-lessons.md` (2026-08-19 macOS gaps)
-- **Makefile UX:** `.DEFAULT_GOAL` is `help`. Public targets need `## description`, a `.PHONY` entry, and inclusion in the matching `print-help-section` list. Do not let bare `make` run tests/build. Root binary from `make build` is gitignored (`/personal-agent`). → `docs/memory/2026-08-12-lessons.md`
-- **Skill tool miss ≠ skip.** If Amp’s Skill tool says a skill in this file / `.agents/skills/` is “not found”, `Read .agents/skills/<name>/SKILL.md` and follow it (especially `compounding-engineering`, `synthesize-memory`). → `docs/memory/2026-08-12-lessons.md`
-- **Polled SPA UIs:** never `innerHTML`-replace a focused composer/input on every poll. Patch messages/status/disabled in place; full shell rebuild only on session switch / missing shell. Keep a focus regression test. → `docs/memory/2026-08-12-lessons.md` (2026-08-19 sessions focus)
+- **High-stakes review on workers:** **`consulting-grok-review`** via a **new Grok 4.5 thread** (`amp --mode grok45 -ox -x '…'` + `reviewer-prompt` contract). Do **not** use built-in `oracle` or Task/OpenAI subagents (no ChatGPT). Never substitute silent self-review. → `docs/memory/lessons.md`
+- **Darwin is a first-class test target for FS/shell.** Linux-only rename APIs, bash-4 empty arrays, “reject any ancestor symlink”, and chmod-immutable-before-rename all break macOS `make test`. Platform-split syscalls; resolve root path with `EvalSymlinks` then block links *inside* the root; seal trees only after rename. → `docs/memory/lessons.md` (macOS gaps)
+- **Makefile UX:** `.DEFAULT_GOAL` is `help`. Public targets need `## description`, a `.PHONY` entry, and inclusion in the matching `print-help-section` list. Do not let bare `make` run tests/build. Root binary from `make build` is gitignored (`/personal-agent`). → `docs/memory/lessons.md`
+- **Skill tool miss ≠ skip.** If Amp’s Skill tool says a skill in this file / `.agents/skills/` is “not found”, `Read .agents/skills/<name>/SKILL.md` and follow it (especially `compounding-engineering`, `synthesize-memory`). → `docs/memory/lessons.md`
+- **Polled SPA UIs:** never `innerHTML`-replace a focused composer/input on every poll. Patch messages/status/disabled in place; full shell rebuild only on session switch / missing shell. Keep a focus regression test. → `docs/memory/lessons.md` (sessions focus)
 - **UI fix ≠ served fix.** If user hits `localhost:8080`, check who listens (`lsof`/Docker) and that served asset bytes match the edit (`curl …/js/…`) before claiming success. Baked images do not see host `web/` until rebuild or a dev mount.
-- **Docker local loop:** prod compose stays image-baked (no host source mounts). Live API+web = `make docker-dev` (`docker-compose.yml` + `docker-compose.dev.yml` override, `air`, `..:/src`). Do not put live mounts on the prod compose file. → `docs/memory/2026-08-12-lessons.md`, `docs/ops/deploy.md`
+- **Docker local loop:** prod compose stays image-baked (no host source mounts). Live API+web = `make docker-dev` (`docker-compose.yml` + `docker-compose.dev.yml` override, `air`, `..:/src`). Do not put live mounts on the prod compose file. → `docs/memory/lessons.md`, `docs/ops/deploy.md`
 
 ## Notes for Amp orbs
 
