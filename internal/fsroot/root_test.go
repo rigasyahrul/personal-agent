@@ -384,3 +384,36 @@ func TestEditFileAtomicRequiresExactlyOneMatch(t *testing.T) {
 		t.Fatal("duplicate old text accepted")
 	}
 }
+
+func TestRootRejectsSymlinkLeafAndAncestor(t *testing.T) {
+	base := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.md"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "secret.md"), filepath.Join(base, "leaf.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(base, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	r, err := fsroot.Open(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	for _, path := range []string{"leaf.md", "linked/secret.md"} {
+		t.Run(path, func(t *testing.T) {
+			if _, err := r.ReadFile(path, 1<<20); err == nil {
+				t.Fatalf("ReadFile(%q) followed a symlink", path)
+			}
+			if err := r.WriteFileAtomic(path, []byte("changed"), 0o600); err == nil {
+				t.Fatalf("WriteFileAtomic(%q) followed a symlink", path)
+			}
+		})
+	}
+	got, err := os.ReadFile(filepath.Join(outside, "secret.md"))
+	if err != nil || string(got) != "secret" {
+		t.Fatalf("outside file changed: body=%q err=%v", got, err)
+	}
+}
