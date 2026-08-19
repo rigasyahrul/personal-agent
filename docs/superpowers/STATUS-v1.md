@@ -12,7 +12,7 @@
 | 4 Workspace tools | 21–24 | 3 | no | done | impl/v1-p4-tools | [T-019ff945…](https://ampcode.com/threads/T-019ff945-5949-7619-946a-e050c40d177f) | 2026-08-13 |
 | 5 Promote + review | 25–32 | 4 | no | done | impl/v1-p5-promote-review | [T-019ff978…](https://ampcode.com/threads/T-019ff978-ac06-73fc-9f51-d4c8fcff2854) | 2026-08-13 |
 | 6 Backup | 33–36 | 5 | no | done | impl/v1-p6-backup | [T-019ffad8…](https://ampcode.com/threads/T-019ffad8-acf3-712c-b091-a1b91d0ae257) **grok45** | 2026-08-19 |
-| 7 Hardening | 37–42 | 6 | no | running | impl/v1-p7-hardening | (dispatching grok45) | 2026-08-19 |
+| 7 Hardening | 37–42 | 6 | no | running | impl/v1-p7-hardening | [T-01a0181b…](https://ampcode.com/threads/T-01a0181b-8ad0-71bc-95d2-c8912ef20238) **grok45** | 2026-08-19 |
 
 **Status:** `todo` | `running` | `review` | `done` | `blocked`
 
@@ -25,6 +25,7 @@
 | 2026-08-13 | Phase 6 grok45 worker started: T-019ffad8… |
 | 2026-08-19 | Phase 6 DONE @ `84ef54b` (9 commits). consulting-grok-review YES after ctx fix `57ae777`. Master `go test ./...` green. FF-merged to main. |
 | 2026-08-19 | Dispatching Phase 7 Hardening (tasks 37–42) on **grok45**. |
+| 2026-08-19 | Phase 7 worker: https://ampcode.com/threads/T-01a0181b-8ad0-71bc-95d2-c8912ef20238 |
 
 ## Active blockers
 
