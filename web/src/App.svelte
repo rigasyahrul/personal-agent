@@ -7,6 +7,9 @@
   import AppShell from './shell/AppShell.svelte';
   import BootstrapPage from './routes/auth/BootstrapPage.svelte';
   import LoginPage from './routes/auth/LoginPage.svelte';
+  import HomePage from './routes/HomePage.svelte';
+  import ProjectsPage from './routes/ProjectsPage.svelte';
+  import VaultsPage from './routes/VaultsPage.svelte';
 
   let { authLoader = loadAuthState }: { authLoader?: typeof loadAuthState } = $props();
   let auth = $state<AuthState>({ status: 'loading' });
@@ -42,6 +45,14 @@
   <main class="auth-canvas"><p role="alert">{auth.message}</p></main>
 {:else}
   <AppShell {context} {route} health="Storage status unavailable">
-    <p>Route: {route.name}</p>
+    {#if route.name === 'home'}
+      <HomePage />
+    {:else if route.name === 'projects'}
+      <ProjectsPage />
+    {:else if route.name === 'vaults'}
+      <VaultsPage />
+    {:else}
+      <p>Route: {route.name}</p>
+    {/if}
   </AppShell>
 {/if}

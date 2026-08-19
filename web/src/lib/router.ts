@@ -72,6 +72,21 @@ export function routeToHash(route: AppRoute): string {
   }
 }
 
+
+export type GlobalRoute =
+  | { name: 'home' }
+  | { name: 'projects' }
+  | { name: 'vaults' }
+
+/** Exact global catalog hashes; used by App route selection helpers. */
+export function parseGlobalHash(hash: string): GlobalRoute | null {
+  const path = hash.replace(/^#/, '').replace(/\/$/, '') || '/home'
+  if (path === '/home') return { name: 'home' }
+  if (path === '/projects') return { name: 'projects' }
+  if (path === '/vaults') return { name: 'vaults' }
+  return null
+}
+
 export function navigate(hash: string): void {
   if (typeof location === 'undefined') return
   location.hash = hash.startsWith('#') ? hash.slice(1) : hash
