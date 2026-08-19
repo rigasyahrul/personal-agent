@@ -42,3 +42,7 @@ go.work.sum
 
 # macOS
 .DS_Store
+
+# Vite / npm (web UI)
+web/node_modules/
+web/dist/
