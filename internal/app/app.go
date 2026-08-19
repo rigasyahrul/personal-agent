@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -123,6 +124,14 @@ func NewWithDependencies(ctx context.Context, cfg config.Config, deps Dependenci
 	if static == nil {
 		static = http.Dir("web/dist")
 	}
+	var ui http.Handler
+	if rawURL := os.Getenv("PA_UI_DEV_PROXY"); rawURL != "" {
+		ui, err = httpapi.NewUIProxy(rawURL)
+		if err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	sinkConfigured := cfg.BackupS3Bucket != "" || deps.ObjectSink != nil
 	application := &App{
@@ -143,6 +152,7 @@ func NewWithDependencies(ctx context.Context, cfg config.Config, deps Dependenci
 			BootstrapToken:       cfg.BootstrapToken,
 			SecureCookies:        secure,
 			Static:               static,
+			UI:                   ui,
 			Publish:              machine,
 			Models:               cfg.Models,
 			Provider:             provider,

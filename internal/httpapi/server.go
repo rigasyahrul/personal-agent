@@ -21,6 +21,7 @@ type ServerDeps struct {
 	BootstrapToken string
 	SecureCookies  bool
 	Static         http.FileSystem
+	UI             http.Handler
 	Publish        *publish.Machine
 	Models         []config.ModelRef
 	Provider       agent.Provider
@@ -85,8 +86,12 @@ func New(deps ServerDeps) http.Handler {
 	mux.Handle("GET /api/v1/sessions/{id}/workspace/tree", auth(http.HandlerFunc(ch.workspaceTree)))
 	mux.Handle("GET /api/v1/sessions/{id}/workspace/file", auth(http.HandlerFunc(ch.workspaceFile)))
 	mux.Handle("GET /health", healthHandler(deps.DataDir))
-	if deps.Static != nil {
-		mux.Handle("GET /", http.FileServer(deps.Static))
+	ui := deps.UI
+	if ui == nil {
+		ui = http.FileServer(deps.Static)
+	}
+	if deps.UI != nil || deps.Static != nil {
+		mux.Handle("GET /", ui)
 	}
 	return mux
 }
