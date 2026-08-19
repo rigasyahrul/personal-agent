@@ -45,6 +45,7 @@ After non-trivial work or a user correction: append a lesson under `docs/memory/
 - **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; Oracle until Approved. → `docs/memory/2026-08-12-lessons.md`
 - **No extra doc trees** (`docs/solutions/`, process/planning splits) unless the user asks. Prefer one lessons file + AGENTS.md.
 - **v1 execution:** master thread = `docs/superpowers/HANDOFF-master-execution.md` + board `STATUS-v1.md`. Workers implement phases; master coordinates merge/ship.
+- **High-stakes review on workers:** use skill `consulting-grok-review` (Task + `reviewer-prompt.md`). Prefer built-in `oracle` only if it works without provider errors; on usage/provider failure do **not** self-review as substitute — dispatch consulting-grok-review. → `docs/memory/2026-08-12-lessons.md`
 
 ## Notes for Amp orbs
 
