@@ -36,7 +36,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 	realClock := clock.RealClock{}
 	barrier := &backup.Barrier{}
-	machine := &publish.Machine{DB: db, DataDir: cfg.DataDir, Clock: realClock, Barrier: barrier}
+	sessionLocks := store.NewSessionLocks()
+	machine := &publish.Machine{DB: db, DataDir: cfg.DataDir, Clock: realClock, Barrier: barrier, SessionLocks: sessionLocks}
 	if err := machine.RecoverAll(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("recover unfinished publications: %w", err)

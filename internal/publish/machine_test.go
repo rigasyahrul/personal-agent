@@ -17,6 +17,7 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/layout"
 	"github.com/rigasyahrul/personal-agent/internal/publish"
+	"github.com/rigasyahrul/personal-agent/internal/store"
 	"github.com/rigasyahrul/personal-agent/internal/testutil"
 )
 
@@ -815,5 +816,67 @@ func TestUnknownProjectAndUnsafeOpIDCreateNoArtifacts(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(d, "staging")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("staging artifact: %v", err)
+	}
+}
+
+func TestSessionDeleteDuringPromoteHasNoOrphanReadyNote(t *testing.T) {
+	d, db, c, in := promoteFixture(t)
+	locks := store.NewSessionLocks()
+	sessions := &store.SessionStore{DB: db, DataDir: d, Now: func() time.Time { return c.Now() }, Locks: locks}
+	machine := &publish.Machine{DB: db, DataDir: d, Clock: c, SessionLocks: locks}
+	reachedFreeze := make(chan struct{})
+	continuePromote := make(chan struct{})
+	machine.AfterTransition = func(status string) {
+		if status == "frozen" {
+			select {
+			case <-reachedFreeze:
+				// already closed
+			default:
+				close(reachedFreeze)
+			}
+			<-continuePromote
+		}
+	}
+	promoteDone := make(chan error, 1)
+	go func() {
+		_, _, err := machine.Run(context.Background(), in)
+		promoteDone <- err
+	}()
+	select {
+	case <-reachedFreeze:
+	case <-time.After(5 * time.Second):
+		t.Fatal("promote never reached frozen")
+	}
+	deleteDone := make(chan error, 1)
+	go func() { deleteDone <- sessions.Delete(context.Background(), in.SessionID) }()
+	// Give delete a chance to block on the session lock.
+	time.Sleep(20 * time.Millisecond)
+	close(continuePromote)
+	promoteErr := <-promoteDone
+	deleteErr := <-deleteDone
+	if promoteErr != nil && deleteErr != nil {
+		t.Fatalf("both operations failed: promote=%v delete=%v", promoteErr, deleteErr)
+	}
+	rows, err := db.Query(`SELECT id, relative_path FROM notes WHERE status='ready'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	projectRoot := layout.ProjectRoot(d, "v1", "p1")
+	for rows.Next() {
+		var id, rel string
+		if err := rows.Scan(&id, &rel); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(layout.SourceDir(projectRoot), filepath.FromSlash(rel))); err != nil {
+			t.Fatalf("orphan ready note %s at %s: %v", id, rel, err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	workspace := layout.SessionWorkspace(d, "project", "v1", "p1", in.SessionID)
+	if _, err := os.Stat(workspace); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("workspace still exists or stat failed: %v", err)
 	}
 }

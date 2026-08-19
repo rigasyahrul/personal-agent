@@ -51,7 +51,11 @@ type Machine struct {
 	DataDir string
 	Clock   clock.Clock
 	Barrier mutBarrier
-	mu      sync.Mutex
+	// SessionLocks serializes promote against session delete for the same session.
+	SessionLocks *store.SessionLocks
+	// AfterTransition is a test-only hook invoked after a committed status transition.
+	AfterTransition func(status string)
+	mu              sync.Mutex
 }
 
 func validComponent(s string) bool {
@@ -146,6 +150,10 @@ func (m *Machine) writeStage(kind, id string, body []byte) error {
 }
 
 func (m *Machine) Run(ctx context.Context, in PublishInput) (string, string, error) {
+	if in.Kind == "promote" && m.SessionLocks != nil && in.SessionID != "" {
+		unlock := m.SessionLocks.Lock(in.SessionID)
+		defer unlock()
+	}
 	var status, noteID string
 	runLocked := func() error {
 		m.mu.Lock()
@@ -366,6 +374,7 @@ func (m *Machine) advance(ctx context.Context, id, from, to string) error {
 		return err
 	}
 	if n == 1 {
+		m.fireAfterTransition(to)
 		return nil
 	}
 	o, err = m.operationByID(ctx, o.Kind, id)
@@ -376,6 +385,12 @@ func (m *Machine) advance(ctx context.Context, id, from, to string) error {
 		return nil
 	}
 	return fmt.Errorf("operation transition %s to %s affected %d rows", from, to, n)
+}
+
+func (m *Machine) fireAfterTransition(status string) {
+	if m.AfterTransition != nil {
+		m.AfterTransition(status)
+	}
 }
 func (m *Machine) fail(ctx context.Context, o store.DirectOperation, cause error) error {
 	tx, err := m.DB.BeginTx(ctx, nil)
@@ -444,6 +459,8 @@ func (m *Machine) resume(ctx context.Context, o store.DirectOperation) error {
 				if err = m.advance(ctx, o.ID, "accepted", "frozen"); err != nil {
 					return err
 				}
+			} else {
+				m.fireAfterTransition("frozen")
 			}
 		case "frozen":
 			if err := m.reserve(ctx, o); err != nil {
