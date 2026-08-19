@@ -43,11 +43,25 @@ func TestChatAPIProviderFailureIsSafeIdempotentAndHistoryReadable(t *testing.T) 
 	body := map[string]string{"content": "hello", "request_key": "same"}
 	first := apiRequest(t, h, "POST", path, body, cookies, "csrf")
 	second := apiRequest(t, h, "POST", path, body, cookies, "csrf")
-	if first.Code != 502 || second.Code != 202 || p.calls.Load() != 1 || strings.Contains(first.Body.String(), "secret") {
-		t.Fatalf("responses=%d/%d calls=%d body=%s", first.Code, second.Code, p.calls.Load(), first.Body.String())
+	// Async Start: both admissions succeed (same key). Provider failure terminalizes the run in-background.
+	if first.Code != 202 || second.Code != 202 {
+		t.Fatalf("responses=%d/%d body=%s/%s", first.Code, second.Code, first.Body.String(), second.Body.String())
 	}
+	// Wait until the provider was invoked exactly once and the run finished.
+	deadline := time.Now().Add(2 * time.Second)
+	for p.calls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if p.calls.Load() != 1 {
+		t.Fatalf("provider calls=%d, want 1", p.calls.Load())
+	}
+	// Give execute a moment to terminalize.
+	time.Sleep(50 * time.Millisecond)
 	if history := apiRequest(t, h, "GET", path, nil, cookies, ""); history.Code != 200 || !strings.Contains(history.Body.String(), "hello") {
 		t.Fatalf("history=%d %s", history.Code, history.Body.String())
+	}
+	if strings.Contains(first.Body.String(), "secret") || strings.Contains(second.Body.String(), "secret") {
+		t.Fatalf("leaked provider error: %s %s", first.Body.String(), second.Body.String())
 	}
 }
 
@@ -152,6 +166,18 @@ func TestChatAPIDeleteBlocksWhileProviderRunIsActive(t *testing.T) {
 	close(provider.release)
 	if got := <-chatDone; got != http.StatusAccepted {
 		t.Fatalf("chat response = %d", got)
+	}
+	// Async Start: wait until the agent run is terminal before delete.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		var active int
+		if err := db.QueryRow(`SELECT count(*) FROM agent_runs WHERE session_id=? AND status IN ('queued','running')`, session.ID).Scan(&active); err != nil {
+			t.Fatal(err)
+		}
+		if active == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	if got := apiRequest(t, h, "DELETE", "/api/v1/sessions/"+session.ID, nil, cookies, "csrf").Code; got != http.StatusNoContent {
 		t.Fatalf("delete after run = %d", got)

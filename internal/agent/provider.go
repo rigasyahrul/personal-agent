@@ -48,10 +48,13 @@ type MessageStore interface {
 	Append(context.Context, domain.Message) error
 }
 
+// RunStore is the low-level run surface used by tests and wrappers.
+// Production admission goes through store.RunStore.Admit via Runner.Runs (RunAdmissions).
 type RunStore interface {
 	BeginOrGet(context.Context, string, string) (string, bool, error)
 	MarkRunning(context.Context, string) error
 	MarkDone(context.Context, string, string, string) error
+	ByID(context.Context, string) (domain.AgentRun, error)
 }
 
 type SessionReader interface {

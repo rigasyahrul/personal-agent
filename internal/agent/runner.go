@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rigasyahrul/personal-agent/internal/agent/tools"
@@ -14,13 +15,28 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/fsroot"
 	"github.com/rigasyahrul/personal-agent/internal/layout"
+	"github.com/rigasyahrul/personal-agent/internal/store"
 )
 
 const maxToolRounds = 8
 
+// ErrSessionBusy is returned when a different request key tries to start
+// while a non-terminal agent run is already admitted for the session.
+var ErrSessionBusy = errors.New("session has an active agent run")
+
 // mutBarrier is implemented by *backup.Barrier (local to avoid import cycles).
 type mutBarrier interface {
 	Mutate(func() error) error
+}
+
+// RunAdmissions is the store surface used by Runner.Start.
+type RunAdmissions interface {
+	Admit(ctx context.Context, sessionID, requestKey, userMessage string, now time.Time) (store.RunAdmission, error)
+	MarkRunning(ctx context.Context, runID string) error
+	MarkDone(ctx context.Context, runID, status, errMsg string) error
+	ByID(ctx context.Context, runID string) (domain.AgentRun, error)
+	// BeginOrGet retained for tests that exercise low-level admission.
+	BeginOrGet(ctx context.Context, sessionID, requestKey string) (string, bool, error)
 }
 
 type Runner struct {
@@ -28,43 +44,62 @@ type Runner struct {
 	DataDir  string
 	Provider Provider
 	Messages MessageStore
-	Runs     RunStore
+	Runs     RunAdmissions
 	Sessions SessionReader
 	Clock    clock.Clock
 	Barrier  mutBarrier
+
+	// bg tracks in-flight execute goroutines so tests can wait for completion.
+	bg sync.WaitGroup
 }
 
-func (r *Runner) Start(ctx context.Context, sessionID, requestKey, userMessage string) (runID string, err error) {
-	runID, existing, err := r.Runs.BeginOrGet(ctx, sessionID, requestKey)
-	if err != nil || existing {
-		return runID, err
-	}
-	fail := func(cause error) (string, error) {
-		if doneErr := r.Runs.MarkDone(ctx, runID, domain.AgentRunStatusFailed, cause.Error()); doneErr != nil {
-			return runID, errors.Join(cause, fmt.Errorf("mark run failed: %w", doneErr))
-		}
-		return runID, cause
-	}
-
-	session, err := r.Sessions.Get(ctx, sessionID)
+func (r *Runner) Start(ctx context.Context, sessionID, requestKey, userMessage string) (string, error) {
+	admission, err := r.Runs.Admit(ctx, sessionID, requestKey, userMessage, r.now())
 	if err != nil {
-		return fail(err)
+		if errors.Is(err, store.ErrRunBusy) || errors.Is(err, store.ErrSessionBusy) {
+			return "", ErrSessionBusy
+		}
+		return "", err
 	}
-	run := runID
-	if err := r.Messages.Append(ctx, domain.Message{SessionID: sessionID, RunID: &run, Role: domain.MessageRoleUser,
-		Content: userMessage, Status: domain.MessageStatusComplete, CreatedAt: r.now()}); err != nil {
-		return fail(err)
+	if admission.Existing {
+		return admission.RunID, nil
+	}
+	r.bg.Add(1)
+	go func(runID string) {
+		defer r.bg.Done()
+		r.executeRun(context.Background(), runID)
+	}(admission.RunID)
+	return admission.RunID, nil
+}
+
+// Wait blocks until all background execute goroutines finish. Tests only.
+func (r *Runner) Wait() { r.bg.Wait() }
+
+func (r *Runner) executeRun(ctx context.Context, runID string) {
+	fail := func(cause error) {
+		_ = r.Runs.MarkDone(ctx, runID, domain.AgentRunStatusFailed, cause.Error())
+	}
+	run, err := r.Runs.ByID(ctx, runID)
+	if err != nil {
+		fail(err)
+		return
+	}
+	session, err := r.Sessions.Get(ctx, run.SessionID)
+	if err != nil {
+		fail(err)
+		return
 	}
 	if err := r.Runs.MarkRunning(ctx, runID); err != nil {
-		return fail(err)
+		fail(err)
+		return
 	}
 	if err := r.execute(ctx, runID, session); err != nil {
-		return fail(err)
+		fail(err)
+		return
 	}
 	if err := r.Runs.MarkDone(ctx, runID, domain.AgentRunStatusCompleted, ""); err != nil {
-		return fail(err)
+		fail(err)
 	}
-	return runID, nil
 }
 
 func (r *Runner) execute(ctx context.Context, runID string, session domain.Session) error {
