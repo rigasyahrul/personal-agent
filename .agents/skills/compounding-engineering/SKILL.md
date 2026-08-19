@@ -75,6 +75,7 @@ Every compounding run MUST update the project's lessons log. This is the durable
 ```
 
 - If an entry already covers the same learning, update or supersede it (note supersession) rather than duplicating.
+- **Session wrap:** if this session already wrote the lesson while implementing, wrap = verify codification + attach evidence (thread/commit) on that section — do **not** prepend a second `###` for the same learning.
 - Standing rules that should load every session go in **`AGENTS.md`** (short bullets), with a pointer back to the lesson. Do **not** expect agents to re-read the full diary every session.
 
 **Periodic synthesis:** when a pattern appears in **3 or more** independent lessons, promote it via the `synthesize-memory` skill into durable artifacts (standing bullets, hooks, tests). Diaries/lessons capture; synthesis compounds.
