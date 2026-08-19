@@ -96,6 +96,7 @@ $PA_DATA_DIR/
 
 ## Docs
 
+- **Owner handbook (start here):** [`docs/manual/README.md`](docs/manual/README.md)
 - Design: [`docs/superpowers/specs/2026-08-12-personal-agent-design.md`](docs/superpowers/specs/2026-08-12-personal-agent-design.md)
 - Deploy: [`docs/ops/deploy.md`](docs/ops/deploy.md)
 - Backup / restore: [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md)
