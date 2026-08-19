@@ -17,9 +17,24 @@ type Result struct {
 	ChangedPath string `json:"changed_path,omitempty"`
 }
 
-type Workspace struct{ root *fsroot.Root }
+// MutBarrier is implemented by *backup.Barrier (local to avoid import cycles).
+type MutBarrier interface {
+	Mutate(func() error) error
+}
+
+type Workspace struct {
+	root    *fsroot.Root
+	Barrier MutBarrier
+}
 
 func NewWorkspace(root *fsroot.Root) *Workspace { return &Workspace{root: root} }
+
+func (w *Workspace) withMutate(fn func() error) error {
+	if w.Barrier == nil {
+		return fn()
+	}
+	return w.Barrier.Mutate(fn)
+}
 
 func decode(raw json.RawMessage, dst any) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
@@ -58,7 +73,9 @@ func (w *Workspace) Execute(ctx context.Context, name string, raw json.RawMessag
 		if len(a.Content) > paths.MaxMarkdownBytes {
 			return Result{}, fmt.Errorf("content exceeds %d bytes", paths.MaxMarkdownBytes)
 		}
-		if err := w.root.WriteFileAtomic(a.Path, []byte(a.Content), 0644); err != nil {
+		if err := w.withMutate(func() error {
+			return w.root.WriteFileAtomic(a.Path, []byte(a.Content), 0644)
+		}); err != nil {
 			return Result{}, err
 		}
 		return Result{ChangedPath: a.Path}, nil
@@ -71,7 +88,9 @@ func (w *Workspace) Execute(ctx context.Context, name string, raw json.RawMessag
 		if err := decode(raw, &a); err != nil {
 			return Result{}, err
 		}
-		if err := w.root.EditFileAtomic(a.Path, a.Old, a.Replacement); err != nil {
+		if err := w.withMutate(func() error {
+			return w.root.EditFileAtomic(a.Path, a.Old, a.Replacement)
+		}); err != nil {
 			return Result{}, err
 		}
 		return Result{ChangedPath: a.Path}, nil
@@ -82,7 +101,9 @@ func (w *Workspace) Execute(ctx context.Context, name string, raw json.RawMessag
 		if err := decode(raw, &a); err != nil {
 			return Result{}, err
 		}
-		if err := w.root.MkdirAll(a.Path, 0755); err != nil {
+		if err := w.withMutate(func() error {
+			return w.root.MkdirAll(a.Path, 0755)
+		}); err != nil {
 			return Result{}, err
 		}
 		return Result{ChangedPath: a.Path}, nil

@@ -18,6 +18,11 @@ import (
 
 const maxToolRounds = 8
 
+// mutBarrier is implemented by *backup.Barrier (local to avoid import cycles).
+type mutBarrier interface {
+	Mutate(func() error) error
+}
+
 type Runner struct {
 	DB       *sql.DB
 	DataDir  string
@@ -26,6 +31,7 @@ type Runner struct {
 	Runs     RunStore
 	Sessions SessionReader
 	Clock    clock.Clock
+	Barrier  mutBarrier
 }
 
 func (r *Runner) Start(ctx context.Context, sessionID, requestKey, userMessage string) (runID string, err error) {
@@ -115,6 +121,7 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 		}
 		defer root.Close()
 		workspace = tools.NewWorkspace(root)
+		workspace.Barrier = r.Barrier
 		req.Tools = workspaceToolDefinitions
 	}
 	run := runID

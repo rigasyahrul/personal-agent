@@ -27,10 +27,11 @@ type noteHandlers struct {
 	dataDir string
 	notes   *store.NoteStore
 	publish *publish.Machine
+	barrier store.MutBarrier
 }
 
-func NoteRoutes(mux *http.ServeMux, db *sql.DB, dataDir string, c clock.Clock, machine *publish.Machine) {
-	h := noteHandlers{db: db, dataDir: dataDir, notes: store.NewNoteStore(db, dataDir), publish: machine}
+func NoteRoutes(mux *http.ServeMux, db *sql.DB, dataDir string, c clock.Clock, machine *publish.Machine, barrier store.MutBarrier) {
+	h := noteHandlers{db: db, dataDir: dataDir, notes: store.NewNoteStore(db, dataDir), publish: machine, barrier: barrier}
 	authenticated := func(next http.Handler) http.Handler { return requireAuthAt(db, c.Now, next) }
 	mux.Handle("GET /api/v1/projects/{id}/tree", authenticated(http.HandlerFunc(h.tree)))
 	mux.Handle("POST /api/v1/projects/{id}/folders", authenticated(RequireCSRF(http.HandlerFunc(h.createFolder))))
@@ -162,7 +163,12 @@ func (h noteHandlers) createFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer root.Close()
-	err = root.MkdirAll(p, 0700)
+	mkdir := func() error { return root.MkdirAll(p, 0700) }
+	if h.barrier != nil {
+		err = h.barrier.Mutate(mkdir)
+	} else {
+		err = mkdir()
+	}
 	if errors.Is(err, fs.ErrExist) {
 		http.Error(w, "folder exists", 409)
 		return
