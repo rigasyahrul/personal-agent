@@ -22,6 +22,17 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 
 If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.
 
+## Large-plan delivery (this repo)
+
+If the plan will be **long** (roughly 6+ tasks across multiple phases, or clearly multi-thousand lines):
+
+1. **Same turn as starting the plan:** write `docs/superpowers/plans/YYYY-MM-DD-<feature>-lock.md` (scope freeze + draft file list + authority rules).
+2. Dispatch **parallel agents** (or Task tool) to write phase drafts under `docs/superpowers/plans/YYYY-MM-DD-<feature>-drafts/` — one draft file per phase, disjoint task number ranges.
+3. **You** write header + **Canonical contracts** + file map, then **assemble** drafts into one plan at `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`.
+4. Do **not** solo-author the entire mega-plan in silence — the human sees delay as stuck work. → `docs/memory/lessons.md` (2026-08-19 big plans).
+
+Small plans (single phase, few tasks) may stay single-threaded.
+
 ## File Structure
 
 Before defining tasks, map out which files will be created or modified and what each one is responsible for. This is where decomposition decisions get locked in.

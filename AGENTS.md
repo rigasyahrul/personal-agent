@@ -48,6 +48,7 @@ After non-trivial work or a user correction: run **`compounding-engineering`** (
 - **Ship = push.** Commit is not enough. After ship/done/archive: `git push`, confirm not `ahead of origin`, then archive the thread. → `docs/memory/lessons.md`
 - **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is lessons only (`docs/memory/lessons.md`).
 - **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; high-stakes review until Approved. → `docs/memory/lessons.md`
+- **Large writing-plans:** if the plan has many phases, **same turn** write `…-lock.md`, dispatch **parallel draft agents** into `…-drafts/`, then assemble one plan. Do **not** solo-stall a mega-plan in silence. → `docs/memory/lessons.md`
 - **No extra doc trees** (`docs/solutions/`, process/planning splits) unless the user asks. Prefer one lessons file + AGENTS.md.
 - **Lessons path is stable:** always `docs/memory/lessons.md`. Prepend newest-first; refresh the Index. Never create per-session `YYYY-MM-DD-lessons.md`.
 - **v1 execution:** master thread = `docs/superpowers/HANDOFF-master-execution.md` + board `STATUS-v1.md`. Workers implement phases; master coordinates merge/ship.
