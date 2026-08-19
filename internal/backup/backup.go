@@ -122,7 +122,9 @@ func (s *Service) Run(ctx context.Context) (run domain.BackupRun, err error) {
 
 	run.Status = "succeeded"
 	run.CompletedAt = s.Clock.Now().UTC().Format(time.RFC3339)
-	if err = store.CompleteBackupRun(ctx, s.DB, run); err != nil {
+	// Detach from request ctx: local (and optional upload) already durable; a
+	// canceled client must not flip a successful snapshot to failed via defer.
+	if err = store.CompleteBackupRun(context.Background(), s.DB, run); err != nil {
 		return run, err
 	}
 	return run, nil

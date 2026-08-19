@@ -244,6 +244,42 @@ func TestConfiguredUploadControlsFinalStatus(t *testing.T) {
 	assertStoredStatus(t, db, run.ID, "failed")
 }
 
+func TestRunSucceedsWhenContextCanceledAfterLocalBundle(t *testing.T) {
+	// After local seal + upload, CompleteBackupRun must not depend on a still-live
+	// request context — otherwise client disconnect marks a durable snapshot failed.
+	svc, db, _ := testService(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc.Bucket = "archive"
+	svc.Sink = &cancelAfterUploadSink{cancel: cancel}
+	run, err := svc.Run(ctx)
+	if run.LocalPath == "" {
+		t.Fatalf("expected local bundle: run=%+v err=%v", run, err)
+	}
+	t.Cleanup(func() { unsealTree(t, run.LocalPath) })
+	assertStoredStatus(t, db, run.ID, "succeeded")
+	if run.Status != "succeeded" || run.ManifestHash == "" || run.ObjectKey == "" {
+		t.Fatalf("run=%+v err=%v", run, err)
+	}
+	// err may be nil even if ctx is canceled after durable success.
+	_ = err
+}
+
+// cancelAfterUploadSink cancels the parent context once Upload returns successfully,
+// simulating client disconnect after the durable work finished.
+type cancelAfterUploadSink struct {
+	cancel context.CancelFunc
+}
+
+func (c *cancelAfterUploadSink) Upload(ctx context.Context, localDir, objectPrefix string) error {
+	// Walk once to ensure the dir is readable (same shape as real sink).
+	err := filepath.WalkDir(localDir, func(path string, d os.DirEntry, err error) error {
+		return err
+	})
+	c.cancel()
+	return err
+}
+
 func TestS3SinkUploadsDirectoryTree(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{}`), 0o600); err != nil {
