@@ -162,6 +162,26 @@ func TestProductionImageCopiesOnlyBuiltWebAssets(t *testing.T) {
 	}
 }
 
+func TestDockerDevHMRIsDocumentedAndProductionIsMountFree(t *testing.T) {
+	docs := readFile(t, "../docs/ops/deploy.md")
+	for _, required := range []string{
+		"http://localhost:8080",
+		"PA_UI_DEV_PROXY=http://127.0.0.1:5173",
+		"ws://localhost:8080/@vite-hmr",
+		"Production compose has no host source mounts",
+	} {
+		if !strings.Contains(docs, required) {
+			t.Errorf("deploy docs missing %q", required)
+		}
+	}
+	prod := readFile(t, "docker-compose.yml")
+	for _, forbidden := range []string{"../web:", "..:/src", "PA_UI_DEV_PROXY", "5173:5173"} {
+		if strings.Contains(prod, forbidden) {
+			t.Errorf("production compose must not contain %q", forbidden)
+		}
+	}
+}
+
 func writeExecutable(t *testing.T, path, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {

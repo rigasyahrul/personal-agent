@@ -33,24 +33,28 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up --build
 
 Compose publishes the app on `127.0.0.1:8080` and mounts the `pa-data` volume at `/data`.
 
-### Live-reload development (one service)
+### Live-reload development (Go + Vite HMR)
 
-Production compose uses a baked image (`deploy/Dockerfile`). For local coding where **both** Go API and `web/` should pick up host edits without rebuild/recreate:
+Production compose uses a baked image. Start the one-command API and UI loop:
 
 ```sh
 make docker-dev
+# open http://localhost:8080
 # stop: make docker-dev-down
 ```
 
-`docker-compose.dev.yml` is an **override** of the base compose file (ports, env, `pa-data`). You always pass both `-f` flags; `make docker-dev` does that for you.
+`deploy/docker-compose.dev.yml` mounts the repository at `/src` and starts `deploy/dev-entrypoint.sh`. The script runs Air for Go reloads and Vite for Svelte/TypeScript/CSS HMR. Go remains the only browser-facing server on port 8080: API and health requests terminate in Go, while non-API GETs are proxied because the override sets `PA_UI_DEV_PROXY=http://127.0.0.1:5173`.
 
-| Piece | Behavior |
-|-------|----------|
-| `deploy/Dockerfile.dev` | Go 1.24 + `air` |
-| `deploy/air.toml` | rebuild `./cmd/personal-agent` on `.go` changes |
-| `deploy/docker-compose.dev.yml` | mount `..:/src`, module/build caches, same `pa-data` |
+Vite listens only inside the container on port 5173. Its client uses `host: localhost`, `clientPort: 8080`, and `path: /@vite-hmr`; Go carries `ws://localhost:8080/@vite-hmr`. Edits under `web/src/` update without rebuilding or recreating the container. Air continues to exclude `web/`, because Vite owns frontend watching.
 
-Static UI is `http.Dir("web")` from `/src/web` (bind-mounted). Hard-refresh the browser after JS/CSS edits. Stop the stack before switching back to plain production compose on the same port.
+Before claiming a localhost UI change works:
+
+```sh
+lsof -nP -iTCP:8080 -sTCP:LISTEN
+curl -sf http://127.0.0.1:8080/src/App.svelte | grep 'Personal Agent'
+```
+
+Confirm `/@vite-hmr` is connected in DevTools → Network → WS. Production compose has no host source mounts: `deploy/Dockerfile` builds `web/dist` with Node 22 and copies only that output. Never add `..:/src`, `../web:`, `PA_UI_DEV_PROXY`, or a published Vite port to `deploy/docker-compose.yml`.
 
 ### Persistent volume checks
 
