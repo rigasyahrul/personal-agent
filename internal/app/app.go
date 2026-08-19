@@ -121,7 +121,7 @@ func NewWithDependencies(ctx context.Context, cfg config.Config, deps Dependenci
 	}
 	static := deps.Static
 	if static == nil {
-		static = http.Dir("web")
+		static = http.Dir("web/dist")
 	}
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	sinkConfigured := cfg.BackupS3Bucket != "" || deps.ObjectSink != nil

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -117,5 +118,15 @@ func seedPendingBite(t *testing.T, dataDir string) {
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDefaultStaticDirectoryIsViteDist(t *testing.T) {
+	body, err := os.ReadFile("app.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `http.Dir("web/dist")`) {
+		t.Fatal("default static directory must be web/dist")
 	}
 }

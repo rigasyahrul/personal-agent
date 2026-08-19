@@ -9,9 +9,9 @@ import (
 
 func TestWebContainsPromoteAndReviewContracts(t *testing.T) {
 	tests := map[string][]string{
-		"../../web/js/pages/sessions.js":           {"Save to source", "target_relative_path", "review_mode", "operation_id"},
-		"../../web/js/pages/review.js":             {"project:", "scope=", "caught_up", "row_version", "duration_ms"},
-		"../../web/js/components/status-badges.js": {"Promoting…", "Promote failed — Retry", "Note saved; cards pending…", "Cards failed — Retry cards", "Ready"},
+		"../../web-legacy/js/pages/sessions.js":           {"Save to source", "target_relative_path", "review_mode", "operation_id"},
+		"../../web-legacy/js/pages/review.js":             {"project:", "scope=", "caught_up", "row_version", "duration_ms"},
+		"../../web-legacy/js/components/status-badges.js": {"Promoting…", "Promote failed — Retry", "Note saved; cards pending…", "Cards failed — Retry cards", "Ready"},
 	}
 	for file, wants := range tests {
 		t.Run(filepath.Base(file), func(t *testing.T) {
