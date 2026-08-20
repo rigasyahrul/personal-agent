@@ -34,13 +34,13 @@ Scan this first. Open the linked file only when you need detail.
 | amp | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | compounding | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
+| craft | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
 | darwin | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
+| dist | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
 | docker | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
 | docs | [2026-08-19 — Lessons file is stable `lessons.md`](20260819-2200-lessons-file-is-stable-lessons-md.md) |
 | docs layout | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | fixtures | [2026-08-13 — Verify escaped literals at the byte level](20260813-2300-verify-escaped-literals-at-the-byte-level.md) |
-| craft | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
-| dist | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
 | frontend | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
 | fs | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | git | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
@@ -48,15 +48,19 @@ Scan this first. Open the linked file only when you need detail.
 | go | [2026-08-13 — Verify escaped literals at the byte level](20260813-2300-verify-escaped-literals-at-the-byte-level.md) |
 | grok | [2026-08-19 — consulting-grok-review via Grok thread, not Task/OpenAI](20260819-1700-consulting-grok-review-via-grok-thread-not-task-openai.md) |
 | grok45 | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
+| handoff | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | make | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
 | master | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | memory | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | merge | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | multi-agent | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
 | node | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
+| orb | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | orb-execute | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | plans | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
+| restore | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | review | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
+| session-focus | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | shell | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | ship | [2026-08-12 — Ship means push](20260812-2100-ship-means-push.md) |
 | skills | [2026-08-20 — Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md) |
@@ -83,6 +87,8 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-20** — [Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md)  
+  Tags: orb, git, handoff, amp, grok45, session-focus, restore
 - **2026-08-20** — [UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md)  
   Tags: frontend, ui, web, craft, dist, orb
 - **2026-08-20** — [Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md)  
