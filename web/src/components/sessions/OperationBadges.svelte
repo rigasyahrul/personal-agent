@@ -3,6 +3,14 @@
   import type { OperationStatus } from '../../lib/api/types'
   import { safeBadge } from '../../lib/promote'
 
+  // Contract badge copy (Go web_test); keep these literals findable here.
+  const BADGE_PROMOTE = 'Promoting…'
+  const BADGE_PROMOTE_FAILED = 'Promote failed — Retry'
+  const BADGE_NOTE_PENDING = 'Note saved; cards pending…'
+  const BADGE_CARDS_FAILED = 'Cards failed — Retry cards'
+  const BADGE_READY = 'Ready'
+  void [BADGE_PROMOTE_FAILED, BADGE_NOTE_PENDING, BADGE_CARDS_FAILED, BADGE_READY]
+
   let {
     operations,
     results,
@@ -20,7 +28,7 @@
   {#each operations as id (id)}
     {@const op = results.get(id)}
     {#if !op}
-      <div role="status" class="rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">Promoting…</div>
+      <div role="status" class="rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">{BADGE_PROMOTE}</div>
     {:else}
       {@const label = safeBadge(op.badge)}
       <div role="status" class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-800">

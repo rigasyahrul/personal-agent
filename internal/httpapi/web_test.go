@@ -9,9 +9,10 @@ import (
 
 func TestWebContainsPromoteAndReviewContracts(t *testing.T) {
 	tests := map[string][]string{
-		"../../web-legacy/js/pages/sessions.js":           {"Save to source", "target_relative_path", "review_mode", "operation_id"},
-		"../../web-legacy/js/pages/review.js":             {"project:", "scope=", "caught_up", "row_version", "duration_ms"},
-		"../../web-legacy/js/components/status-badges.js": {"Promoting…", "Promote failed — Retry", "Note saved; cards pending…", "Cards failed — Retry cards", "Ready"},
+		"../../web/src/components/sessions/PromoteDialog.svelte":  {"Save to source", "target_relative_path", "review_mode"},
+		"../../web/src/lib/api/index.ts":                          {"operation_id", "scope="},
+		"../../web/src/components/review/ReviewRunner.svelte":     {"project:", "caught_up", "row_version", "duration_ms"},
+		"../../web/src/components/sessions/OperationBadges.svelte": {"Promoting…", "Promote failed — Retry", "Note saved; cards pending…", "Cards failed — Retry cards", "Ready"},
 	}
 	for file, wants := range tests {
 		t.Run(filepath.Base(file), func(t *testing.T) {

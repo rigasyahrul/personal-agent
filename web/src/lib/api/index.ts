@@ -76,6 +76,7 @@ export const api = {
     ) as Promise<WorkspaceFile>,
 
   promoteSession: (sessionId: string, payload: PromotePayload, key: string) =>
+    // PromoteResult.operation_id is returned for operation status polling.
     request<PromoteResult>(`/api/v1/sessions/${enc(sessionId)}/promote`, {
       method: 'POST',
       body: payload,
@@ -86,6 +87,7 @@ export const api = {
     request<OperationStatus>(`/api/v1/operations/${enc(operationId)}`) as Promise<OperationStatus>,
 
   getReviewQueue: (scope: string) =>
+    // Review queue uses scope=all or scope=project:{id}.
     request<ReviewQueue>(`/api/v1/review/queue?scope=${enc(scope)}`) as Promise<ReviewQueue>,
 
   rateReviewItem: (itemId: string, payload: RateReviewPayload) =>
