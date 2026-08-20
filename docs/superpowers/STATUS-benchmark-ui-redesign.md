@@ -17,8 +17,8 @@
 | 4 | ProjectRail + CSS | complete | T-01a02038-a56f-73f1-9f2c-46b855e8d528 | 205c84d |
 | 5 | ProjectHubPage Claude stack | complete | T-01a0203e-e9d1-72b0-be3f-7a493ab29487 | cf39049 |
 | 6 | sessions route → hub | complete | T-01a02043-9cee-7608-814a-d847258323d7 | 36dba4d |
-| 7 | SessionChat openPath / embeddedInHub | implementing | — | |
-| 8 | Dense bottom composer + copy | todo | — | |
+| 7 | SessionChat openPath / embeddedInHub | complete | T-01a02053-a214-71d2-833d-8afc65f9b279 | b049d68 |
+| 8 | Dense bottom composer + copy | implementing | — | |
 | 9 | Hub embeds SessionChat | todo | — | |
 | 10 | Vault projects name-first | todo | — | |
 | 11 | frontend-ui-craft benchmark gate | todo | — | |
@@ -35,6 +35,7 @@ Status values: `todo | implementing | review | PASS | complete`
 - Task 4: PASS T-01a02038-a56f-73f1-9f2c-46b855e8d528 (Critical none, Important none) — 205c84d ProjectRail
 - Task 5: PASS T-01a0203e-e9d1-72b0-be3f-7a493ab29487 (Critical none, Important none) — cf39049 Claude hub
 - Task 6: PASS T-01a02043-9cee-7608-814a-d847258323d7 (Critical none, Important none) — 36dba4d sessions→hub
+- Task 7: PASS T-01a02053-a214-71d2-833d-8afc65f9b279 (Critical none, Important none) — b049d68 openPath+notes
 
 
 ## Merge / push log
