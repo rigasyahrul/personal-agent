@@ -40,3 +40,20 @@
 - Spec: `docs/superpowers/specs/2026-08-20-session-focus-layout-design.md`
 - Plan: `docs/superpowers/plans/2026-08-20-session-focus-layout.md`
 - SDD ledger: `.worktrees/session-focus-layout/.superpowers/sdd/2026-08-20-session-focus-layout/progress.md`
+
+## Consulting-grok-review (mandatory re-run)
+
+**Status:** COMPLETE — all Tasks 1–11 + whole-branch review **PASS** (Critical none, Important none).
+
+| Gate | Result |
+|------|--------|
+| Per-task consulting-grok-review (1–11) | PASS |
+| Whole-branch `main..HEAD` | PASS — merge-ready from correctness/spec |
+| Screenshots vibe-pass | `.amp/in/artifacts/session-focus-01..11.png` |
+| Tests | 205 passed; focus invariant green |
+
+Review board: `.worktrees/session-focus-layout/.superpowers/sdd/2026-08-20-session-focus-layout/reviews/BOARD.md`  
+Branch verdict: `…/reviews/branch-verdict.md`
+
+**Still not merged/pushed** until user explicitly asks.
+

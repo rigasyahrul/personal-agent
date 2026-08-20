@@ -59,7 +59,7 @@ Scan this first. Open the linked file only when you need detail.
 | orb-execute | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | plans | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
 | restore | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
-| review | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
+| review | [2026-08-20 — Every worker task must pass consulting-grok-review](20260820-1505-every-worker-must-pass-consulting-grok-review.md) |
 | session-focus | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | shell | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | ship | [2026-08-12 — Ship means push](20260812-2100-ship-means-push.md) |
@@ -87,6 +87,8 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-20** — [Every worker task must pass consulting-grok-review](20260820-1505-every-worker-must-pass-consulting-grok-review.md)  
+  Tags: review, grok45, sdd, master, session-focus
 - **2026-08-20** — [Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md)  
   Tags: orb, git, handoff, amp, grok45, session-focus, restore
 - **2026-08-20** — [UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md)  
