@@ -50,6 +50,21 @@ describe('visual baseline', () => {
     }
   });
 
+  it('declares session-focus layout tokens', () => {
+    for (const token of [
+      '.session-focus',
+      '.session-tabs',
+      '.session-tab',
+      '.session-split',
+      '.session-files',
+      '.session-card',
+      '.message-prose',
+      '.content-canvas--session-focus',
+    ]) {
+      expect(css).toContain(token);
+    }
+  });
+
   it('bans scaffold soup leftovers in Svelte markup', () => {
     const files = walkSvelte(here);
     const offenders: string[] = [];
