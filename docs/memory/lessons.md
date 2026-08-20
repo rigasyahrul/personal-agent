@@ -39,6 +39,7 @@ Scan this first. Open the linked file only when you need detail.
 | docs | [2026-08-19 — Lessons file is stable `lessons.md`](20260819-2200-lessons-file-is-stable-lessons-md.md) |
 | docs layout | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | fixtures | [2026-08-13 — Verify escaped literals at the byte level](20260813-2300-verify-escaped-literals-at-the-byte-level.md) |
+| frontend | [2026-08-20 — Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md) |
 | fs | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | git | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | gitignore | [2026-08-19 — Default `make` is help; build binary is gitignored](20260819-2000-default-make-is-help-build-binary-is-gitignored.md) |
@@ -56,11 +57,11 @@ Scan this first. Open the linked file only when you need detail.
 | review | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | shell | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | ship | [2026-08-12 — Ship means push](20260812-2100-ship-means-push.md) |
-| skills | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
+| skills | [2026-08-20 — Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md) |
 | spa | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
 | spawn | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
-| ui | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
-| web | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
+| ui | [2026-08-20 — Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md) |
+| web | [2026-08-20 — Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md) |
 | writing-plans | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
 
 ## Where Superpowers artifacts go
@@ -80,6 +81,8 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-20** — [Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md)  
+  Tags: ui, skills, frontend, web, compounding
 - **2026-08-20** — [Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md)  
   Tags: memory, compounding, docs layout
 - **2026-08-20** — [Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md)  

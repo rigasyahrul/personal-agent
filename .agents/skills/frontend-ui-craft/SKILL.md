@@ -92,7 +92,7 @@ Do not ship or claim done while these remain unless the user **explicitly** waiv
 - **Localhost claims:** confirm process on the port + served bytes include the edit
 - **Docker:** `make docker-dev` for live API+web; prod compose stays image-baked
 - **Web tests:** Node `>=22 <23` on `PATH` before `make web-test`
-- **Browser:** `.chrome.mcp.json` → Chrome DevTools at `http://localhost:9222` when available
+- **Browser:** `.chrome.mcp.json` → Chrome DevTools at `http://localhost:9222` when available. Start Chrome with `--remote-debugging-port=9222` if nothing listens. A11y `take_snapshot` is enough for craft gates; screenshots may only write under the MCP temp dir (workspace `filePath` can be denied) — copy out if you need a durable image.
 - **Product look intent:** clean dashboard, light-first, Inter — `docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md` (this skill does not redefine IA)
 
 ## Related
