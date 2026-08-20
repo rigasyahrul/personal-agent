@@ -1,7 +1,6 @@
 <!-- web/src/routes/ProjectReviewPage.svelte — Phase F surface; stub keeps project vault shell wiring -->
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import Breadcrumbs from '../components/Breadcrumbs.svelte'
+    import Breadcrumbs from '../components/Breadcrumbs.svelte'
   import Skeleton from '../components/Skeleton.svelte'
   import { api } from '../lib/api'
   import type { Project } from '../lib/api/types'
@@ -18,7 +17,9 @@
   let loading = $state(true)
   let error = $state('')
 
-  onMount(async () => {
+  async function load() {
+    loading = true
+    error = ''
     try {
       project = await api.getProject(projectId)
       onProjectLoad?.(project)
@@ -28,6 +29,11 @@
     } finally {
       loading = false
     }
+  }
+
+  $effect(() => {
+    void projectId
+    void load()
   })
 </script>
 

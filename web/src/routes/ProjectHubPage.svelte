@@ -1,7 +1,6 @@
 <!-- web/src/routes/ProjectHubPage.svelte -->
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import Badge from '../components/Badge.svelte'
+    import Badge from '../components/Badge.svelte'
   import Breadcrumbs from '../components/Breadcrumbs.svelte'
   import Skeleton from '../components/Skeleton.svelte'
   import { api } from '../lib/api'
@@ -35,7 +34,8 @@
     }
   }
 
-  onMount(() => {
+  $effect(() => {
+    void projectId
     void load()
   })
 
