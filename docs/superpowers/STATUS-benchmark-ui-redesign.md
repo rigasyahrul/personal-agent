@@ -19,8 +19,8 @@
 | 6 | sessions route → hub | complete | T-01a02043-9cee-7608-814a-d847258323d7 | 36dba4d |
 | 7 | SessionChat openPath / embeddedInHub | complete | T-01a02053-a214-71d2-833d-8afc65f9b279 | b049d68 |
 | 8 | Dense bottom composer + copy | complete | T-01a02058-dd93-7148-8c83-ac9de6bd8ae1 | 4d34069 |
-| 9 | Hub embeds SessionChat | implementing | — | |
-| 10 | Vault projects name-first | todo | — | |
+| 9 | Hub embeds SessionChat | complete | T-01a0205c-773f-755b-84c7-d2c51e81fac4 | f7e65be |
+| 10 | Vault projects name-first | implementing | — | |
 | 11 | frontend-ui-craft benchmark gate | todo | — | |
 | 12 | Full suite + dist + vibe-pass | todo | — | |
 | — | Whole-branch review | todo | — | After Task 12 |
@@ -37,6 +37,7 @@ Status values: `todo | implementing | review | PASS | complete`
 - Task 6: PASS T-01a02043-9cee-7608-814a-d847258323d7 (Critical none, Important none) — 36dba4d sessions→hub
 - Task 7: PASS T-01a02053-a214-71d2-833d-8afc65f9b279 (Critical none, Important none) — b049d68 openPath+notes
 - Task 8: PASS T-01a02058-dd93-7148-8c83-ac9de6bd8ae1 (Critical none, Important none) — 4d34069 composer+copy
+- Task 9: PASS T-01a0205c-773f-755b-84c7-d2c51e81fac4 (Critical none, Important none) — f7e65be hub Back
 
 
 ## Merge / push log
