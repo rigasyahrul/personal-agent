@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Fail if an SDD progress ledger claims Task N complete without a prior
+# consulting-grok-review PASS line for that task (personal-agent hard gate).
+#
+# Usage: check-review-gate PROGRESS_MD
+# Exit 0 = gate OK (or no complete lines yet)
+# Exit 1 = missing review for a completed task
+# Exit 2 = usage / missing file
+set -euo pipefail
+
+if [ $# -ne 1 ]; then
+  echo "usage: check-review-gate PROGRESS_MD" >&2
+  exit 2
+fi
+file=$1
+if [ ! -f "$file" ]; then
+  echo "no such progress file: $file" >&2
+  exit 2
+fi
+
+# Collect task numbers marked complete
+mapfile -t completes < <(grep -E '^Task[[:space:]]+[0-9]+:[[:space:]]+complete' "$file" \
+  | sed -E 's/^Task[[:space:]]+([0-9]+):.*/\1/' | sort -nu)
+
+if [ ${#completes[@]} -eq 0 ]; then
+  echo "check-review-gate: no Task complete lines (OK)"
+  exit 0
+fi
+
+fail=0
+for n in "${completes[@]}"; do
+  # Accept PASS line with thread id T-... somewhere on a consulting-grok-review line for this task
+  if ! grep -E "^Task[[:space:]]+${n}:[[:space:]]+consulting-grok-review[[:space:]]+PASS" "$file" >/dev/null; then
+    echo "MISSING: Task $n is complete but has no 'Task $n: consulting-grok-review PASS' line" >&2
+    fail=1
+    continue
+  fi
+  # Require a thread id on that PASS line
+  if ! grep -E "^Task[[:space:]]+${n}:[[:space:]]+consulting-grok-review[[:space:]]+PASS.*T-[0-9a-fA-F-]+" "$file" >/dev/null; then
+    echo "MISSING: Task $n consulting-grok-review PASS line has no thread id T-…" >&2
+    fail=1
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo "check-review-gate: FAILED — run consulting-grok-review before marking tasks complete" >&2
+  exit 1
+fi
+echo "check-review-gate: OK (${#completes[@]} completed task(s) have review PASS + thread id)"
+exit 0

@@ -46,6 +46,7 @@ Skip any step = lying, not verifying
 | Regression test works | Red-green cycle verified | Test passes once |
 | Agent completed | VCS diff shows changes | Agent reports "success" |
 | Requirements met | Line-by-line checklist | Tests passing |
+| SDD task / branch merge-ready | Ledger line `consulting-grok-review PASS (thread T-…)` + Critical/Important none; run `scripts/check-review-gate progress.md` | Tests green, implementer DONE, controller self-read of diff |
 
 ## Red Flags - STOP
 
@@ -57,6 +58,7 @@ Skip any step = lying, not verifying
 - Thinking "just this once"
 - Tired and wanting work over
 - **ANY wording implying success without having run verification**
+- Claiming SDD task complete or "ready to merge" without consulting-grok-review thread evidence
 
 ## Rationalization Prevention
 
@@ -70,6 +72,7 @@ Skip any step = lying, not verifying
 | "I'm tired" | Exhaustion ≠ excuse |
 | "Partial check is enough" | Partial proves nothing |
 | "Different words so rule doesn't apply" | Spirit over letter |
+| "Tests green / implementer DONE" | On personal-agent SDD: still need consulting-grok-review PASS in the ledger |
 
 ## Key Patterns
 

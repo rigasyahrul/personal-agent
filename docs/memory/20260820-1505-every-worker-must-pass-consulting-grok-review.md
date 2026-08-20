@@ -17,9 +17,12 @@
 **Rule (next agent):** After each implementer finishes a plan task, **before** merge into the feature branch: new grok45 consulting-grok-review on that task’s BASE..HEAD. Fix Critical/Important (or re-review fixes). Tests green ≠ reviewed. Whole-branch review still required before ship.
 
 **Codified into:**
-- `AGENTS.md` standing rule (mandatory per worker task)
-- `.agents/skills/subagent-driven-development/SKILL.md` (personal-agent note)
+- `AGENTS.md` standing rule (mandatory per worker task + `check-review-gate`)
+- `.agents/skills/subagent-driven-development/SKILL.md` (HARD GATE, ledger order, rationalizations)
+- `.agents/skills/subagent-driven-development/scripts/check-review-gate` (executable ledger proof)
+- `.agents/skills/consulting-grok-review/SKILL.md` (personal-agent override: every SDD task)
+- `.agents/skills/verification-before-completion/SKILL.md` (task complete ≠ tests green)
 - This entry
-- Session-focus review board under worktree `.superpowers/sdd/…/reviews/` (local evidence)
+
 
 **Evidence:** Master https://ampcode.com/threads/T-01a01f00-30b2-748a-8a68-c625574d5a35 ; branch review T-01a01fb2-d9e7-7718-a7bb-b584d06b6786 ; feature `impl/session-focus-layout`.

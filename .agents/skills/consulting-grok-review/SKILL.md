@@ -30,7 +30,23 @@ Evaluation of model quality vs real Oracle is **out of scope here**—run that l
 - Broad “find anything wrong” fishing with no decision at stake.
 - Asking whether work is “ready” without a specific risk or invariant.
 - Codebase search (use finder/rg) or implementing the fix (do it yourself after the review).
-- Replacing `requesting-code-review` for every task—this is for **Oracle-tier** calls only.
+- Outside SDD: do not spam this skill for pure formatting. **Inside SDD on personal-agent:** every task uses this skill (see Personal-agent override).
+
+
+## Personal-agent override (this repo)
+
+**Standing rule wins:** on personal-agent, **every SDD implementer task** and the
+**whole-branch merge gate** must use this skill (new grok45 `-x` +
+`reviewer-prompt`). Do **not** apply the "When NOT to use / not every task"
+calibration to waive per-task SDD reviews here.
+
+That calibration still applies to ad-hoc mid-coding questions outside SDD.
+Inside `subagent-driven-development`, skipping this skill is a process failure
+equal to merging without review. Evidence: session-focus 2026-08-20 full re-run
+after controller FF-merged on tests alone
+(`docs/memory/20260820-1505-every-worker-must-pass-consulting-grok-review.md`).
+
+Ledger proof required: `Task <N>: consulting-grok-review PASS (thread T-…, …)`.
 
 ## Relationship to other skills
 

@@ -11,7 +11,14 @@ Execute plan by dispatching a fresh implementer subagent per task, a task review
 
 **Core principle:** Fresh subagent per task + task review (spec + quality) + broad final review = high quality, fast iteration
 
-**Personal-agent standing rule:** After each implementer task, the controller must run **consulting-grok-review** (new grok45 `-x` thread + reviewer-prompt) on the task diff and clear Critical/Important before marking the task complete / merging. Tests alone are not a review gate.
+**Personal-agent HARD GATE (non-negotiable):** After each implementer task, **before** any FF-merge into the feature branch and **before** writing `Task <N>: complete`:
+
+1. Package the task diff (`scripts/review-package` or `git diff BASE..HEAD`).
+2. Dispatch a **new** `amp -m grok45 --no-archive-after-execute -x` thread using **`consulting-grok-review`** + `reviewer-prompt.md` (never Task/OpenAI/oracle/silent self-review; never `-ox` with grok45).
+3. Require a top-level `## Verdict` with Critical/Important cleared (fix or re-review).
+4. Ledger the gate: `Task <N>: consulting-grok-review PASS (thread T-…, Critical none, Important none)` then `Task <N>: complete (…)`.
+
+**Forbidden rationalizations:** "tests green", "implementer DONE", "mechanical task", "I'll batch reviews at the end", "self-reviewed the diff", "consulting-grok-review is only for high-stakes". On this repo, **every SDD task is high-stakes for the gate**. Skipping = process failure (same class as shipping without push).
 
 **Narration:** between tool calls, narrate at most one short line — the
 ledger and the tool results carry the record.
@@ -263,6 +270,14 @@ report missing either verdict — spec compliance AND task quality are both
 required. Implementer self-review never replaces the task review; both are
 needed.
 
+**On personal-agent:** the per-task reviewer **is** `consulting-grok-review`
+(new grok45 `-x` + `reviewer-prompt`), not a silent controller read of the
+diff and not "tests passed." You may still use `task-reviewer-prompt.md` as
+a structure checklist inside that Grok review, but the **dispatch vehicle
+must be consulting-grok-review**. No `Task <N>: complete` line without a
+prior ledger line naming the review thread id and Critical/Important = none.
+Run `scripts/check-review-gate PROGRESS_MD` before claiming the plan done.
+
 - Hand the reviewer its diff as a file: run this skill's
   `scripts/review-package PLAN_FILE BASE HEAD` and pass the reviewer the file path
   it prints (or, without bash: `git log --oneline`, `git diff --stat`,
@@ -382,9 +397,15 @@ When the review comes back clean — or every open finding is parked with a
 ruling at the cap — append the completion line to the ledger in the same
 message as your other bookkeeping:
 
-- `Task <N>: complete (commits <base7>..<head7>, review clean)`
-- `Task <N>: complete (commits <base7>..<head7>, <K> parked)` after a
-  tripped breaker
+**Required order on personal-agent (two ledger lines):**
+1. `Task <N>: consulting-grok-review PASS (thread T-…, Critical none, Important none)` — or FAIL + fix-loop notes
+2. `Task <N>: complete (commits <base7>..<head7>, review clean)` — only after (1)
+
+Also acceptable after a tripped breaker:
+- `Task <N>: complete (commits <base7>..<head7>, <K> parked)` **only if** consulting-grok-review ran and residuals were adjudicated in the ledger
+
+**Do not** write `complete` from tests alone. Controllers that FF-merged on
+"implementer DONE + npm test green" caused a full re-review wave (session-focus 2026-08-20).
 
 Then mark the todo complete and move on. Never move to the next task while
 the review has open Critical/Important issues that are neither fixed nor
@@ -396,12 +417,16 @@ The final whole-branch review gets a package too: run
 `scripts/review-package PLAN_FILE MERGE_BASE HEAD` (MERGE_BASE = the commit the
 branch started from, e.g. `git merge-base main HEAD`) and include the
 printed path in the final review dispatch, so the final reviewer reads
-one file instead of re-deriving the branch diff with git commands. Dispatch
-on the most capable available model (see Model Selection), using
-superpowers:requesting-code-review's
-[code-reviewer.md](../requesting-code-review/code-reviewer.md). Point it at
-the ledger's deferred-minor and parked lines so it can triage which must be
-fixed before merge.
+one file instead of re-deriving the branch diff with git commands.
+
+**On personal-agent:** dispatch the final review as **`consulting-grok-review`**
+(new grok45 `-x` + `reviewer-prompt` with whole-branch BASE..HEAD). You may
+attach `requesting-code-review`'s
+[code-reviewer.md](../requesting-code-review/code-reviewer.md) checklist
+inside that prompt. Do **not** substitute Task/OpenAI/oracle/self-review.
+Point the reviewer at the ledger's deferred-minor and parked lines so it can
+triage which must be fixed before merge. Ledger:
+`Branch: consulting-grok-review PASS (thread T-…, Critical none, Important none)`.
 
 If the final whole-branch review returns findings, dispatch ONE fix subagent
 with the complete findings list — not one fixer per finding.
@@ -436,6 +461,10 @@ Use superpowers:finishing-a-development-branch.
 | "The fix was small, skip the re-review" | Unreviewed fixes are how regressions land. Every round ends with a scoped re-review. |
 | "Reviews slow the loop down" | The loop without reviews is just unverified churn. Reviews are the loop's brakes and steering. |
 | "Ledger bookkeeping is overhead" | The ledger is what survives compaction. Controllers without one have re-dispatched entire completed task sequences. |
+| "Tests green = reviewed" | Tests ≠ consulting-grok-review. On personal-agent both are required. |
+| "I'll batch all reviews at the end" | Per-task gate. Batching skips the gate and ships unreviewed mid-branch commits. |
+| "Mechanical task / tiny diff / self-reviewed" | Still dispatch consulting-grok-review. Size does not waive the gate. |
+| "Implementer DONE is enough" | Implementer self-review never replaces consulting-grok-review. |
 
 ## Example Workflow
 
