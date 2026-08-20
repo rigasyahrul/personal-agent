@@ -29,6 +29,9 @@
   let vaults = $state<VaultSummary[]>([]);
   let routeProject = $state<Project | null>(null);
   let health = $state<'unknown' | 'ready' | 'error'>('unknown');
+  let vaultRefreshInFlight: Promise<void> | null = null;
+  /** Vault IDs we already tried to resolve after a miss (avoid refetch loops). */
+  let vaultLookupTried = $state(new Set<string>());
   const context = $derived(deriveShellContext(route, vaults, routeProject ?? undefined));
 
   const vaultName = $derived(
@@ -42,6 +45,44 @@
       ? new URLSearchParams(route.scope ? `scope=${route.scope}` : '')
       : new URLSearchParams(),
   );
+
+  async function refreshVaults() {
+    // Wait out any in-flight list so a post-create navigate does not join a
+    // stale empty response from mount.
+    if (vaultRefreshInFlight) await vaultRefreshInFlight;
+    const request = api
+      .get<Vault[]>('/api/v1/vaults')
+      .then((listed) => {
+        vaults = listed.map((vault) => ({ id: vault.id, name: vault.name }));
+      })
+      .catch(() => {
+        /* shell falls back to generic vault name */
+      });
+    vaultRefreshInFlight = request.finally(() => {
+      if (vaultRefreshInFlight === request) vaultRefreshInFlight = null;
+    });
+    return vaultRefreshInFlight;
+  }
+
+  /**
+   * Newly created vaults are missing from the mount-time cache.
+   * Wait for any in-flight list, then fetch again so the real name appears.
+   */
+  function ensureVaultKnown(next: AppRoute) {
+    if (!next.name.startsWith('vault-')) return;
+    const id = 'vaultId' in next ? next.vaultId : '';
+    if (!id) return;
+    if (vaults.some((vault) => vault.id === id)) return;
+    if (vaultLookupTried.has(id)) return;
+    void (async () => {
+      if (vaultRefreshInFlight) await vaultRefreshInFlight;
+      if (vaults.some((vault) => vault.id === id)) return;
+      await refreshVaults();
+      if (!vaults.some((vault) => vault.id === id)) {
+        vaultLookupTried = new Set(vaultLookupTried).add(id);
+      }
+    })();
+  }
 
   onMount(() => {
     const updateRoute = () => {
@@ -57,19 +98,15 @@
         routeProject = null;
       }
       route = next;
+      ensureVaultKnown(next);
     };
     addEventListener('hashchange', updateRoute);
     void authLoader().then((value) => {
       auth = value;
     });
-    void api
-      .get<Vault[]>('/api/v1/vaults')
-      .then((listed) => {
-        vaults = listed.map((vault) => ({ id: vault.id, name: vault.name }));
-      })
-      .catch(() => {
-        /* shell falls back to generic vault name */
-      });
+    void refreshVaults().then(() => {
+      ensureVaultKnown(route);
+    });
     void api
       .get<{ ok?: boolean; storage_writable?: boolean }>('/health')
       .then((body) => {

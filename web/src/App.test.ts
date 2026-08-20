@@ -1,7 +1,8 @@
 // web/src/App.test.ts
-import { cleanup, render, screen, waitFor } from '@testing-library/svelte'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.svelte'
+import { api } from './lib/api/client'
 
 vi.mock('./lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./lib/api/client')>()
@@ -20,9 +21,22 @@ vi.mock('./lib/api/client', async (importOriginal) => {
   }
 })
 
+const authenticated = { status: 'authenticated' as const }
+
 afterEach(() => {
   cleanup()
   window.location.hash = ''
+})
+
+beforeEach(() => {
+  vi.mocked(api.get).mockImplementation(async (path: string) => {
+    if (path === '/api/v1/vaults') return []
+    if (path.startsWith('/api/v1/review/queue')) {
+      return { scope: 'all', items: [], caught_up: true }
+    }
+    if (path === '/health') return { ok: true, storage_writable: true }
+    return { generated_at: '', projects: [], due_count: 0 }
+  })
 })
 
 it('renders login without authenticated chrome', async () => {
@@ -40,7 +54,7 @@ describe('global catalog routes', () => {
     it(`renders ${hash}`, async () => {
       window.location.hash = hash
       render(App, {
-        props: { authLoader: vi.fn().mockResolvedValue({ status: 'authenticated' }) },
+        props: { authLoader: vi.fn().mockResolvedValue(authenticated) },
       })
       expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument()
     })
@@ -57,9 +71,63 @@ describe('vault context routes', () => {
     it(`renders ${hash}`, async () => {
       window.location.hash = hash
       render(App, {
-        props: { authLoader: vi.fn().mockResolvedValue({ status: 'authenticated' }) },
+        props: { authLoader: vi.fn().mockResolvedValue(authenticated) },
       })
       expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument()
     })
   }
+
+  it('shows the real vault name on vault project create (not generic Vault)', async () => {
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path === '/api/v1/vaults') {
+        return [{ id: 'v-test', name: 'Test', created_at: '', updated_at: '' }]
+      }
+      if (path === '/health') return { ok: true, storage_writable: true }
+      if (path.startsWith('/api/v1/review/queue')) {
+        return { scope: 'all', items: [], caught_up: true }
+      }
+      return { generated_at: '', projects: [], due_count: 0 }
+    })
+
+    window.location.hash = '#/vaults/v-test/projects'
+    render(App, { props: { authLoader: vi.fn().mockResolvedValue(authenticated) } })
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Projects' })).toBeInTheDocument()
+    // Sidebar context + page eyebrow must use the real name.
+    expect(await screen.findAllByText('Test')).not.toHaveLength(0)
+    await fireEvent.click(screen.getAllByRole('button', { name: /new project/i })[0])
+    expect(screen.getByLabelText('Vault')).toHaveValue('Test')
+  })
+
+  it('refetches vaults when entering a newly created vault missing from the cache', async () => {
+    let vaultListCalls = 0
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path === '/api/v1/vaults') {
+        vaultListCalls += 1
+        // First load (mount on home): empty. After navigate into new vault: includes Test.
+        if (vaultListCalls === 1) return []
+        return [{ id: 'v-new', name: 'Test', created_at: '', updated_at: '' }]
+      }
+      if (path === '/health') return { ok: true, storage_writable: true }
+      if (path.startsWith('/api/v1/review/queue')) {
+        return { scope: 'all', items: [], caught_up: true }
+      }
+      return { generated_at: '', projects: [], due_count: 0 }
+    })
+
+    window.location.hash = '#/home'
+    render(App, { props: { authLoader: vi.fn().mockResolvedValue(authenticated) } })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
+
+    window.location.hash = '#/vaults/v-new/projects'
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+
+    // Wait until vault projects page is mounted (not Home's "New project").
+    expect(await screen.findByRole('heading', { level: 1, name: 'Projects' })).toBeInTheDocument()
+    await fireEvent.click(screen.getAllByRole('button', { name: /new project/i })[0])
+    await waitFor(() => {
+      expect(screen.getByLabelText('Vault')).toHaveValue('Test')
+    })
+    expect(vaultListCalls).toBeGreaterThanOrEqual(2)
+  })
 })
