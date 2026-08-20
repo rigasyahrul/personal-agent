@@ -1,6 +1,6 @@
 <!-- web/src/components/sessions/SessionChat.svelte -->
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy } from 'svelte'
   import { api } from '../../lib/api'
   import type {
     ChatMessage,
@@ -15,6 +15,15 @@
     saveOperationIds,
     workspaceEnabled,
   } from '../../lib/promote'
+  import {
+    clampMainPct,
+    DEFAULT_MAIN_PCT,
+    readFilesBarOpen,
+    readFilesBarWidthPct,
+    writeFilesBarOpen,
+    writeFilesBarWidthPct,
+  } from '../../lib/session-prefs'
+  import MarkdownView from '../markdown/MarkdownView.svelte'
   import { createSessionPoller } from './session-poller'
   import OperationBadges from './OperationBadges.svelte'
   import PromoteDialog from './PromoteDialog.svelte'
@@ -53,6 +62,11 @@
   let promoteOpen = $state(false)
   let promoteSource = $state<WorkspaceFile | null>(null)
   let showWorkspace = $derived(workspaceEnabled(session))
+
+  let filesOpen = $state(false)
+  let mainPct = $state(DEFAULT_MAIN_PCT)
+  let splitEl: HTMLElement | undefined = $state()
+  let dragging = false
 
   const alertText = $derived([operationError, error].filter(Boolean).join(' — '))
   const runLabel = $derived(run ? `Run: ${run.status}` : 'Idle')
@@ -242,6 +256,35 @@
     void pollOperations()
   }
 
+  function toggleFiles() {
+    filesOpen = !filesOpen
+    writeFilesBarOpen(storage, filesOpen)
+  }
+
+  function onHandlePointerDown(event: PointerEvent) {
+    if (!splitEl) return
+    dragging = true
+    const target = event.currentTarget as HTMLElement
+    target.setPointerCapture?.(event.pointerId)
+    event.preventDefault()
+  }
+
+  function onHandlePointerMove(event: PointerEvent) {
+    if (!dragging || !splitEl) return
+    const rect = splitEl.getBoundingClientRect()
+    if (rect.width <= 0) return
+    const pct = ((event.clientX - rect.left) / rect.width) * 100
+    mainPct = clampMainPct(Math.round(pct))
+  }
+
+  function onHandlePointerUp(event: PointerEvent) {
+    if (!dragging) return
+    dragging = false
+    const target = event.currentTarget as HTMLElement
+    target.releasePointerCapture?.(event.pointerId)
+    writeFilesBarWidthPct(storage, mainPct)
+  }
+
   function resetForSession(value: Session) {
     generation += 1
     poller.stop()
@@ -280,6 +323,8 @@
     operationResults = new Map()
     retryingPending = new Set()
     operations = loadOperationIds(value.id, storage)
+    filesOpen = readFilesBarOpen(storage)
+    mainPct = readFilesBarWidthPct(storage)
     poller.start()
   }
 
@@ -301,67 +346,122 @@
   })
 </script>
 
-<div class="session-layout">
-  <section class="session-chat session-layout__chat panel form-stack">
-    <div class="flex flex-wrap items-center gap-3">
-      <button type="button" class="link-accent" onclick={() => onclose?.()}>Sessions</button>
+<div class="session-focus" data-files-open={filesOpen && showWorkspace ? '1' : '0'}>
+  <header class="session-focus__header">
+    <div class="flex flex-wrap items-center gap-3 min-w-0">
+      <button type="button" class="link-accent" onclick={() => onclose?.()}>Back</button>
       <h2 class="text-xl font-semibold" style="margin:0">{session.title}</h2>
       <span class="badge-chip" style="background:#f4f4f5;color:#52525b"
       >{session.provider}:{session.model_id}</span>
+      <p class="run-status text-sm text-slate-600" role="status" aria-live="polite" style="margin:0"
+      >{runLabel}</p>
+    </div>
+    {#if showWorkspace}
+      <button
+        type="button"
+        class="btn btn--secondary"
+        aria-pressed={filesOpen}
+        onclick={toggleFiles}
+      >{filesOpen ? 'Hide files' : 'Show files'}</button>
+    {/if}
+  </header>
+
+  <OperationBadges
+    {operations}
+    results={operationResults}
+    retrying={retryingPending}
+    onretry={(op) => void retryCards(op)}
+  />
+
+  {#if alertText}
+    <p class="error alert alert--error" role="alert" data-chat-alert>{alertText}</p>
+  {/if}
+
+  <div class="session-tabs" role="tablist" aria-label="Session tabs">
+    <button type="button" class="session-tab session-tab--active" role="tab" aria-selected="true"
+    >Agent</button>
+  </div>
+
+  <div
+    class="session-split"
+    style="--session-main-pct: {mainPct}%"
+    bind:this={splitEl}
+  >
+    <div class="session-split__main">
+      <ol class="messages message-thread session-focus__messages">
+        {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
+          {#if message.role === 'user'}
+            <li
+              class="message message-row message-row--user"
+              data-role="user"
+              data-raw-role={message.role}
+            >
+              <div class="message-bubble message-bubble--user">
+                <p>{message.content}</p>
+              </div>
+            </li>
+          {:else if message.role === 'assistant'}
+            <li
+              class="message message-row message-row--assistant"
+              data-role="assistant"
+              data-raw-role={message.role}
+            >
+              <div class="message-prose">
+                <MarkdownView source={message.content} />
+              </div>
+            </li>
+          {:else}
+            <li
+              class="message message-row message-row--other"
+              data-role="other"
+              data-raw-role={message.role}
+            >
+              <div class="message-meta text-sm text-slate-500">
+                <span class="font-medium uppercase tracking-wide" style="font-size:11px"
+                >{message.role}</span>
+                <p style="margin:0.25rem 0 0; white-space:pre-wrap">{message.content}</p>
+              </div>
+            </li>
+          {/if}
+        {/each}
+      </ol>
+
+      <!-- Composer ancestry is stable: never conditionally remount this form during polls. -->
+      <form class="sticky bottom-0 space-y-2 border-t border-slate-100 bg-white pt-3" onsubmit={send}>
+        <label class="block text-sm">
+          <span class="font-medium">Message</span>
+          <textarea
+            class="field-textarea mt-1"
+            name="message"
+            required
+            rows="3"
+            bind:value={draft}
+          ></textarea>
+        </label>
+        <button
+          type="submit"
+          class="btn btn--primary"
+          disabled={sendDisabled}
+        >Send</button>
+      </form>
     </div>
 
-    <OperationBadges
-      {operations}
-      results={operationResults}
-      retrying={retryingPending}
-      onretry={(op) => void retryCards(op)}
-    />
-
-    <ol class="messages message-thread max-h-[50vh] overflow-auto">
-      {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
-        {@const side = message.role === 'user' ? 'user' : 'assistant'}
-        <li
-          class="message message-row message-row--{side}"
-          data-role={side}
-          data-raw-role={message.role}
-        >
-          <div class="message-bubble message-bubble--{side}">
-            <strong>{message.role === 'user' ? 'You' : message.role === 'assistant' ? 'Assistant' : message.role}</strong>
-            <p>{message.content}</p>
-          </div>
-        </li>
-      {/each}
-    </ol>
-
-    <p class="run-status text-sm text-slate-600" role="status" aria-live="polite" style="margin:0">{runLabel}</p>
-
-    {#if alertText}
-      <p class="error alert alert--error" role="alert" data-chat-alert>{alertText}</p>
+    {#if filesOpen && showWorkspace}
+      <div
+        class="session-split__handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize files pane"
+        onpointerdown={onHandlePointerDown}
+        onpointermove={onHandlePointerMove}
+        onpointerup={onHandlePointerUp}
+        onpointercancel={onHandlePointerUp}
+      ></div>
+      <aside class="session-split__files session-files">
+        <WorkspacePanel sessionId={session.id} {messages} onpromote={openPromote} />
+      </aside>
     {/if}
-
-    <!-- Composer ancestry is stable: never conditionally remount this form during polls. -->
-    <form class="sticky bottom-0 space-y-2 border-t border-slate-100 bg-white pt-3" onsubmit={send}>
-      <label class="block text-sm">
-        <span class="font-medium">Message</span>
-        <textarea
-          class="field-textarea mt-1"
-          name="message"
-          required
-          rows="3"
-          bind:value={draft}
-        ></textarea>
-      </label>
-      <button
-        type="submit"
-        class="btn btn--primary"
-        disabled={sendDisabled}
-      >Send</button>
-    </form>
-  </section>
-
-  {#if showWorkspace}
-    <WorkspacePanel sessionId={session.id} {messages} onpromote={openPromote} />
-  {/if}
+  </div>
 </div>
 
 {#if promoteOpen && promoteSource}

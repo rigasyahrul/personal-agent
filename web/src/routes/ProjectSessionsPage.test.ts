@@ -76,6 +76,7 @@ describe('ProjectSessionsPage', () => {
     render(ProjectSessionsPage, { props: { projectId: 'p1' } })
     await fireEvent.click(await screen.findByRole('button', { name: /Old/i }))
     expect(await screen.findByRole('heading', { name: 'Old' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sessions' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(document.querySelector('.content-canvas--session-focus')).toBeTruthy()
   })
 })

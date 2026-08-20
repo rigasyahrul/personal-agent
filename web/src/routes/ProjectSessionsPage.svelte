@@ -102,9 +102,11 @@
 {/if}
 
 {#if activeSession}
-  {#key activeSession.id}
-    <SessionChat session={activeSession} {projectId} onclose={closeSession} />
-  {/key}
+  <div class="content-canvas--session-focus">
+    {#key activeSession.id}
+      <SessionChat session={activeSession} {projectId} onclose={closeSession} />
+    {/key}
+  </div>
 {:else}
   <div class="page-stack">
     <header class="page-header">

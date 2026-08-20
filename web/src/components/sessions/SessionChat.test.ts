@@ -123,7 +123,7 @@ describe('SessionChat', () => {
     await waitFor(() => expect(composer).toHaveValue(''))
   })
 
-  it('aligns user messages right and assistant messages left (chat layout)', async () => {
+  it('renders assistant as bare prose without Assistant label', async () => {
     vi.mocked(api.listMessages).mockResolvedValue([
       { sequence: 1, role: 'user', content: 'hello from me' },
       { sequence: 2, role: 'assistant', content: 'reply from agent' },
@@ -132,15 +132,58 @@ describe('SessionChat', () => {
       props: { session, projectId: 'p1', pollInterval: 60_000 },
     })
     expect(await screen.findByText('hello from me')).toBeInTheDocument()
+    expect(screen.getByText('reply from agent')).toBeInTheDocument()
+    expect(screen.queryByText('Assistant')).not.toBeInTheDocument()
+
     const userRow = screen.getByText('hello from me').closest('li')
     const assistantRow = screen.getByText('reply from agent').closest('li')
     expect(userRow).toHaveAttribute('data-role', 'user')
     expect(assistantRow).toHaveAttribute('data-role', 'assistant')
     expect(userRow?.className).toMatch(/message-row--user/)
     expect(assistantRow?.className).toMatch(/message-row--assistant/)
-    // Bubbles sit inside role-tagged rows (CSS: user flex-end / assistant flex-start).
-    expect(userRow?.querySelector('.message-bubble')).toBeTruthy()
-    expect(assistantRow?.querySelector('.message-bubble')).toBeTruthy()
+    expect(userRow?.querySelector('.message-bubble--user')).toBeTruthy()
+    expect(assistantRow?.querySelector('.message-bubble')).toBeNull()
+    expect(assistantRow?.querySelector('.message-prose')).toBeTruthy()
+  })
+
+  it('toggles files bar and persists pref', async () => {
+    const mem = (() => {
+      const m = new Map<string, string>()
+      return {
+        get length() {
+          return m.size
+        },
+        clear: () => m.clear(),
+        getItem: (k: string) => m.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          m.set(k, String(v))
+        },
+        removeItem: (k: string) => {
+          m.delete(k)
+        },
+        key: () => null,
+      } satisfies Storage
+    })()
+    const wsSession = {
+      ...session,
+      tool_grants: { workspace_files: true as const },
+    }
+    render(SessionChat, {
+      props: {
+        session: wsSession,
+        projectId: 'p1',
+        pollInterval: 60_000,
+        storage: mem,
+      },
+    })
+    const toggle = await screen.findByRole('button', { name: /show files/i })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await fireEvent.click(toggle)
+    expect(mem.getItem('pa.session.filesBarOpen')).toBe('1')
+    expect(screen.getByRole('button', { name: /hide files/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
   it('ignores stale poll results after session switch', async () => {
