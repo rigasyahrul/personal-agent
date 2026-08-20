@@ -4,7 +4,7 @@
 **Role:** One **master** Amp thread coordinates the project. It does **not** implement bulk application code itself. It spawns, tracks, reviews, and ships via **worker** threads (and in-thread subagents when cheaper).  
 **Plan SoT:** `docs/superpowers/plans/2026-08-12-personal-agent-v1.md`  
 **Spec SoT:** `docs/superpowers/specs/2026-08-12-personal-agent-design.md`  
-**Lessons:** `docs/memory/lessons.md` + `AGENTS.md`
+**Lessons:** `docs/memory/lessons.md` (index) + `docs/memory/YYYYMMDD-HHmm-*.md` + `AGENTS.md`
 
 ---
 
@@ -46,7 +46,7 @@ docs/superpowers/HANDOFF-master-execution.md
 - Drive the approved plan phase-by-phase:
   docs/superpowers/plans/2026-08-12-personal-agent-v1.md
 - Spec SoT: docs/superpowers/specs/2026-08-12-personal-agent-design.md
-- Lessons: docs/memory/lessons.md and AGENTS.md
+- Lessons: docs/memory/lessons.md (index) + YYYYMMDD-HHmm entry files + AGENTS.md
 - Do NOT re-brainstorm product. Do NOT rewrite the plan unless blocked.
 - Prefer NOT writing bulk app code in this thread. Coordinate workers.
 
@@ -65,7 +65,7 @@ docs/superpowers/HANDOFF-master-execution.md
 5. Verify: tests, branch, push state, plan checkboxes if claimed done.
 6. Mark phase done on STATUS-v1.md. Commit board updates. Push.
 7. Only after ALL phases done: final hardening gate, tag/release notes
-   if appropriate, compound a short lesson in docs/memory if needed.
+   if appropriate, compound: durable artifact first; optional docs/memory/YYYYMMDD-HHmm-slug.md + index row.
 
 ## Parallelism rules
 - Phases 1→7 are sequential by default (see STATUS-v1.md depends_on).
@@ -116,7 +116,7 @@ Use Superpowers. Load using-superpowers, then:
 - Follow plan Interfaces / Global Constraints.
 - Go 1.24+, module github.com/rigasyahrul/personal-agent.
 - Ship = push your branch (and PR/merge only if master asked).
-- Prepend lessons only for real mistakes: docs/memory/lessons.md (newest first + Index)
+- Memory entries only for real mistakes: docs/memory/YYYYMMDD-HHmm-slug.md + index row in docs/memory/lessons.md (newest first + Index)
 - Standing rules: AGENTS.md
 
 ## Process
@@ -212,7 +212,7 @@ When all phases `done`:
 | Design approved | `docs/superpowers/specs/2026-08-12-personal-agent-design.md` |
 | Plan approved (Oracle) | `docs/superpowers/plans/2026-08-12-personal-agent-v1.md` |
 | Plan lock / drafts | `…-v1-lock.md`, `…-v1-drafts/` |
-| Lessons + AGENTS rules | `docs/memory/lessons.md`, `AGENTS.md` |
+| Lessons + AGENTS rules | `docs/memory/lessons.md` (index), `docs/memory/YYYYMMDD-HHmm-*.md`, `AGENTS.md` |
 | Greenfield app | still no `go.mod` until Phase 1 |
 
 ---

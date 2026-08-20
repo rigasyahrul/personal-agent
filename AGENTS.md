@@ -25,43 +25,45 @@ Announce which skill you are using, then follow it exactly.
 - `using-git-worktrees` / `finishing-a-development-branch`
 - `requesting-code-review` / `receiving-code-review`
 - `dispatching-parallel-agents` / `writing-skills`
-- `compounding-engineering` — after a unit of work: append lesson + codify into AGENTS.md / tests / skills
-- `synthesize-memory` — promote recurring lessons (3+) into durable standing rules
+- `compounding-engineering` — after a unit of work: codify into AGENTS.md / skills / tests / hooks; optional evidence as `docs/memory/YYYYMMDD-HHmm-slug.md` + thin index row in `docs/memory/lessons.md`
+- `synthesize-memory` — promote recurring lesson entries (3+) into durable standing rules
 
 ## Compounding engineering (keep it simple)
 
-Pattern: [Compounding Engineering](https://www.agentic-patterns.com/patterns/compounding-engineering-pattern/) — each unit of work should make the next easier. Codify learnings so agents stop repeating mistakes.
+Pattern: [Compounding Engineering](https://www.agentic-patterns.com/patterns/compounding-engineering-pattern/) — each unit of work should make the next easier. **Codify first** so agents stop repeating mistakes. A diary dump is not compounding.
 
 | What | Where |
 |------|--------|
 | Specs | `docs/superpowers/specs/YYYY-MM-DD-*-design.md` |
 | Plans (+ optional lock/drafts) | `docs/superpowers/plans/YYYY-MM-DD-*.md` |
-| **Lessons learned** | **`docs/memory/lessons.md`** (one stable file; newest first) |
-| Standing rules | **This file** (short bullets below) |
+| **Standing rules (hot path)** | **This file** (short bullets below) |
+| **Skills / hooks / tests** | `.agents/skills/`, repo checks — preferred durable form |
+| **Lessons index (list only)** | **`docs/memory/lessons.md`** |
+| **Lesson entries (detail)** | **`docs/memory/YYYYMMDD-HHmm-<slug>.md`** — selective; not every session |
 
-**Memory layers:** Standing rules here load every session. `docs/memory/lessons.md` is on-demand evidence (compound / synthesize / repeated trap) — do not dump the whole diary into every prompt.
+**Memory layers:** Standing rules here load every session. Skills load when the task matches. Scan `docs/memory/lessons.md` only when compounding / synthesizing / hunting a trap; open the linked entry file for detail — do **not** dump the corpus into every prompt, and do **not** write an entry for every wrap.
 
-After non-trivial work or a user correction: run **`compounding-engineering`** (prepend lesson under `docs/memory/lessons.md`, standing bullet here if it should load every session). Periodically run **`synthesize-memory`** when lessons recur.
+After non-trivial work or a user correction: run **`compounding-engineering`** → codify into AGENTS / skill / hook / test first → if evidence is needed, write **`docs/memory/YYYYMMDD-HHmm-slug.md`** and prepend a list row in **`docs/memory/lessons.md`**. Skip memory when a durable artifact fully captures it. Periodically run **`synthesize-memory`** when entries recur (3+).
 
 ### Standing rules
 
-- **Ship = push.** Commit is not enough. After ship/done/archive: `git push`, confirm not `ahead of origin`, then archive the thread. → `docs/memory/lessons.md`
-- **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is lessons only (`docs/memory/lessons.md`).
-- **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; high-stakes review until Approved. → `docs/memory/lessons.md`
-- **Large writing-plans:** if the plan has many phases, **same turn** write `…-lock.md`, dispatch **parallel draft agents** into `…-drafts/`, then assemble one plan. Do **not** solo-stall a mega-plan in silence. → `docs/memory/lessons.md`
-- **No extra doc trees** (`docs/solutions/`, process/planning splits) unless the user asks. Prefer one lessons file + AGENTS.md.
-- **Lessons path is stable:** always `docs/memory/lessons.md`. Prepend newest-first; refresh the Index. Never create per-session `YYYY-MM-DD-lessons.md`.
+- **Ship = push.** Commit is not enough. After ship/done/archive: `git push`, confirm not `ahead of origin`, then archive the thread. → `docs/memory/` (ship entry)
+- **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is selective lesson entries + index only.
+- **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; high-stakes review until Approved. → `docs/memory/`
+- **Large writing-plans:** if the plan has many phases, **same turn** write `…-lock.md`, dispatch **parallel draft agents** into `…-drafts/`, then assemble one plan. Do **not** solo-stall a mega-plan in silence. → `docs/memory/`
+- **No extra doc trees** (`docs/solutions/`, process/planning splits) unless the user asks. Prefer AGENTS + skills/tests; memory = index + timestamped entry files only.
+- **Compound ≠ diary.** Codify into AGENTS / skill / hook / test first. Evidence (when needed): **`docs/memory/YYYYMMDD-HHmm-<slug>.md`** + thin row in **`docs/memory/lessons.md`**. Never put full lesson bodies in the index. Do not log mechanical work or restate git/PRs. → compounding-engineering skill
 - **v1 execution:** master thread = `docs/superpowers/HANDOFF-master-execution.md` + board `STATUS-v1.md`. Workers implement phases; master coordinates merge/ship.
-- **High-stakes review on workers:** **`consulting-grok-review`** via a **new Grok 4.5 thread** + `reviewer-prompt` contract. Prefer `amp -m grok45 --no-archive-after-execute -x '…'`; **`-ox` is best-effort only** (plugin modes may reject orb-execute — fall back to local `-x` immediately). Do **not** use built-in `oracle` or Task/OpenAI subagents (no ChatGPT). Never substitute silent self-review. → `docs/memory/lessons.md`
-- **Grok worker spawn (master):** same command as review. Local `-x` shares the master's workspace — **board/merge only from a separate clean `main` worktree** while a worker runs. Do not stall between unblocked phases (verify → review → merge/push → next). → `docs/memory/lessons.md` (2026-08-20 spawn)
-- **Master merge when FF fails:** board-only or diverged worker-board tips block pure FF — cherry-pick **product** commits or merge-commit; never force-push worker. Re-run gates on the result. → `docs/memory/lessons.md`
-- **Web UI Node 22:** Vite/Vitest need Node `>=22 <23`. Put Node 22 first on `PATH` before `make web-test` / `npm test` (orb may default to Node 20). Build `web/dist` before Go static tests that read it. → `docs/memory/lessons.md`
-- **Darwin is a first-class test target for FS/shell.** Linux-only rename APIs, bash-4 empty arrays, “reject any ancestor symlink”, and chmod-immutable-before-rename all break macOS `make test`. Platform-split syscalls; resolve root path with `EvalSymlinks` then block links *inside* the root; seal trees only after rename. → `docs/memory/lessons.md` (macOS gaps)
-- **Makefile UX:** `.DEFAULT_GOAL` is `help`. Public targets need `## description`, a `.PHONY` entry, and inclusion in the matching `print-help-section` list. Do not let bare `make` run tests/build. Root binary from `make build` is gitignored (`/personal-agent`). → `docs/memory/lessons.md`
-- **Skill tool miss ≠ skip.** If Amp’s Skill tool says a skill in this file / `.agents/skills/` is “not found”, `Read .agents/skills/<name>/SKILL.md` and follow it (especially `compounding-engineering`, `synthesize-memory`). → `docs/memory/lessons.md`
-- **Polled SPA UIs:** never `innerHTML`-replace a focused composer/input on every poll. Patch messages/status/disabled in place; full shell rebuild only on session switch / missing shell. Keep a focus regression test. → `docs/memory/lessons.md` (sessions focus)
+- **High-stakes review on workers:** **`consulting-grok-review`** via a **new Grok 4.5 thread** + `reviewer-prompt` contract. Prefer `amp -m grok45 --no-archive-after-execute -x '…'`; **`-ox` is best-effort only** (plugin modes may reject orb-execute — fall back to local `-x` immediately). Do **not** use built-in `oracle` or Task/OpenAI subagents (no ChatGPT). Never substitute silent self-review. → `docs/memory/`
+- **Grok worker spawn (master):** same command as review. Local `-x` shares the master's workspace — **board/merge only from a separate clean `main` worktree** while a worker runs. Do not stall between unblocked phases (verify → review → merge/push → next). → `docs/memory/20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md`
+- **Master merge when FF fails:** board-only or diverged worker-board tips block pure FF — cherry-pick **product** commits or merge-commit; never force-push worker. Re-run gates on the result. → `docs/memory/`
+- **Web UI Node 22:** Vite/Vitest need Node `>=22 <23`. Put Node 22 first on `PATH` before `make web-test` / `npm test` (orb may default to Node 20). Build `web/dist` before Go static tests that read it. → `docs/memory/`
+- **Darwin is a first-class test target for FS/shell.** Linux-only rename APIs, bash-4 empty arrays, “reject any ancestor symlink”, and chmod-immutable-before-rename all break macOS `make test`. Platform-split syscalls; resolve root path with `EvalSymlinks` then block links *inside* the root; seal trees only after rename. → `docs/memory/` (macOS gaps)
+- **Makefile UX:** `.DEFAULT_GOAL` is `help`. Public targets need `## description`, a `.PHONY` entry, and inclusion in the matching `print-help-section` list. Do not let bare `make` run tests/build. Root binary from `make build` is gitignored (`/personal-agent`). → `docs/memory/`
+- **Skill tool miss ≠ skip.** If Amp’s Skill tool says a skill in this file / `.agents/skills/` is “not found”, `Read .agents/skills/<name>/SKILL.md` and follow it (especially `compounding-engineering`, `synthesize-memory`). → `docs/memory/`
+- **Polled SPA UIs:** never `innerHTML`-replace a focused composer/input on every poll. Patch messages/status/disabled in place; full shell rebuild only on session switch / missing shell. Keep a focus regression test. → `docs/memory/` (sessions focus)
 - **UI fix ≠ served fix.** If user hits `localhost:8080`, check who listens (`lsof`/Docker) and that served asset bytes match the edit (`curl …/js/…`) before claiming success. Baked images do not see host `web/` until rebuild or a dev mount.
-- **Docker local loop:** prod compose stays image-baked (no host source mounts). Live API+web = `make docker-dev` (`docker-compose.yml` + `docker-compose.dev.yml` override, `air`, `..:/src`). Do not put live mounts on the prod compose file. → `docs/memory/lessons.md`, `docs/ops/deploy.md`
+- **Docker local loop:** prod compose stays image-baked (no host source mounts). Live API+web = `make docker-dev` (`docker-compose.yml` + `docker-compose.dev.yml` override, `air`, `..:/src`). Do not put live mounts on the prod compose file. → `docs/memory/`, `docs/ops/deploy.md`
 
 ## Notes for Amp orbs
 

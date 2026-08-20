@@ -18,4 +18,4 @@ Design specs and implementation plans from Superpowers skills.
 
 **Owner-facing product docs** (routes, vaults, daily use) live under `docs/manual/` — keep those current when UI behavior ships; do not treat frozen specs as the only handbook.
 
-**Lessons / compounding notes** are not here — see `docs/memory/lessons.md`.
+**Lessons / compounding notes** are not here — index `docs/memory/lessons.md`, entries `docs/memory/YYYYMMDD-HHmm-*.md`.

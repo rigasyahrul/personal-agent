@@ -6,7 +6,7 @@
 **Spec SoT:** `docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md`  
 **Lock:** `docs/superpowers/plans/2026-08-19-ui-svelte-redesign-lock.md`  
 **Board:** `docs/superpowers/STATUS-ui-svelte-redesign.md` (master creates on start)  
-**Lessons:** `docs/memory/lessons.md` + `AGENTS.md`
+**Lessons:** `docs/memory/lessons.md` (index) + `docs/memory/YYYYMMDD-HHmm-*.md` + `AGENTS.md`
 
 **Pushed baseline on `origin/main`:** includes spec `20b62cd`, plan `d3a2d3a`, compound wrap `d962894` (or later tips on main).
 
@@ -50,7 +50,7 @@ You are the MASTER execution coordinator for personal-agent **UI Svelte redesign
 1. Load Superpowers: using-superpowers first.
 2. Follow this handoff exactly:
    docs/superpowers/HANDOFF-ui-svelte-redesign-master.md
-3. Read AGENTS.md standing rules + docs/memory/lessons.md Index (esp. big plans, docker-dev, sessions focus, consulting-grok-review).
+3. Read AGENTS.md standing rules + docs/memory/lessons.md topic index (esp. big plans, docker-dev, sessions focus, consulting-grok-review).
 
 ## Sources of truth (do not re-brainstorm)
 - Spec: docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md
@@ -150,7 +150,7 @@ Load using-superpowers, then:
 - Production compose stays image-baked; live UI = make docker-dev + PA_UI_DEV_PROXY as plan Tasks 6–8.
 - Polled session UI must never steal composer focus (when you touch sessions).
 - Ship = push your branch. Report merge readiness; MASTER merges unless told otherwise.
-- Lessons only for real mistakes: docs/memory/lessons.md (newest first + Index). Standing: AGENTS.md.
+- Memory entries only for real mistakes: docs/memory/YYYYMMDD-HHmm-slug.md + thin index in docs/memory/lessons.md (newest first + Index). Standing: AGENTS.md.
 
 ## Done criteria
 1. All tasks in range implemented + tests green.

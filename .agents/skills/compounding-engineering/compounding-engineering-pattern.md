@@ -70,13 +70,16 @@ graph LR
 
 **After completion:**
 
-0. Record a memory entry in `docs/memory/` (`YYYYMMDD-HHmm-<title-slug>.md`,
-   diary format) — the artifacts below link back to it
-1. Update `CLAUDE.md` with new coding standards or patterns
-2. Create slash commands for workflows you'll repeat
+1. Update `CLAUDE.md` / `AGENTS.md` with new coding standards or patterns
+2. Create slash commands / skills for workflows you'll repeat
 3. Build subagents for specialized validation tasks
 4. Add hooks to prevent common mistakes automatically
 5. Write tests that encode requirements
+6. **Optionally** record evidence when the learning needs a rationale trail for
+   later synthesis — not a mandatory per-task dump. This repo:
+   - Detail: `docs/memory/YYYYMMDD-HHmm-<title-slug>.md` (diary entry)
+   - Index list only: `docs/memory/lessons.md` (topic map + links; no full bodies)
+   Durable artifacts above are the primary compound; memory is selective evidence.
 
 **Related patterns**: This approach works synergistically with Memory Synthesis from Execution Logs (identifies patterns across features), Coding Agent CI Feedback Loop (provides structured testing feedback), and Skill Library Evolution (codifies working solutions).
 
