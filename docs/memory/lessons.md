@@ -34,20 +34,21 @@ Scan this first. Open the linked file only when you need detail.
 | amp | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | compounding | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
-| craft | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
+| craft | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
+| benchmark | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
 | darwin | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | dist | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
 | docker | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
 | docs | [2026-08-19 — Lessons file is stable `lessons.md`](20260819-2200-lessons-file-is-stable-lessons-md.md) |
 | docs layout | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | fixtures | [2026-08-13 — Verify escaped literals at the byte level](20260813-2300-verify-escaped-literals-at-the-byte-level.md) |
-| frontend | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
+| frontend | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
 | fs | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | git | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | gitignore | [2026-08-19 — Default `make` is help; build binary is gitignored](20260819-2000-default-make-is-help-build-binary-is-gitignored.md) |
 | go | [2026-08-13 — Verify escaped literals at the byte level](20260813-2300-verify-escaped-literals-at-the-byte-level.md) |
 | grok | [2026-08-19 — consulting-grok-review via Grok thread, not Task/OpenAI](20260819-1700-consulting-grok-review-via-grok-thread-not-task-openai.md) |
-| grok45 | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
+| grok45 | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
 | handoff | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | make | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
 | master | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
@@ -57,7 +58,7 @@ Scan this first. Open the linked file only when you need detail.
 | node | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | orb | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | orb-execute | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
-| plans | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
+| plans | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
 | restore | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | review | [2026-08-20 — Every worker task must pass consulting-grok-review](20260820-1505-every-worker-must-pass-consulting-grok-review.md) |
 | session-focus | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
@@ -65,10 +66,10 @@ Scan this first. Open the linked file only when you need detail.
 | ship | [2026-08-12 — Ship means push](20260812-2100-ship-means-push.md) |
 | skills | [2026-08-20 — Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md) |
 | spa | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
-| spawn | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
-| ui | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
-| web | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
-| writing-plans | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
+| spawn | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
+| ui | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
+| web | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
+| writing-plans | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
 
 ## Where Superpowers artifacts go
 
@@ -87,6 +88,10 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-21** — [Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md)  
+  Tags: grok45, amp, plans, writing-plans, spawn
+- **2026-08-21** — [Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md)  
+  Tags: craft, frontend, ui, benchmark, aislope
 - **2026-08-20** — [Every worker task must pass consulting-grok-review](20260820-1505-every-worker-must-pass-consulting-grok-review.md)  
   Tags: review, grok45, sdd, master, session-focus
 - **2026-08-20** — [Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md)  

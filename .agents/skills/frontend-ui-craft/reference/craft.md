@@ -101,8 +101,31 @@ If after a vibe-pass the layout is still generic soup:
 
 Code is cheap; confusing chrome is expensive.
 
+## Benchmark fidelity (named screenshots)
+
+When the user names or supplies reference images (e.g. `claude.png`, `grok.png`, `amp.png`):
+
+1. Freeze a **fidelity table**: region → required structure (not pixel-perfect).
+2. Open the real product URL **and** view each ref (local paths preferred).
+3. Side-by-side check every named ref before claiming done.
+4. Completion report: list each ref + pass/fail structural notes + intentional deviations.
+5. **Tokens / green tests alone do not pass** this gate.
+
+Personal-agent benchmark redesign (2026-08-20):
+
+| Ref | Structure |
+|-----|-----------|
+| Shell | Nav rows ≤44px; `.sidebar nav` packs with `align-content: start` |
+| `claude.png` | Project hub: “How can I help you today?” + composer; session rows **below**; no left session column; no metric/destination grid |
+| `claude-2.png` | Vault projects: name-first rows; create via modal |
+| `grok.png` / `grok-2.png` | Right rail default open; **Memory \| Files** header tabs |
+| `amp.png` | Agent + file tabs; sticky **bottom** composer; assistant copy control |
+
+Spec/plan: `docs/superpowers/specs/2026-08-20-benchmark-ui-redesign-design.md`, `docs/superpowers/plans/2026-08-20-benchmark-ui-redesign.md`.
+
 ## What this reference is not
 
 - Not a component library API
 - Not permission to expand product scope
 - Not a substitute for opening the real app
+- Not a license to treat token polish as screenshot fidelity
