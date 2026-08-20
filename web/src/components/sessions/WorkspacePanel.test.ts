@@ -34,7 +34,7 @@ const baseSession = {
 
 afterEach(cleanup)
 
-describe('WorkspacePanel', () => {
+describe('WorkspacePanel / files gate (session focus IA)', () => {
   beforeEach(() => {
     vi.mocked(api.listMessages).mockReset().mockResolvedValue([])
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
@@ -53,7 +53,7 @@ describe('WorkspacePanel', () => {
     { grants: '{bad', visible: false },
     { grants: '{"workspace_files":false}', visible: false },
     { grants: '{"workspace_files":true}', visible: true },
-  ])('gates workspace from persisted grants %#', async ({ grants, visible }) => {
+  ])('gates Show files toggle from persisted grants %#', async ({ grants, visible }) => {
     render(SessionChat, {
       props: {
         session: { ...baseSession, tool_grants_json: grants },
@@ -63,14 +63,18 @@ describe('WorkspacePanel', () => {
     })
     await screen.findByLabelText('Message')
     if (visible) {
-      expect(await screen.findByRole('complementary', { name: 'Workspace' })).toBeVisible()
+      expect(await screen.findByRole('button', { name: /show files/i })).toBeVisible()
+      // Files bar default closed — region not mounted until toggle
+      expect(screen.queryByLabelText('Session files')).not.toBeInTheDocument()
     } else {
-      expect(screen.queryByRole('complementary', { name: 'Workspace' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /show files/i })).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Session files')).not.toBeInTheDocument()
     }
   })
 
-  it('refreshes tree after a newly polled tool message changes a path', async () => {
-    let messages: Array<{ sequence: number; role: string; content: string; changed_path?: string }> = []
+  it('refreshes tree after tool path change once files are open', async () => {
+    let messages: Array<{ sequence: number; role: string; content: string; changed_path?: string }> =
+      []
     vi.mocked(api.listMessages).mockImplementation(async () => messages as never)
     const { component } = render(SessionChat, {
       props: {
@@ -79,7 +83,8 @@ describe('WorkspacePanel', () => {
         pollInterval: 60_000,
       },
     })
-    await screen.findByRole('complementary', { name: 'Workspace' })
+    await fireEvent.click(await screen.findByRole('button', { name: /show files/i }))
+    expect(await screen.findByLabelText('Session files')).toBeVisible()
     await waitFor(() => expect(api.workspaceTree).toHaveBeenCalledTimes(1))
     messages = [{ sequence: 1, role: 'tool', content: '', changed_path: 'new.txt' }]
     const poll = (component as unknown as { poll: () => Promise<void> }).poll
@@ -87,14 +92,12 @@ describe('WorkspacePanel', () => {
     await waitFor(() => expect(api.workspaceTree).toHaveBeenCalledTimes(2))
   })
 
-  it('loads file content and offers Save to source for md files', async () => {
-    const onpromote = vi.fn()
+  it('thin WorkspacePanel has no Save to source / preview', async () => {
     render(WorkspacePanel, {
-      props: { sessionId: 's1', messages: [], onpromote },
+      props: { sessionId: 's1', messages: [] },
     })
-    await fireEvent.click(await screen.findByRole('button', { name: 'draft.md' }))
-    expect(await screen.findByText('# hi')).toBeInTheDocument()
-    await fireEvent.click(screen.getByRole('button', { name: 'Save to source' }))
-    expect(onpromote).toHaveBeenCalledWith(expect.objectContaining({ path: 'draft.md' }))
+    await screen.findByRole('button', { name: 'draft.md' })
+    expect(screen.queryByRole('button', { name: 'Save to source' })).not.toBeInTheDocument()
+    expect(document.querySelector('pre')).toBeNull()
   })
 })

@@ -27,7 +27,7 @@
   import { createSessionPoller } from './session-poller'
   import OperationBadges from './OperationBadges.svelte'
   import PromoteDialog from './PromoteDialog.svelte'
-  import WorkspacePanel from './WorkspacePanel.svelte'
+  import SessionFilesBar from './SessionFilesBar.svelte'
 
   let {
     session,
@@ -62,6 +62,8 @@
   let promoteOpen = $state(false)
   let promoteSource = $state<WorkspaceFile | null>(null)
   let showWorkspace = $derived(workspaceEnabled(session))
+  /** Stub active path until Task 7 file tabs; highlights selection in files bar. */
+  let activePath = $state<string | null>(null)
 
   let filesOpen = $state(false)
   let mainPct = $state(DEFAULT_MAIN_PCT)
@@ -246,6 +248,10 @@
     promoteOpen = true
   }
 
+  function openFile(path: string) {
+    activePath = path
+  }
+
   function onPromoteSuccess(operationId: string) {
     if (!operations.includes(operationId)) {
       operations = [...operations, operationId]
@@ -320,6 +326,7 @@
     sendToken = null
     promoteOpen = false
     promoteSource = null
+    activePath = null
     operationResults = new Map()
     retryingPending = new Set()
     operations = loadOperationIds(value.id, storage)
@@ -457,8 +464,13 @@
         onpointerup={onHandlePointerUp}
         onpointercancel={onHandlePointerUp}
       ></div>
-      <aside class="session-split__files session-files">
-        <WorkspacePanel sessionId={session.id} {messages} onpromote={openPromote} />
+      <aside class="session-split__files">
+        <SessionFilesBar
+          sessionId={session.id}
+          {messages}
+          {activePath}
+          onopen={openFile}
+        />
       </aside>
     {/if}
   </div>
