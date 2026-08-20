@@ -31,7 +31,18 @@
   import SessionFilesBar from './SessionFilesBar.svelte'
 
   type TabId = 'agent' | `file:${string}`
-  type FileTabState = { path: string; mode: 'preview' | 'source' }
+  type FileSource = 'project-note' | 'workspace'
+  type FileTabState = {
+    path: string
+    mode: 'preview' | 'source'
+    source: FileSource
+    noteId?: string
+  }
+  type OpenFileRequest = {
+    path: string
+    source: FileSource
+    noteId?: string
+  }
 
   const FILE_TAB_CAP = 8
 
@@ -52,6 +63,7 @@
     uuid = () => crypto.randomUUID(),
     storage = typeof localStorage !== 'undefined' ? localStorage : null,
     openPath = $bindable<string | null>(null),
+    openFileRequest = $bindable<OpenFileRequest | null>(null),
     embeddedInHub = false,
   }: {
     session: Session
@@ -60,8 +72,10 @@
     onclose?: () => void
     uuid?: () => string
     storage?: Storage | null
-    /** Hub rail sets this to open a file tab; cleared after open. */
+    /** Hub convenience: open a workspace file tab; cleared after open. */
     openPath?: string | null
+    /** Rich open request (project notes + workspace); cleared after open. */
+    openFileRequest?: OpenFileRequest | null
     /** When true, hide internal Show files toggle / SessionFilesBar (hub ProjectRail owns files). */
     embeddedInHub?: boolean
   } = $props()
@@ -285,10 +299,19 @@
     fileTabLru = [...fileTabLru.filter((p) => p !== path), path]
   }
 
-  function openFile(path: string) {
+  function openFile(
+    path: string,
+    meta?: { source?: FileSource; noteId?: string },
+  ) {
     if (!path) return
+    const source: FileSource = meta?.source ?? 'workspace'
+    const noteId = source === 'project-note' ? meta?.noteId : undefined
     const existing = openFileTabs.find((t) => t.path === path)
     if (existing) {
+      // Refresh source/note metadata if the same path is re-opened from the rail.
+      openFileTabs = openFileTabs.map((t) =>
+        t.path === path ? { ...t, source, noteId } : t,
+      )
       activeTab = fileTabId(path)
       activePath = path
       bumpFileLru(path)
@@ -303,7 +326,7 @@
         if (activePath === lruPath) activePath = null
       }
     }
-    openFileTabs = [...nextTabs, { path, mode: 'preview' }]
+    openFileTabs = [...nextTabs, { path, mode: 'preview', source, noteId }]
     activeTab = fileTabId(path)
     activePath = path
     bumpFileLru(path)
@@ -332,6 +355,12 @@
 
   function setFileTabMode(path: string, mode: 'preview' | 'source') {
     openFileTabs = openFileTabs.map((t) => (t.path === path ? { ...t, mode } : t))
+  }
+
+  function openPromoteFromTab(file: WorkspaceFile) {
+    // Promote is workspace-only; project notes must not open the dialog.
+    if (activeFileTab?.source === 'project-note') return
+    openPromote(file)
   }
 
   function onPromoteSuccess(operationId: string) {
@@ -463,11 +492,19 @@
     return () => window.removeEventListener('keydown', onKeyDown)
   })
 
-  /** Hub ProjectRail drives file tabs via openPath; clear after handling so the same path can re-open. */
+  /** Hub ProjectRail drives file tabs via openFileRequest; clear after handling so the same path can re-open. */
+  $effect(() => {
+    const req = openFileRequest
+    if (!req?.path) return
+    openFile(req.path, { source: req.source, noteId: req.noteId })
+    openFileRequest = null
+  })
+
+  /** Convenience: openPath means a workspace-source open (files bar / legacy hub bind). */
   $effect(() => {
     const path = openPath
     if (!path) return
-    openFile(path)
+    openFile(path, { source: 'workspace' })
     openPath = null
   })
 
@@ -600,9 +637,11 @@
           sessionId={session.id}
           path={activeFileTab.path}
           {projectId}
+          source={activeFileTab.source}
+          noteId={activeFileTab.noteId}
           mode={activeFileTab.mode}
           onmode={(m) => setFileTabMode(activeFileTab.path, m)}
-          onpromote={openPromote}
+          onpromote={openPromoteFromTab}
         />
       {/if}
 

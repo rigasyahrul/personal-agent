@@ -14,6 +14,7 @@ vi.mock('../lib/api', async (importOriginal) => {
       listProjectSessions: vi.fn(),
       listModels: vi.fn(),
       listProjectNotes: vi.fn(),
+      getProjectNote: vi.fn(),
       createProjectSession: vi.fn(),
       sendMessage: vi.fn(),
       listMessages: vi.fn(),
@@ -50,6 +51,7 @@ describe('ProjectHubPage', () => {
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
     vi.mocked(api.workspaceFile).mockReset()
+    vi.mocked(api.getProjectNote).mockReset()
   })
 
   it('shows Claude start prompt and no metric destination grid', async () => {
@@ -157,8 +159,13 @@ describe('ProjectHubPage', () => {
       },
     ])
     vi.mocked(api.listProjectNotes).mockResolvedValue([
-      { path: 'notes/a.md', kind: 'file' },
+      { path: 'notes/a.md', kind: 'file', note_id: 'n-a' },
     ])
+    vi.mocked(api.getProjectNote).mockResolvedValue({
+      note_id: 'n-a',
+      relative_path: 'notes/a.md',
+      body: '# notes/a.md',
+    })
     vi.mocked(api.workspaceFile).mockImplementation(async (_sid, path) => ({
       path,
       kind: 'file',
@@ -177,6 +184,8 @@ describe('ProjectHubPage', () => {
     const fileTab = await screen.findByRole('tab', { name: /a\.md/i })
     expect(fileTab).toHaveAttribute('aria-selected', 'true')
     expect(fileTab).toHaveAttribute('title', 'notes/a.md')
+    await waitFor(() => expect(api.getProjectNote).toHaveBeenCalledWith('p1', 'n-a'))
+    expect(api.workspaceFile).not.toHaveBeenCalled()
   })
 
   it('shows a retryable hard-load error', async () => {

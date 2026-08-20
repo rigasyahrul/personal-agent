@@ -11,6 +11,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
     api: {
       ...actual.api,
       workspaceFile: vi.fn(),
+      getProjectNote: vi.fn(),
     },
   }
 })
@@ -20,6 +21,7 @@ afterEach(cleanup)
 describe('SessionFileTab', () => {
   beforeEach(() => {
     vi.mocked(api.workspaceFile).mockReset()
+    vi.mocked(api.getProjectNote).mockReset()
   })
 
   it('loads file and shows Preview markdown for .md by default', async () => {
@@ -124,5 +126,27 @@ describe('SessionFileTab', () => {
     expect(screen.getByRole('button', { name: 'Source' })).toHaveAttribute('aria-pressed', 'true')
     await fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
     expect(onmode).toHaveBeenCalledWith('preview')
+  })
+
+  it('loads project-note via getProjectNote, not workspaceFile', async () => {
+    vi.mocked(api.getProjectNote).mockResolvedValue({
+      note_id: 'n-1',
+      relative_path: 'notes/a.md',
+      body: '# From note\n\nBody.',
+    })
+    render(SessionFileTab, {
+      props: {
+        sessionId: 's1',
+        path: 'notes/a.md',
+        projectId: 'p1',
+        source: 'project-note',
+        noteId: 'n-1',
+      },
+    })
+    await waitFor(() => expect(api.getProjectNote).toHaveBeenCalledWith('p1', 'n-1'))
+    expect(api.workspaceFile).not.toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { level: 1, name: 'From note' })).toBeInTheDocument()
+    // Project notes are not workspace files — no promote.
+    expect(screen.queryByRole('button', { name: 'Save to source' })).not.toBeInTheDocument()
   })
 })

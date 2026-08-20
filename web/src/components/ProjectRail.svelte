@@ -5,6 +5,11 @@
   import { buildHierarchy, flattenTree, type TreeNode } from '../lib/workspace-tree'
   import Skeleton from './Skeleton.svelte'
 
+  export type OpenFileMeta = {
+    source: 'project-note' | 'workspace'
+    noteId?: string
+  }
+
   let {
     projectId,
     sessionId = null,
@@ -14,17 +19,20 @@
     projectId: string
     sessionId?: string | null
     workspaceFilesEnabled?: boolean
-    onOpenFile?: (path: string) => void
+    onOpenFile?: (path: string, meta?: OpenFileMeta) => void
   } = $props()
 
   type RailTab = 'memory' | 'files'
+  type RailEntry = WorkspaceEntry & { note_id?: string }
 
   let tab = $state<RailTab>('memory')
   let memory = $state('')
   let instructions = $state('')
 
-  let projectEntries = $state<WorkspaceEntry[]>([])
+  let projectEntries = $state<RailEntry[]>([])
   let workspaceEntries = $state<WorkspaceEntry[]>([])
+  /** path → note_id for project-note file rows (hierarchy drops note_id). */
+  let noteIdByPath = $state<Record<string, string>>({})
   let loading = $state(false)
   let error = $state('')
   let loadToken = 0
@@ -34,10 +42,11 @@
     return 'file'
   }
 
-  function notesToWorkspace(entries: NoteTreeEntry[]): WorkspaceEntry[] {
+  function notesToWorkspace(entries: NoteTreeEntry[]): RailEntry[] {
     return entries.map((entry) => ({
       path: entry.path,
       kind: noteKindToWorkspace(entry.kind),
+      note_id: entry.note_id,
     }))
   }
 
@@ -48,7 +57,13 @@
     try {
       const notes = await api.listProjectNotes(projectId)
       if (token !== loadToken) return
-      projectEntries = notesToWorkspace(notes ?? [])
+      const mapped = notesToWorkspace(notes ?? [])
+      projectEntries = mapped
+      const ids: Record<string, string> = {}
+      for (const entry of mapped) {
+        if (entry.kind === 'file' && entry.note_id) ids[entry.path] = entry.note_id
+      }
+      noteIdByPath = ids
 
       if (sessionId && workspaceFilesEnabled) {
         const tree = await api.workspaceTree(sessionId)
@@ -62,6 +77,7 @@
       error = cause instanceof Error ? cause.message : 'Unable to load project files.'
       projectEntries = []
       workspaceEntries = []
+      noteIdByPath = {}
     } finally {
       if (token === loadToken) loading = false
     }
@@ -84,9 +100,20 @@
   const workspaceRows = $derived(flattenTree(buildHierarchy(workspaceEntries)))
   const hasAnyFiles = $derived(projectRows.length > 0 || workspaceRows.length > 0)
 
-  function onRowClick(path: string, kind: TreeNode['kind']) {
+  function onProjectRowClick(path: string, kind: TreeNode['kind']) {
     if (kind === 'directory') return
-    onOpenFile?.(path)
+    if (!sessionId) return
+    const noteId = noteIdByPath[path]
+    onOpenFile?.(path, {
+      source: 'project-note',
+      ...(noteId ? { noteId } : {}),
+    })
+  }
+
+  function onWorkspaceRowClick(path: string, kind: TreeNode['kind']) {
+    if (kind === 'directory') return
+    if (!sessionId) return
+    onOpenFile?.(path, { source: 'workspace' })
   }
 </script>
 
@@ -161,7 +188,7 @@
                 class="tree-item {row.kind === 'directory' ? 'text-slate-500' : ''}"
                 style="padding-left: {8 + row.depth * 12}px"
                 disabled={row.kind === 'directory'}
-                onclick={() => onRowClick(row.path, row.kind)}
+                onclick={() => onProjectRowClick(row.path, row.kind)}
               >{row.path}</button>
             {/each}
           </div>
@@ -176,7 +203,7 @@
                   class="tree-item {row.kind === 'directory' ? 'text-slate-500' : ''}"
                   style="padding-left: {8 + row.depth * 12}px"
                   disabled={row.kind === 'directory'}
-                  onclick={() => onRowClick(row.path, row.kind)}
+                  onclick={() => onWorkspaceRowClick(row.path, row.kind)}
                 >{row.path}</button>
               {/each}
             </div>

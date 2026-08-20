@@ -15,6 +15,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       sendMessage: vi.fn(),
       workspaceTree: vi.fn(),
       workspaceFile: vi.fn(),
+      getProjectNote: vi.fn(),
       operationStatus: vi.fn(),
       promoteSession: vi.fn(),
       retryReviewPending: vi.fn(),
@@ -506,6 +507,33 @@ describe('SessionChat', () => {
       expect(screen.getByRole('tab', { name: /^Agent$/i })).toHaveAttribute('aria-selected', 'false')
       // Composer form stays mounted while file tab is active
       expect(screen.getByLabelText('Message').closest('form')).toBeTruthy()
+      await waitFor(() => expect(api.workspaceFile).toHaveBeenCalledWith('s1', 'notes/a.md'))
+    })
+
+    it('openFileRequest with project-note loads via getProjectNote', async () => {
+      vi.mocked(api.workspaceFile).mockClear()
+      vi.mocked(api.getProjectNote).mockReset().mockResolvedValue({
+        note_id: 'n-1',
+        relative_path: 'notes/a.md',
+        body: '# From note',
+      })
+      render(SessionChat, {
+        props: {
+          session: wsSession,
+          projectId: 'p1',
+          pollInterval: 60_000,
+          openFileRequest: {
+            path: 'notes/a.md',
+            source: 'project-note',
+            noteId: 'n-1',
+          },
+        },
+      })
+      const fileTab = await screen.findByRole('tab', { name: /a\.md/i })
+      expect(fileTab).toHaveAttribute('aria-selected', 'true')
+      await waitFor(() => expect(api.getProjectNote).toHaveBeenCalledWith('p1', 'n-1'))
+      expect(api.workspaceFile).not.toHaveBeenCalled()
+      expect(await screen.findByRole('heading', { level: 1, name: 'From note' })).toBeInTheDocument()
     })
 
     it('when embeddedInHub, does not show Show files toggle', async () => {

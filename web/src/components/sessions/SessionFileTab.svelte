@@ -9,7 +9,9 @@
   let {
     sessionId,
     path,
-    projectId: _projectId,
+    projectId,
+    source = 'workspace',
+    noteId = undefined,
     mode: modeProp,
     onmode,
     onpromote,
@@ -17,6 +19,8 @@
     sessionId: string
     path: string
     projectId: string
+    source?: 'project-note' | 'workspace'
+    noteId?: string
     mode?: 'preview' | 'source'
     onmode?: (mode: 'preview' | 'source') => void
     onpromote?: (file: WorkspaceFile) => void
@@ -29,7 +33,10 @@
   let loadToken = 0
 
   const mode = $derived(modeProp ?? localMode)
-  const promotable = $derived(isPromotableWorkspaceFile(file ?? { kind: 'file', path }))
+  const isProjectNote = $derived(source === 'project-note')
+  const promotable = $derived(
+    !isProjectNote && isPromotableWorkspaceFile(file ?? { kind: 'file', path }),
+  )
   const isMarkdown = $derived(typeof path === 'string' && path.endsWith('.md'))
   const content = $derived(file?.content ?? '')
 
@@ -39,12 +46,22 @@
     error = ''
     file = null
     try {
-      const next = await api.workspaceFile(sessionId, path)
-      if (token !== loadToken) return
-      // API may omit kind; normalize so promote gating sees a regular file.
-      file = next
-        ? { ...next, path: next.path || path, kind: next.kind || 'file' }
-        : { path, kind: 'file', content: '' }
+      if (source === 'project-note' && noteId && projectId) {
+        const note = await api.getProjectNote(projectId, noteId)
+        if (token !== loadToken) return
+        file = {
+          path: note?.relative_path || path,
+          kind: 'file',
+          content: note?.body ?? '',
+        }
+      } else {
+        const next = await api.workspaceFile(sessionId, path)
+        if (token !== loadToken) return
+        // API may omit kind; normalize so promote gating sees a regular file.
+        file = next
+          ? { ...next, path: next.path || path, kind: next.kind || 'file' }
+          : { path, kind: 'file', content: '' }
+      }
     } catch (cause) {
       if (token !== loadToken) return
       error = cause instanceof Error ? cause.message : 'Unable to load file.'
@@ -57,6 +74,9 @@
   $effect(() => {
     void sessionId
     void path
+    void source
+    void noteId
+    void projectId
     void load()
   })
 
@@ -66,7 +86,7 @@
   }
 
   function promote() {
-    if (!file || !promotable) return
+    if (!file || !promotable || isProjectNote) return
     onpromote?.(file)
   }
 </script>

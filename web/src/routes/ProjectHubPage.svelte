@@ -27,7 +27,11 @@
   let starting = $state(false)
   let activeSession = $state<Session | null>(null)
   /** Rail → SessionChat file tab bridge (cleared by SessionChat after open). */
-  let fileToOpen = $state<string | null>(null)
+  let openFileRequest = $state<{
+    path: string
+    source: 'project-note' | 'workspace'
+    noteId?: string
+  } | null>(null)
 
   async function load() {
     loading = true
@@ -84,7 +88,7 @@
 
   function closeSession() {
     activeSession = null
-    fileToOpen = null
+    openFileRequest = null
     void reloadSessions()
   }
 
@@ -143,7 +147,7 @@
             {projectId}
             onclose={closeSession}
             embeddedInHub={true}
-            bind:openPath={fileToOpen}
+            bind:openFileRequest
           />
         {/key}
       {:else}
@@ -201,8 +205,13 @@
         {projectId}
         sessionId={activeSession?.id}
         workspaceFilesEnabled={workspaceFilesEnabled}
-        onOpenFile={(path) => {
-          fileToOpen = path
+        onOpenFile={(path, meta) => {
+          if (!activeSession) return
+          openFileRequest = {
+            path,
+            source: meta?.source ?? 'workspace',
+            noteId: meta?.noteId,
+          }
         }}
       />
     </aside>

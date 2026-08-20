@@ -46,14 +46,47 @@ describe('ProjectRail', () => {
   it('lists project notes as files and opens on click', async () => {
     const onOpenFile = vi.fn()
     vi.mocked(api.listProjectNotes).mockResolvedValue([
-      { path: 'notes/a.md', kind: 'file' },
+      { path: 'notes/a.md', kind: 'file', note_id: 'n-a' },
       { path: 'notes', kind: 'folder' },
     ])
-    render(ProjectRail, { props: { projectId: 'p1', onOpenFile } })
+    render(ProjectRail, { props: { projectId: 'p1', sessionId: 's1', onOpenFile } })
     await fireEvent.click(screen.getByRole('tab', { name: 'Files' }))
     const file = await screen.findByRole('button', { name: 'notes/a.md' })
     await fireEvent.click(file)
-    expect(onOpenFile).toHaveBeenCalledWith('notes/a.md')
+    expect(onOpenFile).toHaveBeenCalledWith('notes/a.md', {
+      source: 'project-note',
+      noteId: 'n-a',
+    })
+  })
+
+  it('opens workspace rows with workspace source', async () => {
+    const onOpenFile = vi.fn()
+    vi.mocked(api.listProjectNotes).mockResolvedValue([])
+    vi.mocked(api.workspaceTree).mockResolvedValue({
+      entries: [{ path: 'scratch.txt', kind: 'file' }],
+    })
+    render(ProjectRail, {
+      props: {
+        projectId: 'p1',
+        sessionId: 's1',
+        workspaceFilesEnabled: true,
+        onOpenFile,
+      },
+    })
+    await fireEvent.click(screen.getByRole('tab', { name: 'Files' }))
+    await fireEvent.click(await screen.findByRole('button', { name: 'scratch.txt' }))
+    expect(onOpenFile).toHaveBeenCalledWith('scratch.txt', { source: 'workspace' })
+  })
+
+  it('does not call onOpenFile when there is no sessionId', async () => {
+    const onOpenFile = vi.fn()
+    vi.mocked(api.listProjectNotes).mockResolvedValue([
+      { path: 'notes/a.md', kind: 'file', note_id: 'n-a' },
+    ])
+    render(ProjectRail, { props: { projectId: 'p1', onOpenFile } })
+    await fireEvent.click(screen.getByRole('tab', { name: 'Files' }))
+    await fireEvent.click(await screen.findByRole('button', { name: 'notes/a.md' }))
+    expect(onOpenFile).not.toHaveBeenCalled()
   })
 
   it('merges workspace tree under Workspace when session + grant', async () => {
