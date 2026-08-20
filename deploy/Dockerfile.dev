@@ -1,7 +1,14 @@
-FROM node:22-alpine
+# Dev image: Node 22 (Vite) + official Go 1.24 toolchain + air.
+# Do not install Go via apk — Alpine package streams drop older minors
+# (e.g. go~1.24 becomes unsatisfiable when only go-1.26.x ships).
+FROM golang:1.24-alpine AS go-tools
+RUN GOBIN=/usr/local/bin go install github.com/air-verse/air@v1.61.7
 
-RUN apk add --no-cache go=~1.24 git ca-certificates curl \
-    && GOBIN=/usr/local/bin go install github.com/air-verse/air@v1.61.7
+FROM node:22-alpine
+RUN apk add --no-cache git ca-certificates curl
+COPY --from=go-tools /usr/local/go /usr/local/go
+COPY --from=go-tools /usr/local/bin/air /usr/local/bin/air
+ENV PATH="/usr/local/go/bin:${PATH}"
 COPY deploy/dev-entrypoint.sh /usr/local/bin/dev-entrypoint
 RUN chmod +x /usr/local/bin/dev-entrypoint
 WORKDIR /src
