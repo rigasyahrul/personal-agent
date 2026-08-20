@@ -147,6 +147,34 @@ describe('ProjectHubPage', () => {
     expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
   })
 
+  it('clicking a session row shows chat and Back returns to prompt', async () => {
+    vi.mocked(api.listProjectSessions).mockResolvedValue([
+      {
+        id: 's1',
+        title: 'Test 1',
+        status: 'idle',
+        provider: 'openai',
+        model_id: 'gpt',
+      },
+    ])
+
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+
+    expect(await screen.findByRole('heading', { name: /how can i help you today/i })).toBeVisible()
+    await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
+
+    expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /how can i help you today/i })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+
+    expect(await screen.findByRole('heading', { name: /how can i help you today/i })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
+  })
+
   it('rail Files open drives SessionChat file tab and hides Show files', async () => {
     vi.mocked(api.listProjectSessions).mockResolvedValue([
       {
