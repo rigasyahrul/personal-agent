@@ -127,6 +127,12 @@
   function handleProjectLoad(project: Project | null) {
     routeProject = project;
   }
+
+  const canvasClass = $derived(
+    route.name === 'project' || route.name === 'sessions'
+      ? 'content-canvas--project-workspace'
+      : '',
+  )
 </script>
 
 {#if auth.status === 'loading'}
@@ -138,7 +144,7 @@
 {:else if auth.status === 'error'}
   <main class="auth-canvas"><p role="alert">{auth.message}</p></main>
 {:else}
-  <AppShell {context} {route} {health}>
+  <AppShell {context} {route} {health} {canvasClass}>
     {#if route.name === 'home'}
       <HomePage />
     {:else if route.name === 'projects'}

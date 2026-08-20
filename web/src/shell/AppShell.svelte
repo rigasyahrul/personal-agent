@@ -5,11 +5,18 @@
   import type { ShellContext } from '../lib/stores/shell-context';
   import Sidebar from './Sidebar.svelte';
   import TopBar from './TopBar.svelte';
-  let { context, route, health, children }: {
-    context: ShellContext; route: AppRoute; health: string; children: Snippet;
+  let { context, route, health, canvasClass = '', children }: {
+    context: ShellContext
+    route: AppRoute
+    health: string
+    canvasClass?: string
+    children: Snippet
   } = $props();
 </script>
 <div class="app-shell">
   <Sidebar {context} {route} />
-  <div class="app-shell__body"><TopBar {health} /><main class="content-canvas">{@render children()}</main></div>
+  <div class="app-shell__body">
+    <TopBar {health} />
+    <main class="content-canvas {canvasClass}">{@render children()}</main>
+  </div>
 </div>

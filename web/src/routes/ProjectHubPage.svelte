@@ -1,10 +1,14 @@
 <!-- web/src/routes/ProjectHubPage.svelte -->
 <script lang="ts">
-  import Badge from '../components/Badge.svelte'
   import Breadcrumbs from '../components/Breadcrumbs.svelte'
+  import ProjectRail from '../components/ProjectRail.svelte'
   import Skeleton from '../components/Skeleton.svelte'
+  import SessionCardRow from '../components/sessions/SessionCardRow.svelte'
+  import SessionChat from '../components/sessions/SessionChat.svelte'
   import { api } from '../lib/api'
-  import type { Project } from '../lib/api/types'
+  import type { Project, Session } from '../lib/api/types'
+  import { formatRelativeTime } from '../lib/format-relative-time'
+  import { workspaceEnabled } from '../lib/promote'
   import { routeToHash } from '../lib/router'
 
   let {
@@ -16,21 +20,41 @@
   } = $props()
 
   let project = $state<Project | null>(null)
+  let sessions = $state<Session[]>([])
   let loading = $state(true)
   let error = $state('')
+  let draft = $state('')
+  let starting = $state(false)
+  let activeSession = $state<Session | null>(null)
 
   async function load() {
     loading = true
     error = ''
+    activeSession = null
     try {
-      project = await api.getProject(projectId)
-      onProjectLoad?.(project)
+      const [loadedProject, listed] = await Promise.all([
+        api.getProject(projectId),
+        api.listProjectSessions(projectId),
+      ])
+      project = loadedProject
+      onProjectLoad?.(loadedProject)
+      sessions = listed ?? []
     } catch (cause) {
       project = null
       onProjectLoad?.(null)
+      sessions = []
       error = cause instanceof Error ? cause.message : 'Could not load project.'
     } finally {
       loading = false
+    }
+  }
+
+  async function reloadSessions() {
+    try {
+      const listed = await api.listProjectSessions(projectId)
+      sessions = listed ?? []
+    } catch {
+      /* keep existing list on soft reload failure */
     }
   }
 
@@ -40,72 +64,135 @@
   })
 
   const notesHref = $derived(routeToHash({ name: 'notes', projectId }))
-  const sessionsHref = $derived(routeToHash({ name: 'sessions', projectId }))
   const reviewHref = $derived(routeToHash({ name: 'project-review', projectId }))
+
+  const workspaceFilesEnabled = $derived(
+    activeSession ? workspaceEnabled(activeSession) : false,
+  )
+
+  function sessionMeta(session: Session): string {
+    const model = `${session.provider}:${session.model_id}`
+    const rel = formatRelativeTime(session.updated_at ?? session.created_at)
+    return rel ? `${model} · ${rel}` : model
+  }
+
+  function openSession(session: Session) {
+    activeSession = session
+  }
+
+  function closeSession() {
+    activeSession = null
+    void reloadSessions()
+  }
+
+  async function startSession(e: Event) {
+    e.preventDefault()
+    const content = draft.trim()
+    if (!content || starting) return
+    starting = true
+    error = ''
+    try {
+      const { models } = await api.listModels()
+      if (!models?.length) {
+        throw new Error('Configure a model in Settings before starting a session.')
+      }
+      const m = models[0]
+      const session = await api.createProjectSession(projectId, {
+        home: 'project',
+        title: content.slice(0, 80) || 'Untitled',
+        provider: m.provider,
+        model_id: m.model_id,
+        model_parameters: {},
+        tool_grants: { workspace_files: false },
+      })
+      await api.sendMessage(session.id, { content, request_key: crypto.randomUUID() })
+      draft = ''
+      sessions = [session, ...sessions.filter((x) => x.id !== session.id)]
+      activeSession = session
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Could not start session.'
+    } finally {
+      starting = false
+    }
+  }
 </script>
 
 {#if loading}
   <div class="page-stack" aria-busy="true">
     <Skeleton class="h-6 w-48" />
     <Skeleton class="h-10 w-72" />
-    <div class="metric-strip">
-      <Skeleton class="h-16" />
-      <Skeleton class="h-16" />
-      <Skeleton class="h-16" />
-    </div>
+    <Skeleton class="h-24" />
   </div>
-{:else if error}
+{:else if error && !project}
   <div class="page-stack">
-    <p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
+    <p role="alert" class="alert alert--error">{error}</p>
     <div>
       <button type="button" class="btn btn--secondary" onclick={() => void load()}>Retry</button>
     </div>
   </div>
 {:else if project}
-  <div class="page-stack">
-    <div class="space-y-3">
-      <Breadcrumbs {project} />
-      <header class="page-header" style="margin-bottom: 0">
-        <div class="flex flex-wrap items-center gap-3">
-          <h1>{project.name}</h1>
-          {#if project.vault_name}
-            <Badge text={project.vault_name} />
+  <div class="project-workspace">
+    <div class="project-workspace__main">
+      {#if activeSession}
+        {#key activeSession.id}
+          <SessionChat session={activeSession} {projectId} onclose={closeSession} />
+        {/key}
+      {:else}
+        <header class="hub-header name-row">
+          <div class="hub-header__lead">
+            <Breadcrumbs {project} />
+            <h1 class="hub-header__title">{project.name}</h1>
+          </div>
+          <nav class="hub-header__links" aria-label="Project links">
+            <a class="link-accent" href={notesHref}>Notes</a>
+            <a class="link-accent" href={reviewHref}>Review</a>
+          </nav>
+        </header>
+
+        <section class="hub-start">
+          <h1 class="hub-start__title">How can I help you today?</h1>
+          <form class="hub-composer" onsubmit={startSession}>
+            <textarea
+              class="field-textarea"
+              bind:value={draft}
+              aria-label="Message"
+              rows="4"
+            ></textarea>
+            <div class="hub-composer__row">
+              <button
+                class="btn btn--primary"
+                type="submit"
+                disabled={starting || !draft.trim()}
+              >Send</button>
+            </div>
+          </form>
+          {#if error}
+            <p role="alert" class="alert alert--error" style="margin-top:12px">{error}</p>
           {/if}
-        </div>
-      </header>
+        </section>
+
+        <section class="hub-session-list" aria-label="Sessions">
+          {#each sessions as s (s.id)}
+            <SessionCardRow
+              title={s.title}
+              meta={sessionMeta(s)}
+              onclick={() => openSession(s)}
+            />
+          {/each}
+          {#if !sessions.length}
+            <p class="text-sm text-muted" style="margin:0">
+              No sessions yet. Send a message above to start one.
+            </p>
+          {/if}
+        </section>
+      {/if}
     </div>
-
-    <section class="metric-strip" aria-label="Project metrics">
-      <article class="metric-card" data-card="metric">
-        <p class="metric-card__label">Notes</p>
-        <p class="metric-card__value">{project.note_count ?? 0}</p>
-      </article>
-      <article class="metric-card" data-card="metric">
-        <p class="metric-card__label">Sessions</p>
-        <p class="metric-card__value">{project.session_count ?? 0}</p>
-      </article>
-      <article class="metric-card" data-card="metric">
-        <p class="metric-card__label">Due</p>
-        <p class="metric-card__value">{project.due_count ?? 0}</p>
-      </article>
-    </section>
-
-    <section class="destination-grid" aria-label="Project surfaces">
-      <a class="destination-card" data-card="destination" href={notesHref}>
-        <h2 class="destination-card__title">Notes</h2>
-        <p class="destination-card__body">Browse and read source notes.</p>
-        <span class="destination-card__cta">Open →</span>
-      </a>
-      <a class="destination-card" data-card="destination" href={sessionsHref}>
-        <h2 class="destination-card__title">Sessions</h2>
-        <p class="destination-card__body">Chat with tools in this project.</p>
-        <span class="destination-card__cta">Open →</span>
-      </a>
-      <a class="destination-card" data-card="destination" href={reviewHref}>
-        <h2 class="destination-card__title">Review</h2>
-        <p class="destination-card__body">Work through due cards.</p>
-        <span class="destination-card__cta">Open →</span>
-      </a>
-    </section>
+    <aside class="project-workspace__rail">
+      <ProjectRail
+        {projectId}
+        sessionId={activeSession?.id}
+        workspaceFilesEnabled={workspaceFilesEnabled}
+      />
+    </aside>
   </div>
 {/if}
