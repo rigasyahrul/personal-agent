@@ -21,8 +21,8 @@
 | 8 | Dense bottom composer + copy | complete | T-01a02058-dd93-7148-8c83-ac9de6bd8ae1 | 4d34069 |
 | 9 | Hub embeds SessionChat | complete | T-01a0205c-773f-755b-84c7-d2c51e81fac4 | f7e65be |
 | 10 | Vault projects name-first | complete | T-01a02060-f8bc-752e-a53f-69390b1169d6 | f1025c4 |
-| 11 | frontend-ui-craft benchmark gate | implementing | — | |
-| 12 | Full suite + dist + vibe-pass | todo | — | |
+| 11 | frontend-ui-craft benchmark gate | complete | T-01a02064-4446-718b-911b-630dec238af3 | 2f279aa |
+| 12 | Full suite + dist + vibe-pass | implementing | — | |
 | — | Whole-branch review | todo | — | After Task 12 |
 
 Status values: `todo | implementing | review | PASS | complete`
@@ -39,6 +39,7 @@ Status values: `todo | implementing | review | PASS | complete`
 - Task 8: PASS T-01a02058-dd93-7148-8c83-ac9de6bd8ae1 (Critical none, Important none) — 4d34069 composer+copy
 - Task 9: PASS T-01a0205c-773f-755b-84c7-d2c51e81fac4 (Critical none, Important none) — f7e65be hub Back
 - Task 10: PASS T-01a02060-f8bc-752e-a53f-69390b1169d6 (Critical none, Important none) — f1025c4 name-first
+- Task 11: PASS T-01a02064-4446-718b-911b-630dec238af3 (Critical none, Important none) — 2f279aa craft gate
 
 
 ## Merge / push log
