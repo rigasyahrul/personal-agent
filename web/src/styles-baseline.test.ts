@@ -66,6 +66,25 @@ describe('visual baseline', () => {
     }
   });
 
+  it('declares hub/rail workspace tokens', () => {
+    for (const token of [
+      '.project-workspace',
+      '.project-workspace__main',
+      '.project-workspace__rail',
+      '.rail-tabs',
+      '.rail-tab',
+      '.rail-tab--active',
+      '.rail-panel',
+      '.hub-start',
+      '.hub-start__title',
+      '.hub-composer',
+      '.hub-session-list',
+      '.content-canvas--project-workspace',
+    ]) {
+      expect(css).toContain(token);
+    }
+  });
+
   it('bans scaffold soup leftovers in Svelte markup', () => {
     const files = walkSvelte(here);
     const offenders: string[] = [];
