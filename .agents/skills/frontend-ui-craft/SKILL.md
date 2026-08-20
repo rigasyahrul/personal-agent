@@ -55,6 +55,7 @@ Do not ship or claim done while these remain unless the user **explicitly** waiv
 | Poll/timer full re-render or `innerHTML` killing focused inputs | Hostile UX |
 | User named/supplied **benchmark screenshots** but agent only checked tokens/classes/tests | Tokens ≠ fidelity — structural match required |
 | Claimed vibe-pass without **side-by-side** vs each named ref | Guessing against screenshots |
+| Blocked browser treated as passed | Blocked ≠ passed |
 | Nav rows stretched to fill sidebar (`flex:1` grid without `align-content: start`) | Broken density (~147px rows) |
 | Create flows as inline `form-inline` soup when product expects **modals** | AISLOP forms |
 

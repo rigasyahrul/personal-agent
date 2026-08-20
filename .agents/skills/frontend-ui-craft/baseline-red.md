@@ -22,6 +22,8 @@ Without this skill, agents and prior UI work produced:
 - "Empty states and skeletons exist, so UX is done"
 - "Matches the redesign spec tokens, so it looks intentional"
 - "Small leftover chrome can be a follow-up"
+- "Named benchmark screenshots (claude/grok/amp) — tokens/classes match, so fidelity is done" (tokens ≠ side-by-side structural match)
+- "Browser blocked, but I'll mark vibe-pass anyway" (blocked ≠ passed)
 
 ## GREEN expectation (with skill)
 

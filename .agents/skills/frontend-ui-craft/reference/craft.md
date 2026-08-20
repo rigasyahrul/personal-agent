@@ -105,13 +105,20 @@ Code is cheap; confusing chrome is expensive.
 
 When the user names or supplies reference images (e.g. `claude.png`, `grok.png`, `amp.png`):
 
-1. Freeze a **fidelity table**: region → required structure (not pixel-perfect).
-2. Open the real product URL **and** view each ref (local paths preferred).
-3. Side-by-side check every named ref before claiming done.
+1. In the **screen spec**, freeze a short **fidelity criteria table**: region → required structure (layout regions, not pixel-perfect).
+2. Open the real product URL **and** view each ref image (local paths preferred).
+3. **Side-by-side** check every named ref before claiming done.
 4. Completion report: list each ref + pass/fail structural notes + intentional deviations.
-5. **Tokens / green tests alone do not pass** this gate.
+5. **Tokens / green tests alone do not pass** this gate. Blocked browser ≠ passed.
 
-Personal-agent benchmark redesign (2026-08-20):
+### personal-agent ref paths
+
+Look for the five redesign screenshots here (first hit wins):
+
+- `.amp/in/artifacts/{claude,claude-2,grok,grok-2,amp}.png`
+- repo root: `{claude,claude-2,grok,grok-2,amp}.png`
+
+### Structure checklist (2026-08-20 redesign)
 
 | Ref | Structure |
 |-----|-----------|
@@ -122,6 +129,8 @@ Personal-agent benchmark redesign (2026-08-20):
 | `amp.png` | Agent + file tabs; sticky **bottom** composer; assistant copy control |
 
 Spec/plan: `docs/superpowers/specs/2026-08-20-benchmark-ui-redesign-design.md`, `docs/superpowers/plans/2026-08-20-benchmark-ui-redesign.md`.
+
+**Verified complete (Task 11):** gate wording covers red flags (tokens≠fidelity, side-by-side, blocked≠passed), positive recipe + completion report, fidelity table in screen spec, and the five refs above.
 
 ## What this reference is not
 
