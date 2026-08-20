@@ -20,3 +20,5 @@ Task 6: consulting-grok-review PASS (thread T-01a02043-9cee-7608-814a-d847258323
 Task 6: complete (commits 2ee4588..36dba4d, review clean)
 Task 7: consulting-grok-review PASS (thread T-01a02053-a214-71d2-833d-8afc65f9b279, Critical none, Important none; prior FAIL T-01a02049 fixed in b049d68)
 Task 7: complete (commits 4b47ede..b049d68, review clean after fix)
+Task 8: consulting-grok-review PASS (thread T-01a02058-dd93-7148-8c83-ac9de6bd8ae1, Critical none, Important none)
+Task 8: complete (commits a8c5ce4..4d34069, review clean)

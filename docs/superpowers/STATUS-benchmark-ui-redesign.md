@@ -18,8 +18,8 @@
 | 5 | ProjectHubPage Claude stack | complete | T-01a0203e-e9d1-72b0-be3f-7a493ab29487 | cf39049 |
 | 6 | sessions route → hub | complete | T-01a02043-9cee-7608-814a-d847258323d7 | 36dba4d |
 | 7 | SessionChat openPath / embeddedInHub | complete | T-01a02053-a214-71d2-833d-8afc65f9b279 | b049d68 |
-| 8 | Dense bottom composer + copy | implementing | — | |
-| 9 | Hub embeds SessionChat | todo | — | |
+| 8 | Dense bottom composer + copy | complete | T-01a02058-dd93-7148-8c83-ac9de6bd8ae1 | 4d34069 |
+| 9 | Hub embeds SessionChat | implementing | — | |
 | 10 | Vault projects name-first | todo | — | |
 | 11 | frontend-ui-craft benchmark gate | todo | — | |
 | 12 | Full suite + dist + vibe-pass | todo | — | |
@@ -36,6 +36,7 @@ Status values: `todo | implementing | review | PASS | complete`
 - Task 5: PASS T-01a0203e-e9d1-72b0-be3f-7a493ab29487 (Critical none, Important none) — cf39049 Claude hub
 - Task 6: PASS T-01a02043-9cee-7608-814a-d847258323d7 (Critical none, Important none) — 36dba4d sessions→hub
 - Task 7: PASS T-01a02053-a214-71d2-833d-8afc65f9b279 (Critical none, Important none) — b049d68 openPath+notes
+- Task 8: PASS T-01a02058-dd93-7148-8c83-ac9de6bd8ae1 (Critical none, Important none) — 4d34069 composer+copy
 
 
 ## Merge / push log
