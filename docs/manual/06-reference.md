@@ -1,71 +1,124 @@
 # 06 — Reference
 
-Quick tables and links. Prefer ops docs for long procedures.
+Quick tables for operators. Behavior detail lives in the product and API; this page is a field card.
 
-## Environment variables
+## UI stack (current)
 
-| Variable | Required | Default / notes |
-|----------|----------|-----------------|
-| `BOOTSTRAP_TOKEN` | First run | ≥32 random characters; one-time setup |
-| `PA_DATA_DIR` | no | `./data` |
-| `PA_ADDR` | no | `:8080` |
-| `PA_SECURE_COOKIES` | no | Secure cookies on unless `false` (localhost HTTP only) |
-| `PA_MODELS` | for chat UI | `provider:model_id,...` e.g. `openai:gpt-4o-mini` |
-| `OPENAI_API_KEY` | for live chat/bites | |
-| `OPENAI_BASE_URL` | no | OpenAI-compatible base URL |
-| `PA_BACKUP_S3_BUCKET` / related S3 env | no | Enables remote backup upload; see backup-restore doc |
-| `PA_DOMAIN` | domain profile | Used by Caddy compose profile |
+| Piece | Location / note |
+|-------|------------------|
+| Svelte 5 + TypeScript + Vite + Tailwind | `web/` |
+| Production assets | `web/dist` (Go embeds/serves) |
+| Dev HMR | `make docker-dev` → Go `:8080` + Vite via `PA_UI_DEV_PROXY` |
+| Legacy static UI | Removed (`web-legacy` gone) |
+| Frontend tests | `make web-test` (Vitest; **Node 22**) |
+| Focus regression | `web/src/**/SessionChat.focus.test.ts` (composer must survive poll) |
 
-Never commit real secrets. Use `deploy/.env` from `deploy/.env.example` for Compose.
+## Hash routes
 
-## Useful Makefile targets
+| Pattern | Screen |
+|---------|--------|
+| `#/home` | Global home |
+| `#/projects` | Unfiled projects grid |
+| `#/vaults` | Vaults grid |
+| `#/vaults/{vaultId}` | Vault home |
+| `#/vaults/{vaultId}/projects` | Vault projects |
+| `#/vaults/{vaultId}/sessions` | Vault session aggregate |
+| `#/vaults/{vaultId}/review` | Vault review |
+| `#/projects/{projectId}` | Project hub |
+| `#/projects/{projectId}/notes` | Notes list |
+| `#/projects/{projectId}/notes/{noteId}` | Notes + selected note |
+| `#/projects/{projectId}/sessions` | Project sessions / chat |
+| `#/projects/{projectId}/review` | Project review |
+| `#/review?scope=all` | Global review |
+| `#/settings` | Settings |
+| `#settings` | Settings (legacy alias) |
 
-```sh
-make test    # go test ./...
-make lint    # go vet (needs Go 1.24+)
-make run     # go run ./cmd/personal-agent
-make build   # go build ./cmd/personal-agent
-```
+Login and bootstrap are unauthenticated full-page routes (no main chrome).
 
-## Data layout (reminder)
+## Sidebar map
 
-```text
-$PA_DATA_DIR/
-  db/personal-agent.sqlite
-  files/
-  staging/
-  backups/local/{run_id}/
-```
+**Global:** Home · Projects (unfiled) · Sessions (disabled) · Vaults · Review · Settings  
 
-## Limits you will hit in the UI
+**Vault:** Leave vault · Home · Projects · Sessions · Review · Settings  
 
-| Limit | Value |
-|-------|--------|
-| Markdown body | 1 MiB UTF-8 |
-| Relative path | 512 bytes, depth 16, component 255 |
-| Password (bootstrap) | min 12 characters |
-| Promote/direct target | regular `.md` only; no overwrite |
+## Core env vars
 
-## Compose one-liners
+| Variable | Role |
+|----------|------|
+| `PA_DATA_DIR` | Data root (DB, files, backups). Default often `./data` or `/data` in containers |
+| `PA_ADDR` | Listen address (e.g. `:8080`) |
+| `PA_SECURE_COOKIES` | `true` for HTTPS; `false` only on trusted plain HTTP localhost |
+| `BOOTSTRAP_TOKEN` | One-time owner bootstrap secret |
+| `PA_MODELS` | Comma-separated `provider:model` list for sessions |
+| `OPENAI_API_KEY` | Live chat / generation |
+| `OPENAI_BASE_URL` | Optional OpenAI-compatible base URL |
+| `PA_TIMEZONE` | IANA zone for display / daily backup hour context |
+| `PA_BACKUP_HOUR` | Local hour for Daily backup (default 3) |
+| `PA_UI_DEV_PROXY` | Dev only: upstream Vite origin (e.g. `http://127.0.0.1:5173`) so Go proxies non-API GETs |
+| `PA_DOMAIN` | Optional public hostname for domain profile / TLS setups |
+| S3-related (`PA_S3_*` / as documented in deploy) | Optional backup upload |
 
-```sh
-# Localhost
-docker compose --env-file deploy/.env -f deploy/docker-compose.yml up --build
+Never commit real tokens or keys. Prefer `deploy/.env` (gitignored) for Compose.
 
-# Domain TLS profile
-docker compose --env-file deploy/.env -f deploy/docker-compose.yml --profile domain up --build
-```
+## Make targets (common)
 
-## Doc map
+| Target | Purpose |
+|--------|---------|
+| `make help` | Default goal — lists public targets |
+| `make web-build` | Vite production build → `web/dist` |
+| `make web-test` | Frontend unit tests |
+| `make build` | `web-build` + Go binary |
+| `make test` / `go test ./...` | Go tests (build `web/dist` first if static tests need assets) |
+| `make run` | Run API (expects assets as configured) |
+| `make docker-dev` | API + Vite HMR (dev compose override) |
+| `make docker-dev-down` | Stop dev stack |
 
-| Need | Go here |
-|------|---------|
-| This handbook TOC | [`README.md`](README.md) |
-| Deploy / upgrade / TLS | [`../ops/deploy.md`](../ops/deploy.md) |
-| Backup restore drill | [`../ops/backup-restore.md`](../ops/backup-restore.md) |
-| Product design | [`../superpowers/specs/2026-08-12-personal-agent-design.md`](../superpowers/specs/2026-08-12-personal-agent-design.md) |
-| Repo quick start | [`../../README.md`](../../README.md) |
+## API surface (owner mental model)
 
-## API
+Exact paths and schemas are defined by the Go server. Conceptually:
 
-v1 is a browser app over `/api/v1` (plus `/health`). There is no separate public API handbook in this edition. Developers: routes live under `internal/httpapi/`; acceptance coverage in `internal/acceptance/`.
+| Area | Examples of operations |
+|------|-------------------------|
+| Auth | Bootstrap once; login; session cookie; logout |
+| Vaults | List / create / get |
+| Projects | List (filter unfiled vs vault); create with optional `vault_id`; get |
+| Notes / source | Tree, read, write/publish with review mode |
+| Sessions | List by project; create (model + tools flag); messages; run status |
+| Workspace | Tree/read when tools allowed; promote `.md` → source |
+| Review | Due queue by scope; rate; suspend |
+| Settings / backup | Get settings; set schedule; backup now; status |
+| Health | Liveness + storage writability |
+
+Idempotency: mutating “do it once” actions often take a client **request key**; retries with the same key should not double-apply.
+
+## Product invariants (v1)
+
+| Rule | Note |
+|------|------|
+| Single owner | No multi-user ACL |
+| `vault_id` immutable after project create | No move between vaults |
+| Unfiled = empty `vault_id` | Global Projects grid only |
+| Sessions always per-project | No global orphan sessions |
+| Source + promote no-clobber | Conflicts are explicit |
+| One active backup at a time | 409 if busy |
+| One conflicting agent run key | 409 busy |
+| Poll must not steal composer focus | Automated UI test |
+| Prod image baked | No live `web/` mount on prod compose |
+
+## Docs map
+
+| Doc | Audience |
+|-----|----------|
+| [README.md](README.md) (this manual) | Owner handbook index |
+| [01–06](.) | Day-to-day owner chapters |
+| [../ops/deploy.md](../ops/deploy.md) | Deploy, Docker, TLS, HMR |
+| Root [README.md](../../README.md) | Repo quick start |
+| [../superpowers/](../superpowers/) | Design/plan/status (engineering history) |
+
+## Design history
+
+The Svelte redesign design/plan under `docs/superpowers/specs/` and `plans/` describe how the UI was specified and executed. **Runtime truth** is the code on `main` plus this manual and ops deploy doc. Prefer those over frozen “before” sketches if anything disagrees.
+
+## End of manual
+
+Start over: [01 — Overview](01-overview.md) · Index: [README](README.md)

@@ -1,89 +1,117 @@
 # 05 — Troubleshooting
 
-Short fixes for common v1 issues. For restore and upgrade, use the ops docs.
+Symptoms → likely cause → what to do. For deploy/TLS detail see [`docs/ops/deploy.md`](../ops/deploy.md).
 
-## Storage / health
+## Cannot open the UI / blank page
 
-| Symptom | What to check |
-|---------|----------------|
-| Header: storage **unavailable** | `PA_DATA_DIR` exists and is writable by the process user |
-| `/health` not 200 | Process down, wrong `PA_ADDR`, or disk full / permissions |
-| Compose data missing after restart | Volume `pa-data` still attached; see deploy volume checks |
+| Check | Action |
+|-------|--------|
+| Process up? | `curl -sf http://127.0.0.1:8080/health` (or your host) |
+| Local binary without assets? | Run `make web-build` (Node **22**) so `web/dist` exists; restart Go |
+| Docker prod image? | Rebuild image after UI changes (`docker compose … up --build`) — prod has **no** host `web/` mount |
+| Dev HMR empty/wrong? | Use `make docker-dev` (not prod compose alone); confirm `PA_UI_DEV_PROXY` is set in the API container |
+| Wrong URL | Use the published host/portal URL; sandboxes need Amp **portal** URLs, not raw sandbox hosts |
 
-```sh
-curl -sf http://127.0.0.1:8080/health
-```
+## Storage not ready / writes fail
 
-## Bootstrap and login
+Top bar or `/health` shows storage not writable.
 
-| Symptom | Likely cause |
-|---------|----------------|
-| Bootstrap rejected | Wrong `BOOTSTRAP_TOKEN`, or password &lt; 12 characters |
-| Bootstrap **conflict / owner exists** | Already bootstrapped — use **Sign in** |
-| Login fails | Wrong password; cookies blocked; `PA_SECURE_COOKIES=true` on plain HTTP |
-| Logged out unexpectedly | Session expired or cookies cleared |
+- Data directory missing or not writable by the process user
+- Volume not mounted (`pa-data` → `/data` in Compose)
+- Disk full or permissions
 
-**Secure cookies:** use `PA_SECURE_COOKIES=false` only on trusted localhost HTTP. On real HTTPS domains, keep `true`.
+Fix the path/permissions, restart, re-check `/health`.
 
-## Mutations (create, publish, chat, backup)
+## Bootstrap rejected
 
-Browser mutations need a logged-in session **and** CSRF. The UI handles CSRF automatically when cookies work.
+| Symptom | Cause |
+|---------|--------|
+| Unauthorized / bad token | `BOOTSTRAP_TOKEN` mismatch (env vs form) |
+| Conflict / owner exists | Bootstrap already done — use **Sign in** |
+| Token too short | Server requires a strong bootstrap secret (≥32 chars recommended) |
 
-| HTTP / message | Meaning |
-|----------------|---------|
-| **401** | Not logged in (or session invalid) |
-| **403** | CSRF / forbidden |
-| **409** busy / session_busy | Another agent run is active on that session — wait or use one tab |
-| **409** conflict on publish/promote | Path taken, integrity issue, or idempotent conflict — change path or inspect status |
-| **400** invalid | Path/body/model validation failed |
+After a successful bootstrap, do not expect a second setup screen.
 
-Direct publish requires an **Idempotency-Key** (the UI sets this). Retrying the same form reuses the key so you do not double-create.
+## Login fails after bootstrap
 
-## Sessions and models
+- Wrong password (no recovery in-app)
+- Cookies blocked; third-party cookie issues on odd embeddings
+- `PA_SECURE_COOKIES=true` on plain HTTP → cookie never sticks — use HTTPS or set `false` only on trusted localhost
+- Clock skew rare; still verify host time if sessions die instantly
 
-| Symptom | Fix |
-|---------|-----|
-| “Configure a model before creating a session” | Set `PA_MODELS` and restart |
-| Send does nothing useful / runs fail | Set `OPENAI_API_KEY` (and base URL if needed); check run status line |
-| Workspace panel missing | Create session with **Allow workspace files** checked |
-| Cannot promote | Select a `.md` workspace file; target path must end in `.md` |
+## Sidebar missing / stuck on auth
 
-## Review and bites
+- Not logged in → complete bootstrap or sign-in
+- Hard-refresh after deploy; clear site data if an old service worker or stale shell is cached (normally none for this app)
 
-| Symptom | Fix |
-|---------|-----|
-| Always “Caught up” | No due items; publish/promote with whole/bites review mode |
-| Bites stuck / failed | Model/API errors; use **Retry cards** on the session operation badge when shown |
-| Wrong “today” | Owner timezone in settings / DB (IANA); restart workers after change if needed |
+## Empty model list / cannot create session
 
-## Backup
+- Set `PA_MODELS` (e.g. `openai:gpt-4o-mini`) and **restart**
+- UI copy on Sessions explains missing models
 
-| Symptom | Fix |
-|---------|-----|
-| Backup failed in Settings | Read error text; disk space; if sink configured, bucket credentials and network |
-| Bundle files not deletable | Sealed on purpose — `chmod -R u+w` only on **copies** for restore drills |
-| Need full restore | Stop writers → follow [`docs/ops/backup-restore.md`](../ops/backup-restore.md) exactly |
+## Chat does not reply / run stuck
 
-Do **not** run Backup now while manually copying the live data directory.
+- `OPENAI_API_KEY` (and optional `OPENAI_BASE_URL`) for live providers
+- Provider outage or bad base URL
+- **Busy** (409): another run holds the session or a global single-flight key — wait or use one tab
+- Watch session status on the chat page; refresh if the UI lost a poll (draft in the composer should survive polling)
 
-## Where is my data?
+## Composer loses focus while typing
 
-```text
-$PA_DATA_DIR/          # default ./data
-  db/personal-agent.sqlite
-  files/…              # sources + workspaces
-  staging/…
-  backups/local/{id}/  # sealed bundles
-```
+That is a **bug** relative to the product invariant (poll must not rebuild a focused composer). Note the browser and steps; developers should keep `SessionChat.focus.test.ts` green and avoid full-shell `innerHTML`-style rebuilds on poll.
 
-Compose: inside the container `/data` on volume `pa-data`.
+## Promote / save to source fails
+
+- Destination must end in `.md` and must **not** already exist (no-clobber)
+- Path traversal or invalid segments rejected
+- Workspace tools only exist if the session was created with **Allow workspace files**
+- Failed card generation may show a retry affordance — use it rather than double-promoting
+
+## Notes publish conflict
+
+Same no-clobber rules as promote: choose another path or remove/rename the existing source file through the product/API.
+
+## Review empty when you expect cards
+
+- Nothing due yet (caught up)
+- Wrong **scope**: global vs vault vs project
+- Items suspended
+- Publish/promote never created review items (mode **none**)
+
+## Backup now disabled or errors
+
+- Another backup already running — wait
+- Storage not writable
+- Disk full under `PA_DATA_DIR`
+- S3 errors alone should not erase a successful **local** backup; check last-backup detail text
+
+## Vault / project confusion
+
+| Expectation | Product rule |
+|-------------|--------------|
+| “Move project into a vault later” | **Not supported** in v1 — `vault_id` is fixed at **create** |
+| Unfiled project on vault grid | Unfiled only on **global** Projects; enter vault to create vaulted projects |
+| Global Sessions list | Disabled — open a project (or vault sessions → project) |
+
+## Docker: UI changes not visible
+
+- **Prod compose:** image-baked `web/dist` — rebuild image
+- **Dev:** `make docker-dev` with live mounts + Vite; do not expect host edits on prod-only compose
+- Confirm which process listens on 8080 before claiming a fix
+
+## Amp orb specifics
+
+- Prefer portal URLs from `amp orb services ensure` / `amp orb portal`
+- Dev data often under `.amp/state/…` — different from host `./data`
+- Long-lived servers should use orb supervised services, not ad-hoc background shells
 
 ## Still stuck
 
-1. Reproduce with `curl` health + login from [`docs/ops/deploy.md`](../ops/deploy.md).  
-2. Check process logs (compose logs or terminal).  
-3. Confirm Go **1.24+** if building from source.  
-4. Design / acceptance intent: design spec §11 security and §13 tests (for developers).  
+1. Capture `/health` JSON  
+2. Note exact UI route (hash) and HTTP status from failed actions  
+3. Check process logs (Docker: `docker compose logs`)  
+4. Confirm env: `PA_DATA_DIR`, `PA_SECURE_COOKIES`, `PA_MODELS`, keys  
+5. See [06 — Reference](06-reference.md)
 
 ## Next
 

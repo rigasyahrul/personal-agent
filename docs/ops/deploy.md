@@ -2,7 +2,12 @@
 
 ## Localhost (Go binary)
 
+Production UI is the Vite build under **`web/dist`**. Build it first (Node **22**), or use `make build` / `make run` which depend on `web-build`.
+
 ```sh
+export PATH="/usr/bin:$PATH"   # ensure Node 22 if needed
+make web-build                 # writes web/dist
+
 export PA_DATA_DIR=./data
 export PA_ADDR=:8080
 export PA_SECURE_COOKIES=false
@@ -13,12 +18,14 @@ export PA_MODELS=openai:gpt-4o-mini
 # export OPENAI_BASE_URL=https://api.openai.com/v1
 
 go run ./cmd/personal-agent
-# or: make run / go build -o personal-agent ./cmd/personal-agent && ./personal-agent
+# or: make run / make build && ./personal-agent
 ```
+
+Do **not** set `PA_UI_DEV_PROXY` for this path — that variable is only for the docker-dev / Vite HMR loop below.
 
 Health: `curl -sf http://127.0.0.1:8080/health`
 
-Bootstrap the owner **before** exposing the port beyond loopback. Complete setup at `/` once, then log in.
+Bootstrap the owner **before** exposing the port beyond loopback. Complete setup at `/` once, then log in. After login you get the **Svelte** shell (sidebar: Home, Projects, Vaults, Review, Settings).
 
 ## Docker Compose (localhost)
 

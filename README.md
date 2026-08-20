@@ -6,8 +6,10 @@ Self-hosted, single-owner learning dashboard. Promote session notes into a durab
 
 - Multi-user / multi-tenant auth
 - General shell or host filesystem access for the agent
-- FTS search, vault browser, or mobile clients
+- Full-text search across the library, or a separate mobile client
 - Automatic public internet exposure without HTTPS
+
+Vaults **are** first-class in the UI (create, search, enter/leave). They are not multi-tenant permissions.
 
 ## Prerequisites
 
@@ -23,12 +25,15 @@ Self-hosted, single-owner learning dashboard. Promote session notes into a durab
 ```sh
 make test
 make lint
+make web-build   # Node 22 — writes web/dist (also runs as part of make build)
 make run
 ```
 
 Or:
 
 ```sh
+export PATH="/usr/bin:$PATH"   # prefer system Node 22 if the default is older
+make web-build
 go test ./...
 BOOTSTRAP_TOKEN='replace-with-at-least-32-random-characters' \
   PA_SECURE_COOKIES=false \
@@ -36,7 +41,7 @@ BOOTSTRAP_TOKEN='replace-with-at-least-32-random-characters' \
   go run ./cmd/personal-agent
 ```
 
-The app listens on **`:8080`** (`http://localhost:8080`). Runtime state defaults to `./data` (`PA_DATA_DIR`).
+The app listens on **`:8080`** (`http://localhost:8080`). Runtime state defaults to `./data` (`PA_DATA_DIR`). A local binary serves production UI from **`web/dist`** — build it before `go run` if the directory is missing.
 
 ### Frontend (Svelte + Vite)
 
@@ -81,6 +86,8 @@ It sets `PA_DATA_DIR=.amp/state/personal-agent`, `PA_ADDR=:8080`, `PA_SECURE_COO
 | `OPENAI_API_KEY` | no | needed for live chat/bites |
 | `OPENAI_BASE_URL` | no | OpenAI-compatible base URL |
 | `PA_BACKUP_S3_BUCKET` | no | enables S3 directory upload after local bundle |
+| `PA_UI_DEV_PROXY` | no | **dev only** — Vite origin (e.g. `http://127.0.0.1:5173`); set by `make docker-dev`, not production |
+| `PA_TIMEZONE` / `PA_BACKUP_HOUR` | no | display zone and Daily backup hour |
 
 **Warning:** Domain deployment requires **HTTPS** and `PA_SECURE_COOKIES=true`. Never expose plain HTTP with secure cookies disabled on an untrusted network.
 
@@ -138,10 +145,11 @@ $PA_DATA_DIR/
 
 ## Docs
 
-- **Owner handbook (start here):** [`docs/manual/README.md`](docs/manual/README.md)
-- Design: [`docs/superpowers/specs/2026-08-12-personal-agent-design.md`](docs/superpowers/specs/2026-08-12-personal-agent-design.md)
-- Deploy: [`docs/ops/deploy.md`](docs/ops/deploy.md)
+- **Owner handbook (start here):** [`docs/manual/README.md`](docs/manual/README.md) — vaults, sidebar, routes, daily use
+- Deploy / Docker / HMR: [`docs/ops/deploy.md`](docs/ops/deploy.md)
 - Backup / restore: [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md)
+- Product design (v1): [`docs/superpowers/specs/2026-08-12-personal-agent-design.md`](docs/superpowers/specs/2026-08-12-personal-agent-design.md)
+- UI Svelte redesign (shipped): [`docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md`](docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md) · board [`STATUS-ui-svelte-redesign.md`](docs/superpowers/STATUS-ui-svelte-redesign.md)
 
 ## License
 

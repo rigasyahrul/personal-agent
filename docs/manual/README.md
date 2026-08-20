@@ -1,37 +1,35 @@
-# Personal Agent — Owner handbook (v1)
+# Personal Agent — Owner handbook
 
-Practical guide for running and using **Personal Agent**: a self-hosted, single-owner learning dashboard.
+**Edition:** 2026-08-20 (Svelte UI + first-class vaults)  
+**Audience:** The single owner who installs, runs, and uses the app day to day.
 
-You create **projects**, keep durable **source notes**, chat in **sessions**, **promote** workspace drafts into the library, **review** with SM-2-lite, and **back up** the data directory.
+This handbook matches the **shipped** product on `main`: Svelte 5 SPA (`web/` → `web/dist`), hash routes, global vs vault sidebar, unfiled projects, and sessions always per-project.
 
-## Who this is for
+## Read in order
 
-- **You as owner** — day-to-day product use  
-- **You as operator** — install, first run, light deploy, backup habits  
+| # | Chapter | Contents |
+|---|---------|----------|
+| 1 | [Overview](01-overview.md) | Mental model, vaults, sidebar, routes |
+| 2 | [Install and first run](02-install-and-first-run.md) | Binary, Docker, docker-dev, bootstrap |
+| 3 | [Daily use](03-daily-use.md) | Home, projects, vaults, notes, chat, promote, review |
+| 4 | [Settings and backup](04-settings-and-backup.md) | Schedule, Backup now, S3, restore habits |
+| 5 | [Troubleshooting](05-troubleshooting.md) | Common failures and fixes |
+| 6 | [Reference](06-reference.md) | Routes, env, make targets, invariants |
 
-It is **not** an architecture deep-dive. For design intent and acceptance invariants, see the design spec.
+## Related engineering docs
 
-## How to read this book
+| Doc | When to open it |
+|-----|-----------------|
+| [Root README](../../README.md) | Clone, build, test, docker-dev one-liners |
+| [Deploy / ops](../ops/deploy.md) | Production Compose, TLS, volumes, HMR details |
+| [Superpowers index](../superpowers/README.md) | Specs, plans, execution boards (history) |
 
-| Chapter | When you need it |
-|---------|------------------|
-| [01 — Overview](01-overview.md) | Mental model and non-goals |
-| [02 — Install and first run](02-install-and-first-run.md) | Get a working instance and log in |
-| [03 — Daily use](03-daily-use.md) | Projects, notes, sessions, promote, review |
-| [04 — Settings and backup](04-settings-and-backup.md) | Timezone, models, Backup now / schedule |
-| [05 — Troubleshooting](05-troubleshooting.md) | Health, auth errors, busy sessions, data location |
-| [06 — Reference](06-reference.md) | Config table and links to detailed ops docs |
+## What changed in this edition
 
-## Related docs (source of truth for ops detail)
+- Replaced top-nav “Home / Review / Settings only” docs with **sidebar + vault context**
+- Documented **unfiled vs vaulted** projects and immutable `vault_id` at create
+- Documented **hash routes** and production path **`web/dist`**
+- Documented **Node 22**, `make web-build` / `make web-test`, and `make docker-dev` HMR
+- Removed references to the deleted legacy static UI
 
-| Topic | Doc |
-|-------|-----|
-| Deploy / upgrade / domain TLS | [`docs/ops/deploy.md`](../ops/deploy.md) |
-| Backup bundles and restore drill | [`docs/ops/backup-restore.md`](../ops/backup-restore.md) |
-| Product design | [`docs/superpowers/specs/2026-08-12-personal-agent-design.md`](../superpowers/specs/2026-08-12-personal-agent-design.md) |
-| Quick start (repo root) | [`README.md`](../../README.md) |
-
-## Edition
-
-- **Scope:** Personal Agent **v1** (practical)  
-- **Format:** Multi-chapter Markdown under `docs/manual/`  
+If something in this handbook disagrees with a frozen design note under `docs/superpowers/`, **trust the running app and this handbook**.
