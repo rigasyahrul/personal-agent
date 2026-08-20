@@ -10,7 +10,7 @@
 | A Tooling + HMR | 1–8 | — | no | done | impl/ui-svelte-phase-A-tooling | [T-01a01a3a…](https://ampcode.com/threads/T-01a01a3a-4307-76ff-8bd6-65817aad385f) **grok45** | [T-01a01a42…](https://ampcode.com/threads/T-01a01a42-acdd-743a-a719-28f204dabc84) YES | 2026-08-19 |
 | B Shell + auth | 10–15 | A | no | done | impl/ui-svelte-phase-B-shell-auth | [T-01a01a47…](https://ampcode.com/threads/T-01a01a47-f505-74fe-8f89-5a94ff94e556) **grok45** | [T-01a01a50…](https://ampcode.com/threads/T-01a01a50-27ca-77f9-a0d1-e3dbd04f8018) YES | 2026-08-19 |
 | C Global grids | 20–25 | B | no | done | impl/ui-svelte-phase-C-global-grids | [T-01a01a54…](https://ampcode.com/threads/T-01a01a54-0d40-769f-ad58-587595e51efa) **grok45** | [T-01a01cee…](https://ampcode.com/threads/T-01a01cee-528a-7621-8b07-472ae3f98b1d) YES | 2026-08-20 |
-| D Vault context | 30–35 | C | no | running | impl/ui-svelte-phase-D-vault-context | [T-01a01cf1…](https://ampcode.com/threads/T-01a01cf1-a728-7684-8005-157a66eb7428) **grok45** | | 2026-08-20 |
+| D Vault context | 30–35 | C | no | done | impl/ui-svelte-phase-D-vault-context | [T-01a01cf1…](https://ampcode.com/threads/T-01a01cf1-a728-7684-8005-157a66eb7428) **grok45** | [T-01a01cf8…](https://ampcode.com/threads/T-01a01cf8-bd16-73e3-a3e3-8269decbb40b) YES | 2026-08-20 |
 | E Project surfaces | 40–46 | D | no | todo | | | | |
 | F Review + harden | 50–55 | E | no | todo | | | | |
 
@@ -37,6 +37,9 @@
 | 2026-08-20 | Phase C FF-merged to main @ `3480acb`. Note: `amp -m grok45 -ox` invalid after CLI update; local `amp -m grok45 -x` works for review/workers. |
 
 | 2026-08-20 | Phase D dispatched → grok45 worker https://ampcode.com/threads/T-01a01cf1-a728-7684-8005-157a66eb7428 branch `impl/ui-svelte-phase-D-vault-context` (Tasks 30–35). |
+| 2026-08-20 | Phase D worker DONE @ `3916b92` — tasks 30–35, 79 web tests, branch pushed. |
+| 2026-08-20 | Master verify D: 79/79 web tests + build green. consulting-grok-review YES: https://ampcode.com/threads/T-01a01cf8-bd16-73e3-a3e3-8269decbb40b |
+| 2026-08-20 | Phase D cherry-picked to main (worker board commit e33daae diverged from master board tip 14dee31; feature-only pick). |
 
 ## Active blockers
 _None._
@@ -54,6 +57,7 @@ Spawn workers with `amp -m grok45 -ox --no-archive-after-execute ...`. High-stak
 | A | `fab962f` | Tooling + docker HMR; Svelte scaffold; PA_UI_DEV_PROXY |
 | B | `00bbb46` | Router, shell context, API CSRF, AppShell, auth outside shell, tokens |
 | C | `3480acb` | Catalog filters, Home/Projects/Vaults grids, global route wiring |
+| D | `3916b92` | Vault pages + locked vault_id create; client sessions/review aggregates; breadcrumbs |
 
 ## Final ship gate (master)
 
