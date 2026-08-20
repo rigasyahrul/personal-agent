@@ -72,18 +72,24 @@ Report what felt broken in plain language; fix or file before "done."
 
 ## Personal-agent chrome notes
 
-Observed non-human cues (2026-08-20 live pass) — fix when touching shell/home:
+**Baseline (pre-polish 2026-08-20)** — fixed in shell/home + full-surface craft commits; do not reintroduce:
 
-- Sidebar nav prefix `•` instead of icons
-- Collapse control as orphan `‹` under nav
-- Top bar health pill always reading unavailable (noisy)
-- Home/hub: wide metric cards + sparse lower grid; metric row and surface cards same visual weight
-- Global Sessions nav disabled with no in-UI explanation
-- Sessions create form is functional but default-form aesthetic — polish when on that surface
+- Sidebar nav prefix `•` instead of icons → SVG `nav-icon` set
+- Collapse control as orphan `‹` under nav → labeled `.sidebar__collapse`
+- Top bar health pill “Storage status unavailable” → muted/ok/warn from `/health`
+- Home/hub: metric ≡ destination weight → `metric-card` vs `destination-card` / `entity-card`
+- Global Sessions disabled with no explanation → title + `aria-description`
+- Catalogs/review/settings/sessions: raw `bg-indigo-600` + “Global desk” eyebrows → shared `btn--*` + page-header
 
-Product IA and tokens remain defined by  
-`docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md`  
-and `web/src/app.css`. Prefer extending tokens over one-off magic colors.
+**Still enforce when editing any screen:**
+
+- Prefer `web/src/app.css` primitives over Tailwind indigo/scaffold soup
+- Rebuild `web/dist` + cache-bust before claiming vibe-pass on Go-served `:8080`
+- SessionChat: classes only; never remount composer on poll
+
+Product IA remains  
+`docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md`.  
+Token source of truth: `web/src/app.css`.
 
 ## Disposable UI drafts
 

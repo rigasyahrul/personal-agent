@@ -87,13 +87,17 @@ Do not ship or claim done while these remain unless the user **explicitly** waiv
 ## Personal-agent appendix
 
 - **Stack:** Svelte 5 + TS + Vite + Tailwind; tokens/chrome in `web/src/app.css`
-- **Routes:** hash router; shell = global desk vs vault context
-- **Sessions:** poll **patches in place** — never replace a focused composer (`AGENTS.md`)
-- **Localhost claims:** confirm process on the port + served bytes include the edit
+- **Token map (prefer these):** `btn btn--primary|secondary|ghost|danger`, `page-header` / `page-stack`, `metric-card` vs `destination-card` / `entity-card`, `panel` / `panel--dashed`, `field-input|select|textarea`, `form-stack` / `form-inline`, `scope-chip`, `list-panel` / `list-row`, `link-accent`, `alert alert--error|warn`, `catalog-grid`, `badge-chip`, `tree-item` / `tree-item--active`. Extend `app.css` before inventing new one-offs.
+- **Routes:** hash router; shell = global desk vs vault context. Global pages: no “Global desk” eyebrow. Vault pages: vault name eyebrow OK.
+- **Sessions:** poll **patches in place** — never replace a focused composer (`AGENTS.md`). SessionChat polish = class/chrome only; keep composer form ancestry stable.
+- **Health pill:** pass status keys (`unknown` / `ready` / `error`) from `/health`; never hardcode “Storage status unavailable”.
+- **Localhost / orb serve path:** process on `:8080` is Go → **`web/dist`**. After edits: rebuild dist, match asset hashes in `index.html`, `curl` for new tokens, vibe-pass with `?v=<timestamp>#/route` (browser caches old JS/CSS).
 - **Docker:** `make docker-dev` for live API+web; prod compose stays image-baked
-- **Web tests:** Node `>=22 <23` on `PATH` before `make web-test`
-- **Browser:** `.chrome.mcp.json` → Chrome DevTools at `http://localhost:9222` when available. Start Chrome with `--remote-debugging-port=9222` if nothing listens. A11y `take_snapshot` is enough for craft gates; screenshots may only write under the MCP temp dir (workspace `filePath` can be denied) — copy out if you need a durable image.
+- **Web tests:** Node `>=22 <23` on `PATH` before `make web-test` (orb may only have Node 20 — install Node 22 under `~/.local/node-v22` if needed)
+- **Browser:** `agent-browser` against localhost or portal; Chrome DevTools at `http://localhost:9222` when configured. A11y snapshot is enough for craft gates; screenshots may land under temp dirs — copy to `.amp/in/artifacts/` if durable.
+- **Full-surface rule:** polishing shell/home does **not** finish catalogs/review/settings/sessions/notes. Audit every route or explicitly scope the task.
 - **Product look intent:** clean dashboard, light-first, Inter — `docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md` (this skill does not redefine IA)
+- **Plan for multi-screen polish:** `docs/superpowers/plans/2026-08-20-ui-full-surface-craft.md`
 
 ## Related
 
