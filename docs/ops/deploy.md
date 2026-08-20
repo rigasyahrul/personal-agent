@@ -54,7 +54,7 @@ lsof -nP -iTCP:8080 -sTCP:LISTEN
 curl -sf http://127.0.0.1:8080/src/App.svelte | grep 'Personal Agent'
 ```
 
-Confirm `/@vite-hmr` is connected in DevTools → Network → WS. Production compose has no host source mounts: `deploy/Dockerfile` builds `web/dist` with Node 22 and copies only that output. Never add `..:/src`, `../web:`, `PA_UI_DEV_PROXY`, or a published Vite port to `deploy/docker-compose.yml`.
+Confirm `/@vite-hmr` is connected in DevTools → Network → WS. Production Compose is image-baked and has **no live source mounts**; live repository mounts exist only in `docker-compose.dev.yml`. `deploy/Dockerfile` builds `web/dist` with Node 22 and copies only that output. Never add `..:/src`, `../web:`, `PA_UI_DEV_PROXY`, or a published Vite port to `deploy/docker-compose.yml`.
 
 ### Persistent volume checks
 

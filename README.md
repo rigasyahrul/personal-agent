@@ -12,6 +12,7 @@ Self-hosted, single-owner learning dashboard. Promote session notes into a durab
 ## Prerequisites
 
 - Go **1.24+** (`go version`)
+- **Node 22** LTS for the Svelte UI (`node -v` should be `v22.x`) when building or testing `web/`
 - Optional: Docker Compose for packaged deployment
 - Optional: OpenAI-compatible API key for chat and bite generation
 
@@ -35,7 +36,22 @@ BOOTSTRAP_TOKEN='replace-with-at-least-32-random-characters' \
   go run ./cmd/personal-agent
 ```
 
-The app listens on **`:8080`**. Runtime state defaults to `./data` (`PA_DATA_DIR`).
+The app listens on **`:8080`** (`http://localhost:8080`). Runtime state defaults to `./data` (`PA_DATA_DIR`).
+
+### Frontend (Svelte + Vite)
+
+The UI lives under `web/` (Svelte 5 + TypeScript + Vite + Tailwind). Production serves the built assets from **`web/dist`**.
+
+```sh
+# from repo root
+make web-test          # vitest
+make web-build         # writes web/dist
+# or:
+npm --prefix web test
+npm --prefix web run build
+```
+
+Day-to-day coding uses **`make docker-dev`** (see below): open **`http://localhost:8080`**, edit files under `web/src/`, and Vite **HMR** updates the browser without rebuilding the image or recreating containers.
 
 ### Amp orb
 
@@ -49,7 +65,7 @@ It sets `PA_DATA_DIR=.amp/state/personal-agent`, `PA_ADDR=:8080`, `PA_SECURE_COO
 
 ### First-run bootstrap
 
-1. Open `http://127.0.0.1:8080` (or the orb portal URL).
+1. Open `http://localhost:8080` (or `http://127.0.0.1:8080` / the orb portal URL).
 2. Enter the `BOOTSTRAP_TOKEN` and an owner password (12+ characters).
 3. Log in. Bootstrap is **one-time**; a second attempt returns `409 owner_exists`.
 
@@ -80,11 +96,12 @@ Compose persists state in the `pa-data` volume (`PA_DATA_DIR` at `/data`). Confi
 
 ### Live-reload development (API + web)
 
-Production compose bakes the binary and `web/` into the image. For day-to-day coding against one Docker service with hot reload:
+Production compose is **image-baked** (binary + `web/dist` only — **no live source mounts**). For day-to-day coding with one command for API + UI:
 
 ```sh
 # one-time: cp deploy/.env.example deploy/.env  (set BOOTSTRAP_TOKEN)
 make docker-dev
+# open http://localhost:8080
 ```
 
 Equivalent raw compose (dev file is an **override** — it still needs the base file for ports/env/data):
@@ -95,8 +112,9 @@ docker compose --env-file deploy/.env \
 ```
 
 - Mounts the full repo at `/src` and runs [`air`](https://github.com/air-verse/air) (`deploy/air.toml`) so Go API changes rebuild/restart automatically.
-- Serves `web/` from the mounted tree — hard-refresh the browser after UI edits (no image rebuild).
+- Starts Vite inside the container; Go proxies non-API UI to Vite (`PA_UI_DEV_PROXY`) so ordinary `web/src` edits update by **HMR** without image rebuild or container recreation.
 - Reuses the same `pa-data` volume and `.env` as production compose.
+- Live repository mounts exist **only** in `docker-compose.dev.yml` — never on production compose.
 - Do **not** run plain production `up` and the dev override on `:8080` at the same time.
 - Stop: `make docker-dev-down` · logs: `make docker-dev-logs`
 
