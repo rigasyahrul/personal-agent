@@ -19,7 +19,18 @@
 
   $effect(() => {
     if (open) {
-      queueMicrotask(() => dialogEl?.showModal())
+      queueMicrotask(() => {
+        try {
+          // jsdom may lack showModal; callers/tests polyfill, but never throw uncaught.
+          if (dialogEl && typeof dialogEl.showModal === 'function') {
+            dialogEl.showModal()
+          } else if (dialogEl) {
+            dialogEl.setAttribute('open', '')
+          }
+        } catch {
+          /* ignore */
+        }
+      })
     } else {
       try {
         if (dialogEl?.open) dialogEl.close()
