@@ -22,7 +22,7 @@
 | 9 | Hub embeds SessionChat | complete | T-01a0205c-773f-755b-84c7-d2c51e81fac4 | f7e65be |
 | 10 | Vault projects name-first | complete | T-01a02060-f8bc-752e-a53f-69390b1169d6 | f1025c4 |
 | 11 | frontend-ui-craft benchmark gate | complete | T-01a02064-4446-718b-911b-630dec238af3 | 2f279aa |
-| 12 | Full suite + dist + vibe-pass | implementing | — | |
+| 12 | Full suite + dist + vibe-pass | review | — | suite+dist+vibe done |
 | — | Whole-branch review | todo | — | After Task 12 |
 
 Status values: `todo | implementing | review | PASS | complete`
