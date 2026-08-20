@@ -15,8 +15,8 @@
 | 2 | Modal.svelte + tokens | complete | T-01a0202b-817d-702d-8690-ab814509cb2a | a27c824 |
 | 3 | Creates → Modal | complete | T-01a02031-549d-7188-9e7b-95c3baf8a5e6 | 0c29f91 |
 | 4 | ProjectRail + CSS | complete | T-01a02038-a56f-73f1-9f2c-46b855e8d528 | 205c84d |
-| 5 | ProjectHubPage Claude stack | implementing | — | |
-| 6 | sessions route → hub | todo | — | |
+| 5 | ProjectHubPage Claude stack | complete | T-01a0203e-e9d1-72b0-be3f-7a493ab29487 | cf39049 |
+| 6 | sessions route → hub | implementing | — | |
 | 7 | SessionChat openPath / embeddedInHub | todo | — | |
 | 8 | Dense bottom composer + copy | todo | — | |
 | 9 | Hub embeds SessionChat | todo | — | |
@@ -33,6 +33,7 @@ Status values: `todo | implementing | review | PASS | complete`
 - Task 2: PASS T-01a0202b-817d-702d-8690-ab814509cb2a (Critical none, Important none) — a27c824 Modal
 - Task 3: PASS T-01a02031-549d-7188-9e7b-95c3baf8a5e6 (Critical none, Important none) — 0c29f91 creates→Modal
 - Task 4: PASS T-01a02038-a56f-73f1-9f2c-46b855e8d528 (Critical none, Important none) — 205c84d ProjectRail
+- Task 5: PASS T-01a0203e-e9d1-72b0-be3f-7a493ab29487 (Critical none, Important none) — cf39049 Claude hub
 
 
 ## Merge / push log
