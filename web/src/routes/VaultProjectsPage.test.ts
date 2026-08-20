@@ -17,7 +17,17 @@ const other = { id: 'p-o', name: 'Budget', vault_id: 'v2', vault_name: 'WORK', n
 const unfiled = { id: 'p-u', name: 'Inbox', note_count: 0 }
 
 describe('VaultProjectsPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    if (!HTMLDialogElement.prototype.showModal) {
+      HTMLDialogElement.prototype.showModal = function showModal() {
+        this.setAttribute('open', '')
+      }
+      HTMLDialogElement.prototype.close = function close() {
+        this.removeAttribute('open')
+      }
+    }
+  })
 
   it('lists only vault projects and searches by name', async () => {
     vi.mocked(api.get).mockResolvedValue({
@@ -32,7 +42,7 @@ describe('VaultProjectsPage', () => {
     expect(screen.getByText('No matching projects')).toBeInTheDocument()
   })
 
-  it('locks the vault and submits it even when the dialog is reopened', async () => {
+  it('opens New project in a modal, locks the vault, and submits vault_id', async () => {
     vi.mocked(api.get).mockResolvedValue({ generated_at: '', projects: [] })
     vi.mocked(api.post).mockResolvedValue({
       id: 'new',
@@ -42,6 +52,8 @@ describe('VaultProjectsPage', () => {
     })
     render(VaultProjectsPage, { props: { vaultId: 'v1', vaultName: 'HEALTH' } })
     await fireEvent.click(await screen.findByRole('button', { name: /new project/i }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'New project' })).toBeInTheDocument()
     const vaultField = screen.getByLabelText('Vault')
     expect(vaultField).toHaveValue('HEALTH')
     expect(vaultField).toBeDisabled()

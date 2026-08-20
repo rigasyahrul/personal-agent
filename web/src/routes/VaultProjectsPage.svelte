@@ -2,6 +2,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import EmptyState from '../components/EmptyState.svelte'
+  import Modal from '../components/Modal.svelte'
   import ProjectCard from '../components/ProjectCard.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Skeleton from '../components/Skeleton.svelte'
@@ -26,6 +27,7 @@
   let saving = $state(false)
   let name = $state('')
   let error = $state('')
+  let createError = $state('')
 
   let visible = $derived(filterByQuery(projects, query))
 
@@ -43,16 +45,29 @@
     }
   })
 
+  function openCreate() {
+    creating = true
+    name = ''
+    createError = ''
+  }
+
+  function closeCreate() {
+    creating = false
+    name = ''
+    createError = ''
+  }
+
   async function createProject() {
     const payload = createVaultProjectInput(name, vaultId)
     if (!payload.name) return
     saving = true
-    error = ''
+    createError = ''
     try {
       const project = await api.post<Project>('/api/v1/projects', payload)
+      closeCreate()
       navigate(`#/projects/${encodeURIComponent(project.id)}`)
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not create project.'
+      createError = e instanceof Error ? e.message : 'Could not create project.'
     } finally {
       saving = false
     }
@@ -68,7 +83,7 @@
       <h1>Projects</h1>
     </div>
     <div class="page-header__actions">
-      <button class="btn btn--primary" type="button" onclick={() => (creating = true)}>New project</button>
+      <button class="btn btn--primary" type="button" onclick={openCreate}>New project</button>
     </div>
   </header>
 
@@ -78,9 +93,9 @@
     <p role="alert" class="alert alert--error">{error}</p>
   {/if}
 
-  {#if creating}
+  <Modal open={creating} title="New project" onclose={closeCreate}>
     <form
-      class="panel form-inline"
+      class="form-stack"
       onsubmit={(e) => {
         e.preventDefault()
         createProject()
@@ -94,9 +109,15 @@
         Project name
         <input class="field-input" bind:value={name} aria-label="Project name" />
       </label>
-      <button disabled={saving || !name.trim()} class="btn btn--primary" type="submit">Create project</button>
+      {#if createError}
+        <p role="alert" class="alert alert--error">{createError}</p>
+      {/if}
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn--secondary" onclick={closeCreate}>Cancel</button>
+        <button disabled={saving || !name.trim()} class="btn btn--primary" type="submit">Create project</button>
+      </div>
     </form>
-  {/if}
+  </Modal>
 
   {#if loading}
     <div class="catalog-grid" aria-busy="true">
@@ -124,7 +145,7 @@
       title="No projects in this vault yet"
       description="Create a project locked to this vault."
       actionLabel="New project"
-      onaction={() => (creating = true)}
+      onaction={openCreate}
     />
   {/if}
 </div>

@@ -6,7 +6,18 @@ import { api } from '../lib/api/client'
 vi.mock('../lib/api/client', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
 
 describe('ProjectsPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    if (!HTMLDialogElement.prototype.showModal) {
+      HTMLDialogElement.prototype.showModal = function showModal() {
+        this.setAttribute('open', '')
+      }
+      HTMLDialogElement.prototype.close = function close() {
+        this.removeAttribute('open')
+      }
+    }
+  })
+
   it('shows only searched unfiled projects', async () => {
     vi.mocked(api.get).mockResolvedValue({ generated_at: '', projects: [
       { id: 'a', name: 'Alpha', note_count: 0 }, { id: 'b', name: 'Beta', vault_id: 'v1', vault_name: 'WORK', note_count: 0 },
@@ -17,11 +28,14 @@ describe('ProjectsPage', () => {
     await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'none' } })
     expect(screen.getByText('No matching projects')).toBeInTheDocument()
   })
-  it('creates an unfiled project', async () => {
+
+  it('opens New project in a modal and creates an unfiled project', async () => {
     vi.mocked(api.get).mockResolvedValue({ generated_at: '', projects: [] })
     vi.mocked(api.post).mockResolvedValue({ id: 'new', name: 'Inbox', vault_id: null, note_count: 0 })
     render(ProjectsPage)
     await fireEvent.click(await screen.findByRole('button', { name: 'New project' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'New project' })).toBeInTheDocument()
     await fireEvent.input(screen.getByLabelText('Project name'), { target: { value: 'Inbox' } })
     await fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
     expect(api.post).toHaveBeenCalledWith('/api/v1/projects', { name: 'Inbox', vault_id: null })
