@@ -46,3 +46,6 @@ go.work.sum
 # Vite / npm (web UI)
 web/node_modules/
 web/dist/
+
+# Amp orb runtime state (PA_DATA_DIR under services.yaml)
+.amp/state/

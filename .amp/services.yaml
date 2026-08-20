@@ -1,13 +1,13 @@
 services:
   personal-agent:
+    # Inherits project secrets/env (BOOTSTRAP_TOKEN, OPENAI_API_KEY, PA_MODELS,
+    # PA_SECURE_COOKIES) after `amp orb restart-processes`. Only set orb-local
+    # non-secret defaults here — do not hardcode secrets.
     command: go run ./cmd/personal-agent
     working_dir: .
-    environment:
+    env:
       PA_DATA_DIR: .amp/state/personal-agent
       PA_ADDR: :8080
-      PA_SECURE_COOKIES: "false"
-      PA_MODELS: openai:test
-      BOOTSTRAP_TOKEN: dev-only-change-me
     port: 8080
     healthcheck:
       path: /health
