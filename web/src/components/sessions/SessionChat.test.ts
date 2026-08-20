@@ -123,6 +123,26 @@ describe('SessionChat', () => {
     await waitFor(() => expect(composer).toHaveValue(''))
   })
 
+  it('aligns user messages right and assistant messages left (chat layout)', async () => {
+    vi.mocked(api.listMessages).mockResolvedValue([
+      { sequence: 1, role: 'user', content: 'hello from me' },
+      { sequence: 2, role: 'assistant', content: 'reply from agent' },
+    ])
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000 },
+    })
+    expect(await screen.findByText('hello from me')).toBeInTheDocument()
+    const userRow = screen.getByText('hello from me').closest('li')
+    const assistantRow = screen.getByText('reply from agent').closest('li')
+    expect(userRow).toHaveAttribute('data-role', 'user')
+    expect(assistantRow).toHaveAttribute('data-role', 'assistant')
+    expect(userRow?.className).toMatch(/message-row--user/)
+    expect(assistantRow?.className).toMatch(/message-row--assistant/)
+    // Bubbles sit inside role-tagged rows (CSS: user flex-end / assistant flex-start).
+    expect(userRow?.querySelector('.message-bubble')).toBeTruthy()
+    expect(assistantRow?.querySelector('.message-bubble')).toBeTruthy()
+  })
+
   it('ignores stale poll results after session switch', async () => {
     const slow = deferred<Array<{ sequence: number; role: string; content: string }>>()
     let calls = 0

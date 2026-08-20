@@ -317,11 +317,18 @@
       onretry={(op) => void retryCards(op)}
     />
 
-    <ol class="messages max-h-[50vh] space-y-3 overflow-auto" style="list-style:none;margin:0;padding:0">
+    <ol class="messages message-thread max-h-[50vh] overflow-auto">
       {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
-        <li class="message message-{message.role} message-bubble">
-          <strong>{message.role}</strong>
-          <p>{message.content}</p>
+        {@const side = message.role === 'user' ? 'user' : 'assistant'}
+        <li
+          class="message message-row message-row--{side}"
+          data-role={side}
+          data-raw-role={message.role}
+        >
+          <div class="message-bubble message-bubble--{side}">
+            <strong>{message.role === 'user' ? 'You' : message.role === 'assistant' ? 'Assistant' : message.role}</strong>
+            <p>{message.content}</p>
+          </div>
         </li>
       {/each}
     </ol>
