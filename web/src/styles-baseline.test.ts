@@ -46,6 +46,10 @@ describe('visual baseline', () => {
       '.entity-card',
       '.metric-card',
       '.modal', // benchmark B1 shared dialog primitive
+      '.name-list',
+      '.name-row',
+      '.name-row__title',
+      '.name-row__meta',
     ]) {
       expect(css).toContain(token);
     }

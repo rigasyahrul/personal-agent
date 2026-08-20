@@ -151,7 +151,7 @@
           />
         {/key}
       {:else}
-        <header class="hub-header name-row">
+        <header class="hub-header">
           <div class="hub-header__lead">
             <Breadcrumbs {project} />
             <h1 class="hub-header__title">{project.name}</h1>

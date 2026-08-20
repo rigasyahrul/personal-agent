@@ -61,4 +61,32 @@ describe('VaultProjectsPage', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
     expect(api.post).toHaveBeenCalledWith('/api/v1/projects', { name: 'Sleep', vault_id: 'v1' })
   })
+
+  it('renders name-first rows not entity-card grid', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      generated_at: '',
+      projects: [
+        { id: 'p1', name: 'Project 1', vault_id: 'v1', vault_name: 'HEALTH', note_count: 2 },
+        { id: 'p2', name: 'Project 2', vault_id: 'v1', vault_name: 'HEALTH', note_count: 0 },
+      ],
+    })
+    render(VaultProjectsPage, { props: { vaultId: 'v1', vaultName: 'HEALTH' } })
+    expect(await screen.findByRole('button', { name: /Project 1/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Project 2/i })).toBeInTheDocument()
+    expect(document.querySelector('.entity-card')).toBeNull()
+    expect(document.querySelector('.catalog-grid')).toBeNull()
+    expect(document.querySelector('.name-row')).toBeTruthy()
+    expect(document.querySelector('.name-list')).toBeTruthy()
+  })
+
+  it('New project opens dialog', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      generated_at: '',
+      projects: [{ id: 'p1', name: 'Project 1', vault_id: 'v1', note_count: 0 }],
+    })
+    render(VaultProjectsPage, { props: { vaultId: 'v1', vaultName: 'HEALTH' } })
+    await screen.findByRole('button', { name: /Project 1/i })
+    await fireEvent.click(screen.getByRole('button', { name: /new project/i }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
 })

@@ -3,7 +3,6 @@
   import { onMount } from 'svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import Modal from '../components/Modal.svelte'
-  import ProjectCard from '../components/ProjectCard.svelte'
   import SearchField from '../components/SearchField.svelte'
   import Skeleton from '../components/Skeleton.svelte'
   import { api } from '../lib/api/client'
@@ -120,19 +119,29 @@
   </Modal>
 
   {#if loading}
-    <div class="catalog-grid" aria-busy="true">
-      <Skeleton class="h-28" />
-      <Skeleton class="h-28" />
-    </div>
+    <ul class="name-list" aria-busy="true">
+      <li><Skeleton class="h-11" /></li>
+      <li><Skeleton class="h-11" /></li>
+    </ul>
   {:else if visible.length}
-    <div class="catalog-grid">
+    <ul class="name-list" role="list">
       {#each visible as project (project.id)}
-        <ProjectCard
-          {project}
-          onclick={() => navigate(`#/projects/${encodeURIComponent(project.id)}`)}
-        />
+        <li>
+          <button
+            type="button"
+            class="name-row"
+            onclick={() => navigate(`#/projects/${encodeURIComponent(project.id)}`)}
+          >
+            <span class="name-row__title">{project.name}</span>
+            <span class="name-row__meta">
+              {project.note_count}
+              {project.note_count === 1 ? 'note' : 'notes'}
+            </span>
+            <span class="name-row__chevron" aria-hidden="true">→</span>
+          </button>
+        </li>
       {/each}
-    </div>
+    </ul>
   {:else if query.trim()}
     <EmptyState
       title="No matching projects"
