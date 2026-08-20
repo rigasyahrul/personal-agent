@@ -485,5 +485,42 @@ describe('SessionChat', () => {
       await fireEvent.click(promote)
       expect(await screen.findByRole('heading', { name: 'Save to source' })).toBeInTheDocument()
     })
+
+    it('opens file tab when openPath prop is set', async () => {
+      vi.mocked(api.workspaceFile).mockImplementation(async (_sid, path) => ({
+        path,
+        kind: 'file',
+        content: path.endsWith('.md') ? `# ${path}` : `content:${path}`,
+      }))
+      render(SessionChat, {
+        props: {
+          session: wsSession,
+          projectId: 'p1',
+          pollInterval: 60_000,
+          openPath: 'notes/a.md',
+        },
+      })
+      const fileTab = await screen.findByRole('tab', { name: /a\.md/i })
+      expect(fileTab).toHaveAttribute('aria-selected', 'true')
+      expect(fileTab).toHaveAttribute('title', 'notes/a.md')
+      expect(screen.getByRole('tab', { name: /^Agent$/i })).toHaveAttribute('aria-selected', 'false')
+      // Composer form stays mounted while file tab is active
+      expect(screen.getByLabelText('Message').closest('form')).toBeTruthy()
+    })
+
+    it('when embeddedInHub, does not show Show files toggle', async () => {
+      render(SessionChat, {
+        props: {
+          session: wsSession,
+          projectId: 'p1',
+          pollInterval: 60_000,
+          embeddedInHub: true,
+        },
+      })
+      await screen.findByLabelText('Message')
+      expect(screen.queryByRole('button', { name: /show files/i })).toBeNull()
+      expect(screen.queryByRole('button', { name: /hide files/i })).toBeNull()
+      expect(screen.queryByLabelText('Session files')).toBeNull()
+    })
   })
 })

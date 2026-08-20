@@ -19,6 +19,7 @@ vi.mock('../lib/api', async (importOriginal) => {
       listMessages: vi.fn(),
       currentRun: vi.fn(),
       workspaceTree: vi.fn(),
+      workspaceFile: vi.fn(),
     },
   }
 })
@@ -48,6 +49,7 @@ describe('ProjectHubPage', () => {
     vi.mocked(api.listMessages).mockReset().mockResolvedValue([])
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
+    vi.mocked(api.workspaceFile).mockReset()
   })
 
   it('shows Claude start prompt and no metric destination grid', async () => {
@@ -141,6 +143,40 @@ describe('ProjectHubPage', () => {
     expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
+  })
+
+  it('rail Files open drives SessionChat file tab and hides Show files', async () => {
+    vi.mocked(api.listProjectSessions).mockResolvedValue([
+      {
+        id: 's1',
+        title: 'Test 1',
+        status: 'idle',
+        provider: 'openai',
+        model_id: 'gpt',
+        tool_grants: { workspace_files: true },
+      },
+    ])
+    vi.mocked(api.listProjectNotes).mockResolvedValue([
+      { path: 'notes/a.md', kind: 'file' },
+    ])
+    vi.mocked(api.workspaceFile).mockImplementation(async (_sid, path) => ({
+      path,
+      kind: 'file',
+      content: `# ${path}`,
+    }))
+
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+
+    await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
+    expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /show files/i })).toBeNull()
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Files' }))
+    await fireEvent.click(await screen.findByRole('button', { name: 'notes/a.md' }))
+
+    const fileTab = await screen.findByRole('tab', { name: /a\.md/i })
+    expect(fileTab).toHaveAttribute('aria-selected', 'true')
+    expect(fileTab).toHaveAttribute('title', 'notes/a.md')
   })
 
   it('shows a retryable hard-load error', async () => {

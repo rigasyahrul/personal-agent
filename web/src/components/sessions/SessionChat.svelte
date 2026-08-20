@@ -51,6 +51,8 @@
     onclose,
     uuid = () => crypto.randomUUID(),
     storage = typeof localStorage !== 'undefined' ? localStorage : null,
+    openPath = $bindable<string | null>(null),
+    embeddedInHub = false,
   }: {
     session: Session
     projectId: string
@@ -58,6 +60,10 @@
     onclose?: () => void
     uuid?: () => string
     storage?: Storage | null
+    /** Hub rail sets this to open a file tab; cleared after open. */
+    openPath?: string | null
+    /** When true, hide internal Show files toggle / SessionFilesBar (hub ProjectRail owns files). */
+    embeddedInHub?: boolean
   } = $props()
 
   let messages = $state<ChatMessage[]>([])
@@ -446,7 +452,7 @@
   })
 
   $effect(() => {
-    if (!isNarrow || !filesOpen || !showWorkspace) return
+    if (!isNarrow || !filesOpen || !showWorkspace || embeddedInHub) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -455,6 +461,14 @@
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
+  })
+
+  /** Hub ProjectRail drives file tabs via openPath; clear after handling so the same path can re-open. */
+  $effect(() => {
+    const path = openPath
+    if (!path) return
+    openFile(path)
+    openPath = null
   })
 
   onDestroy(() => {
@@ -476,7 +490,7 @@
       <p class="run-status text-sm text-slate-600" role="status" aria-live="polite" style="margin:0"
       >{runLabel}</p>
     </div>
-    {#if showWorkspace}
+    {#if showWorkspace && !embeddedInHub}
       <button
         type="button"
         class="btn btn--secondary"
@@ -618,7 +632,7 @@
       </form>
     </div>
 
-    {#if filesOpen && showWorkspace}
+    {#if filesOpen && showWorkspace && !embeddedInHub}
       {#if !isNarrow}
         <div
           class="session-split__handle"
