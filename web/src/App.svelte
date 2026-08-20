@@ -21,6 +21,7 @@
   import ProjectSessionsPage from './routes/ProjectSessionsPage.svelte';
   import ProjectReviewPage from './routes/ProjectReviewPage.svelte';
   import ReviewPage from './routes/ReviewPage.svelte';
+  import SettingsPage from './routes/SettingsPage.svelte';
 
   let { authLoader = loadAuthState }: { authLoader?: typeof loadAuthState } = $props();
   let auth = $state<AuthState>({ status: 'loading' });
@@ -120,6 +121,8 @@
       <ProjectReviewPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
     {:else if route.name === 'review'}
       <ReviewPage query={reviewQuery} />
+    {:else if route.name === 'settings'}
+      <SettingsPage />
     {:else}
       <p>Route: {route.name}</p>
     {/if}
