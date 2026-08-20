@@ -90,6 +90,60 @@ describe('ProjectHubPage', () => {
     expect(afterComposer & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  it('keeps composer when sessions list fails and shows list retry', async () => {
+    vi.mocked(api.listProjectSessions).mockRejectedValue(new Error('sessions down'))
+
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+
+    expect(await screen.findByRole('heading', { name: /how can i help you today/i })).toBeVisible()
+    expect(screen.getByRole('textbox', { name: /message/i })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/sessions down/i)
+    expect(screen.getByRole('button', { name: /retry sessions/i })).toBeInTheDocument()
+
+    vi.mocked(api.listProjectSessions).mockResolvedValue([
+      {
+        id: 's1',
+        title: 'Recovered',
+        status: 'idle',
+        provider: 'openai',
+        model_id: 'gpt',
+      },
+    ])
+    await fireEvent.click(screen.getByRole('button', { name: /retry sessions/i }))
+    expect(await screen.findByRole('button', { name: /Recovered/i })).toBeInTheDocument()
+  })
+
+  it('opens chat after create even if first message fails (no orphan on retry)', async () => {
+    const created = {
+      id: 's-orphan',
+      title: 'Plan the week',
+      status: 'idle',
+      provider: 'openai',
+      model_id: 'gpt',
+    }
+    vi.mocked(api.createProjectSession).mockResolvedValue(created)
+    vi.mocked(api.sendMessage).mockRejectedValue(new Error('send failed'))
+    vi.mocked(api.listMessages).mockResolvedValue([])
+    vi.mocked(api.currentRun).mockResolvedValue(null)
+    // initial load empty; after Back reload returns created session
+    vi.mocked(api.listProjectSessions)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([created])
+
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+    await screen.findByRole('heading', { name: /how can i help you today/i })
+    await fireEvent.input(screen.getByRole('textbox', { name: /message/i }), {
+      target: { value: 'Plan the week' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: /^send$/i }))
+
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(api.createProjectSession).toHaveBeenCalledTimes(1)
+    await fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(await screen.findByRole('button', { name: /Plan the week/i })).toBeInTheDocument()
+  })
+
   it('Send creates session and first message then opens chat', async () => {
     const created = {
       id: 's-new',

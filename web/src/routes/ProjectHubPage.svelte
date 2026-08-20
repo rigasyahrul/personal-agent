@@ -23,6 +23,7 @@
   let sessions = $state<Session[]>([])
   let loading = $state(true)
   let error = $state('')
+  let sessionsError = $state('')
   let draft = $state('')
   let starting = $state(false)
   let activeSession = $state<Session | null>(null)
@@ -36,20 +37,29 @@
   async function load() {
     loading = true
     error = ''
+    sessionsError = ''
     activeSession = null
     try {
-      const [loadedProject, listed] = await Promise.all([
-        api.getProject(projectId),
-        api.listProjectSessions(projectId),
-      ])
+      const loadedProject = await api.getProject(projectId)
       project = loadedProject
       onProjectLoad?.(loadedProject)
-      sessions = listed ?? []
     } catch (cause) {
       project = null
       onProjectLoad?.(null)
       sessions = []
       error = cause instanceof Error ? cause.message : 'Could not load project.'
+      loading = false
+      return
+    }
+
+    try {
+      const listed = await api.listProjectSessions(projectId)
+      sessions = listed ?? []
+      sessionsError = ''
+    } catch (cause) {
+      sessions = []
+      sessionsError =
+        cause instanceof Error ? cause.message : 'Could not load sessions.'
     } finally {
       loading = false
     }
@@ -59,8 +69,10 @@
     try {
       const listed = await api.listProjectSessions(projectId)
       sessions = listed ?? []
-    } catch {
-      /* keep existing list on soft reload failure */
+      sessionsError = ''
+    } catch (cause) {
+      sessionsError =
+        cause instanceof Error ? cause.message : 'Could not load sessions.'
     }
   }
 
@@ -112,10 +124,18 @@
         model_parameters: {},
         tool_grants: { workspace_files: false },
       })
-      await api.sendMessage(session.id, { content, request_key: crypto.randomUUID() })
-      draft = ''
+      // Always surface the created session so a failed first send cannot orphan it
+      // or cause a second create on retry.
       sessions = [session, ...sessions.filter((x) => x.id !== session.id)]
       activeSession = session
+      try {
+        await api.sendMessage(session.id, { content, request_key: crypto.randomUUID() })
+        draft = ''
+      } catch (sendCause) {
+        error =
+          sendCause instanceof Error ? sendCause.message : 'Could not send first message.'
+        // Keep draft so user can resend from the open chat composer.
+      }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Could not start session.'
     } finally {
@@ -185,6 +205,16 @@
         </section>
 
         <section class="hub-session-list" aria-label="Sessions">
+          {#if sessionsError}
+            <p role="alert" class="alert alert--error">{sessionsError}</p>
+            <div style="margin-bottom:8px">
+              <button
+                type="button"
+                class="btn btn--secondary"
+                onclick={() => void reloadSessions()}
+              >Retry sessions</button>
+            </div>
+          {/if}
           {#each sessions as s (s.id)}
             <SessionCardRow
               title={s.title}
@@ -192,7 +222,7 @@
               onclick={() => openSession(s)}
             />
           {/each}
-          {#if !sessions.length}
+          {#if !sessions.length && !sessionsError}
             <p class="text-sm text-muted" style="margin:0">
               No sessions yet. Send a message above to start one.
             </p>
