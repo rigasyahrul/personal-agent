@@ -28,6 +28,7 @@
   let route = $state<AppRoute>(parseRoute(location.hash));
   let vaults = $state<VaultSummary[]>([]);
   let routeProject = $state<Project | null>(null);
+  let health = $state<'unknown' | 'ready' | 'error'>('unknown');
   const context = $derived(deriveShellContext(route, vaults, routeProject ?? undefined));
 
   const vaultName = $derived(
@@ -69,6 +70,14 @@
       .catch(() => {
         /* shell falls back to generic vault name */
       });
+    void api
+      .get<{ ok?: boolean; storage_writable?: boolean }>('/health')
+      .then((body) => {
+        health = body?.storage_writable ? 'ready' : 'error';
+      })
+      .catch(() => {
+        health = 'unknown';
+      });
     return () => removeEventListener('hashchange', updateRoute);
   });
 
@@ -92,7 +101,7 @@
 {:else if auth.status === 'error'}
   <main class="auth-canvas"><p role="alert">{auth.message}</p></main>
 {:else}
-  <AppShell {context} {route} health="Storage status unavailable">
+  <AppShell {context} {route} {health}>
     {#if route.name === 'home'}
       <HomePage />
     {:else if route.name === 'projects'}

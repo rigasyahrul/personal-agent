@@ -50,6 +50,16 @@ describe('ProjectHubPage', () => {
     expect(screen.getByText('1')).toBeInTheDocument()
   })
 
+  it('differentiates quiet metrics from destination cards', async () => {
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+    expect(await screen.findByRole('heading', { name: project.name })).toBeVisible()
+    const metrics = screen.getByRole('region', { name: 'Project metrics' })
+    const surfaces = screen.getByRole('region', { name: 'Project surfaces' })
+    expect(metrics.querySelectorAll('[data-card="metric"]').length).toBe(3)
+    expect(surfaces.querySelectorAll('[data-card="destination"]').length).toBe(3)
+    expect(metrics.className).not.toEqual(surfaces.className)
+  })
+
   it('shows a retryable hard-load error', async () => {
     vi.mocked(api.getProject).mockRejectedValueOnce(new Error('project missing'))
     render(ProjectHubPage, { props: { projectId: 'p1' } })

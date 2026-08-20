@@ -26,4 +26,26 @@ describe('HomePage', () => {
     await waitFor(() => expect(screen.getByText('You’re all caught up')).toBeInTheDocument())
     expect(screen.getByText('No unfiled projects yet')).toBeInTheDocument()
   })
+
+  it('uses dashboard hierarchy: no redundant eyebrow, metric strip, one primary action', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      generated_at: '2026-08-19T00:00:00Z',
+      due_count: 0,
+      projects: [],
+    })
+    render(HomePage)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
+    expect(screen.queryByText('Global desk')).not.toBeInTheDocument()
+
+    const primary = screen.getAllByRole('button', { name: 'New project' })[0]
+    expect(primary.className).toMatch(/btn--primary/)
+
+    const metrics = screen.getByRole('region', { name: 'Summary' })
+    expect(metrics.querySelectorAll('[data-card="metric"]').length).toBeGreaterThanOrEqual(2)
+
+    const destinations = screen.queryByRole('region', { name: 'Destinations' })
+    if (destinations) {
+      expect(destinations.querySelectorAll('[data-card="destination"]').length).toBeGreaterThan(0)
+    }
+  })
 })

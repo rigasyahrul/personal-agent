@@ -52,66 +52,55 @@
 
 <svelte:head><title>{vaultName} · Personal Agent</title></svelte:head>
 
-<div class="space-y-8">
-  <header>
-    <p class="text-sm text-slate-500">Vault</p>
-    <h1 class="text-2xl font-semibold text-slate-950">{vaultName}</h1>
+<div class="page-stack">
+  <header class="page-header">
+    <div>
+      <p class="page-header__eyebrow">Vault</p>
+      <h1>{vaultName}</h1>
+    </div>
+    <div class="page-header__actions" aria-label="Quick actions">
+      <a class="btn btn--primary" href={newProjectHref}>New project</a>
+      <a class="btn btn--secondary" href={projectsHref}>Projects</a>
+      <a class="btn btn--secondary" href={sessionsHref}>Sessions</a>
+      <a class="btn btn--secondary" href={reviewHref}>Review</a>
+    </div>
   </header>
-
-  <section aria-label="Quick actions" class="flex flex-wrap gap-3">
-    <a
-      class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
-      href={newProjectHref}
-    >New project</a>
-    <a
-      class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium"
-      href={projectsHref}
-    >Projects</a>
-    <a
-      class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium"
-      href={sessionsHref}
-    >Sessions</a>
-    <a
-      class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium"
-      href={reviewHref}
-    >Review</a>
-  </section>
 
   {#if error}
     <p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
   {/if}
 
   {#if loading}
-    <div class="grid gap-4 md:grid-cols-3">
-      <Skeleton class="h-28" />
-      <Skeleton class="h-28" />
-      <Skeleton class="h-28" />
+    <div class="metric-strip" aria-busy="true">
+      <Skeleton class="h-16" />
+      <Skeleton class="h-16" />
+      <Skeleton class="h-16" />
     </div>
   {:else}
-    <section class="grid gap-4 md:grid-cols-3">
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <p class="text-sm text-slate-500">Projects</p>
-        <p class="mt-2 text-xl font-semibold">{projectLabel}</p>
+    <section class="metric-strip" aria-label="Summary">
+      <div class="metric-card" data-card="metric">
+        <p class="metric-card__label">Projects</p>
+        <p class="metric-card__value">{projectLabel}</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <p class="text-sm text-slate-500">Review</p>
-        <p class="mt-2 text-xl font-semibold">{dueLabel}</p>
+      <div class="metric-card" data-card="metric">
+        <p class="metric-card__label">Review</p>
+        <p class="metric-card__value">{dueLabel}</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <p class="text-sm text-slate-500">Notes / sessions</p>
-        <p class="mt-2 text-xl font-semibold">{noteTotal} notes · {sessionTotal} sessions</p>
+      <div class="metric-card" data-card="metric">
+        <p class="metric-card__label">Notes / sessions</p>
+        <p class="metric-card__value">{noteTotal} notes · {sessionTotal} sessions</p>
       </div>
     </section>
 
-    <section class="space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Recent projects</h2>
-        <button class="text-sm font-medium text-indigo-700" type="button" onclick={() => navigate(projectsHref)}>
+    <section aria-label="Recent projects">
+      <div class="section-head">
+        <h2>Recent projects</h2>
+        <button type="button" class="btn btn--ghost" onclick={() => navigate(projectsHref)}>
           View all
         </button>
       </div>
       {#if projects.length}
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {#each projects.slice(0, 6) as project (project.id)}
             <ProjectCard
               {project}
