@@ -61,26 +61,25 @@
 
 <svelte:head><title>Sessions · {vaultName}</title></svelte:head>
 
-<div class="space-y-6">
-  <header class="flex flex-wrap items-end justify-between gap-4">
+<div class="page-stack">
+  <header class="page-header">
     <div>
-      <p class="text-sm text-slate-500">{vaultName}</p>
-      <h1 class="text-2xl font-semibold">Sessions</h1>
+      <p class="page-header__eyebrow">{vaultName}</p>
+      <h1>Sessions</h1>
     </div>
     {#if projects.length}
-      <a
-        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
-        href={newSessionHref}
-      >New session</a>
+      <div class="page-header__actions">
+        <a class="btn btn--primary" href={newSessionHref}>New session</a>
+      </div>
     {/if}
   </header>
 
   {#if error}
-    <p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
+    <p role="alert" class="alert alert--error">{error}</p>
   {/if}
 
   {#if failures.length}
-    <p role="alert" class="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+    <p role="alert" class="alert alert--warn">
       Could not load sessions for: {failures.join(', ')}
     </p>
   {/if}
@@ -100,11 +99,7 @@
   {:else}
     <label class="block max-w-xs">
       <span class="text-sm font-medium text-slate-700">Project</span>
-      <select
-        class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-        bind:value={selectedProjectId}
-        aria-label="Project"
-      >
+      <select class="field-select mt-1" bind:value={selectedProjectId} aria-label="Project">
         <option value="__all__">All projects</option>
         {#each projects as project (project.id)}
           <option value={project.id}>{project.name}</option>
@@ -113,17 +108,19 @@
     </label>
 
     {#if displaySessions.length}
-      <ul class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+      <ul class="list-panel">
         {#each displaySessions as session (session.id)}
-          <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <div>
-              <p class="font-medium text-slate-950">{session.title || 'Untitled session'}</p>
-              <p class="text-sm text-slate-500">{session.project_name}</p>
+          <li>
+            <div class="list-row" style="cursor:default">
+              <div>
+                <p class="font-medium text-slate-950" style="margin:0">{session.title || 'Untitled session'}</p>
+                <p class="text-sm text-slate-500" style="margin:0">{session.project_name}</p>
+              </div>
+              <a
+                class="link-accent"
+                href={`#/projects/${encodeURIComponent(session.project_id)}/sessions`}
+              >Open</a>
             </div>
-            <a
-              class="text-sm font-medium text-indigo-700"
-              href={`#/projects/${encodeURIComponent(session.project_id)}/sessions`}
-            >Open</a>
           </li>
         {/each}
       </ul>

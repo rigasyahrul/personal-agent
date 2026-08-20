@@ -45,12 +45,12 @@
 {#if loading}
   <Skeleton class="h-24" />
 {:else if error}
-  <p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
+  <p role="alert" class="alert alert--error">{error}</p>
 {:else if project}
-  <div class="space-y-4">
+  <div class="page-stack">
     <Breadcrumbs {project} leaf="Review" />
-    <header>
-      <h1 class="text-2xl font-semibold text-slate-950">Review</h1>
+    <header class="page-header" style="margin-bottom: 0">
+      <div><h1>Review</h1></div>
     </header>
     <ReviewRunner
       {scope}

@@ -128,21 +128,19 @@
 
 <div class="space-y-4" data-testid="review-runner">
   {#if showScopeChips}
-    <nav class="scope-chip flex flex-wrap gap-2" aria-label="Review scope">
+    <nav class="flex flex-wrap gap-2" aria-label="Review scope">
       <button
         type="button"
-        class="rounded-full border px-3 py-1 text-sm font-medium disabled:bg-indigo-50 disabled:text-indigo-800"
-        class:border-indigo-300={chipActive('all')}
-        class:border-slate-300={!chipActive('all')}
+        class="scope-chip"
+        class:scope-chip--active={chipActive('all')}
         disabled={chipActive('all')}
         onclick={() => selectScope('all')}
       >All projects</button>
       {#each projectScopes as option (option.scope)}
         <button
           type="button"
-          class="rounded-full border px-3 py-1 text-sm font-medium disabled:bg-indigo-50 disabled:text-indigo-800"
-          class:border-indigo-300={chipActive(option.scope)}
-          class:border-slate-300={!chipActive(option.scope)}
+          class="scope-chip"
+          class:scope-chip--active={chipActive(option.scope)}
           disabled={chipActive(option.scope)}
           onclick={() => selectScope(option.scope)}
         >{option.label}</button>
@@ -151,23 +149,19 @@
   {/if}
 
   {#if error}
-    <p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
-    <button
-      type="button"
-      class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm"
-      onclick={() => refresh()}
-    >Retry</button>
+    <p role="alert" class="alert alert--error">{error}</p>
+    <button type="button" class="btn btn--secondary" onclick={() => refresh()}>Retry</button>
   {:else if loading}
     <div class="space-y-3">
       <Skeleton class="h-32" />
       <Skeleton class="h-24" />
     </div>
   {:else if queue.caught_up || !activeItem}
-    <p class="caught-up rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-slate-700">
+    <p class="caught-up panel panel--dashed px-6 py-12 text-center text-slate-700">
       {caughtUpLabel}
     </p>
   {:else}
-    <article class="review-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <article class="review-card panel panel--pad">
       <h3 class="text-base font-semibold text-slate-950">{activeItem.prompt}</h3>
 
       {#if activeItem.kind === 'bite'}
@@ -176,31 +170,28 @@
         {:else}
           <button
             type="button"
-            class="mt-3 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium"
+            class="btn btn--secondary mt-3"
             onclick={() => {
               revealed = { ...revealed, [activeItem.id]: true }
             }}
           >Reveal answer</button>
         {/if}
       {:else if activeItem.note_id}
-        <a
-          class="mt-3 inline-flex rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700"
-          href={noteHref(activeItem)}
-        >Open current note</a>
+        <a class="btn btn--secondary mt-3" href={noteHref(activeItem)}>Open current note</a>
       {/if}
 
       <div class="ratings mt-5 flex flex-wrap gap-2">
         {#each ratingLabels as rating (rating.value)}
           <button
             type="button"
-            class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            class="btn btn--primary"
             disabled={actionPending}
             onclick={() => rate(rating.value)}
           >{rating.label}</button>
         {/each}
         <button
           type="button"
-          class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+          class="btn btn--secondary"
           disabled={actionPending}
           onclick={() => suspend()}
         >Suspend</button>

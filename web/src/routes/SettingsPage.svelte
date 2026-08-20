@@ -33,10 +33,9 @@
 
 <svelte:head><title>Settings · Personal Agent</title></svelte:head>
 
-<div class="mx-auto max-w-2xl space-y-6">
-  <header>
-    <p class="text-sm text-slate-500">Account</p>
-    <h1 class="text-2xl font-semibold text-slate-950">Settings</h1>
+<div class="mx-auto max-w-2xl page-stack">
+  <header class="page-header">
+    <div><h1>Settings</h1></div>
   </header>
 
   {#if loading}
@@ -45,15 +44,11 @@
       <Skeleton class="h-56" />
     </div>
   {:else if error}
-    <p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
-    <button
-      type="button"
-      class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm"
-      onclick={() => load()}
-    >Retry</button>
+    <p role="alert" class="alert alert--error">{error}</p>
+    <button type="button" class="btn btn--secondary" onclick={() => load()}>Retry</button>
   {:else if settings}
-    <section class="settings-main space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-      <h2 class="text-lg font-semibold text-slate-950">Defaults</h2>
+    <section class="settings-main panel panel--pad form-stack">
+      <h2 class="text-lg font-semibold text-slate-950" style="margin:0">Defaults</h2>
       <dl class="grid gap-3 sm:grid-cols-2">
         <div>
           <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Timezone</dt>

@@ -36,7 +36,7 @@
         {#if op.retry_cards === true && op.pending_id}
           <button
             type="button"
-            class="font-medium text-indigo-700 disabled:opacity-50"
+            class="link-accent disabled:opacity-50"
             disabled={retrying.has(op.pending_id)}
             onclick={() => onretry?.(op)}
           >Retry cards</button>

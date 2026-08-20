@@ -19,4 +19,12 @@ describe('VaultsPage', () => {
     render(VaultsPage); await fireEvent.click(await screen.findByRole('button', { name: 'New vault' })); await fireEvent.input(screen.getByLabelText('Vault name'), { target: { value: 'WORK' } }); await fireEvent.click(screen.getByRole('button', { name: 'Create vault' }))
     expect(api.post).toHaveBeenCalledWith('/api/v1/vaults', { name: 'WORK' }); expect(navigate).toHaveBeenCalledWith('#/vaults/v2')
   })
+
+  it('uses craft hierarchy without Global desk eyebrow', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce([]).mockResolvedValueOnce({ projects: [], generated_at: '' })
+    render(VaultsPage)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Vaults' })).toBeInTheDocument()
+    expect(screen.queryByText('Global desk')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'New vault' })[0].className).toMatch(/btn--primary/)
+  })
 })

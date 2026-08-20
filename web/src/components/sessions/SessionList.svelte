@@ -14,16 +14,12 @@
 {#if sessions.length === 0}
   <p class="text-sm text-slate-600">No sessions yet</p>
 {:else}
-  <ul class="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+  <ul class="list-panel">
     {#each sessions as session (session.id)}
       <li>
-        <button
-          type="button"
-          class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50"
-          onclick={() => onopen?.(session)}
-        >
+        <button type="button" class="list-row" onclick={() => onopen?.(session)}>
           <span class="font-medium text-slate-900">{session.title}</span>
-          <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+          <span class="badge-chip" style="background:#f4f4f5;color:#52525b">
             {session.provider}:{session.model_id}
           </span>
         </button>

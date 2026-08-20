@@ -18,16 +18,14 @@
 <ul role="tree" class="space-y-1 text-sm">
   {#each entries as entry (entry.path + (entry.note_id ?? ''))}
     {#if entry.kind === 'folder'}
-      <li role="treeitem" class="font-medium text-slate-700" aria-expanded="true" aria-selected="false">
-        📁 {entry.path}
+      <li role="treeitem" class="px-2 py-1 font-medium text-slate-700" aria-expanded="true" aria-selected="false">
+        {entry.path}
       </li>
     {:else}
       <li role="treeitem" aria-selected={entry.note_id === selectedNoteId}>
         {#if entry.note_id}
           <a
-            class="block rounded px-2 py-1 hover:bg-slate-100 {entry.note_id === selectedNoteId
-              ? 'bg-indigo-50 font-medium text-indigo-800'
-              : 'text-slate-800'}"
+            class="tree-item {entry.note_id === selectedNoteId ? 'tree-item--active' : ''}"
             href={`#/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(entry.note_id)}`}
             onclick={(event) => {
               if (onselect && entry.note_id) {
@@ -35,9 +33,9 @@
                 onselect(entry.note_id)
               }
             }}
-          >📄 {entry.path}</a>
+          >{entry.path}</a>
         {:else}
-          <span class="px-2 py-1 text-slate-600">📄 {entry.path}</span>
+          <span class="tree-item" style="cursor:default">{entry.path}</span>
         {/if}
       </li>
     {/if}

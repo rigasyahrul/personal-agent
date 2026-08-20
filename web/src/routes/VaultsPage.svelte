@@ -44,26 +44,28 @@
   }
 </script>
 <svelte:head><title>Vaults · Personal Agent</title></svelte:head>
-<div class="space-y-6">
-  <header class="flex flex-wrap items-end justify-between gap-4">
-    <div><p class="text-sm text-slate-500">Global desk</p><h1 class="text-2xl font-semibold">Vaults</h1></div>
-    <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white" onclick={() => creating = true}>New vault</button>
+<div class="page-stack">
+  <header class="page-header">
+    <div><h1>Vaults</h1></div>
+    <div class="page-header__actions">
+      <button type="button" class="btn btn--primary" onclick={() => creating = true}>New vault</button>
+    </div>
   </header>
   <SearchField bind:value={query} label="Search vaults" />
-  {#if error}<p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>{/if}
+  {#if error}<p role="alert" class="alert alert--error">{error}</p>{/if}
   {#if creating}
-    <form class="flex max-w-lg gap-2 rounded-xl border bg-white p-4" onsubmit={(e) => { e.preventDefault(); createVault() }}>
-      <label class="flex-1">
-        <span class="text-sm font-medium">Vault name</span>
-        <input class="mt-1 w-full rounded-md border px-3 py-2" bind:value={name} />
+    <form class="panel form-inline" onsubmit={(e) => { e.preventDefault(); createVault() }}>
+      <label>
+        Vault name
+        <input class="field-input" bind:value={name} aria-label="Vault name" />
       </label>
-      <button disabled={saving || !name.trim()} class="self-end rounded-md bg-indigo-600 px-4 py-2 text-sm text-white" type="submit">Create vault</button>
+      <button disabled={saving || !name.trim()} class="btn btn--primary" type="submit">Create vault</button>
     </form>
   {/if}
   {#if loading}
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"><Skeleton class="h-28" /><Skeleton class="h-28" /></div>
+    <div class="catalog-grid" aria-busy="true"><Skeleton class="h-28" /><Skeleton class="h-28" /></div>
   {:else if visible.length}
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div class="catalog-grid">
       {#each visible as vault (vault.id)}
         <VaultCard {vault} projectCount={counts[vault.id] ?? 0} onclick={() => navigate(`#/vaults/${encodeURIComponent(vault.id)}`)} />
       {/each}

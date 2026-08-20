@@ -301,12 +301,12 @@
   })
 </script>
 
-<div class="session-layout flex flex-col gap-4 lg:flex-row">
-  <section class="session-chat min-w-0 flex-1 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+<div class="session-layout">
+  <section class="session-chat session-layout__chat panel form-stack">
     <div class="flex flex-wrap items-center gap-3">
-      <button type="button" class="text-sm font-medium text-indigo-700" onclick={() => onclose?.()}>Sessions</button>
-      <h2 class="text-xl font-semibold">{session.title}</h2>
-      <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
+      <button type="button" class="link-accent" onclick={() => onclose?.()}>Sessions</button>
+      <h2 class="text-xl font-semibold" style="margin:0">{session.title}</h2>
+      <span class="badge-chip" style="background:#f4f4f5;color:#52525b"
       >{session.provider}:{session.model_id}</span>
     </div>
 
@@ -317,19 +317,19 @@
       onretry={(op) => void retryCards(op)}
     />
 
-    <ol class="messages max-h-[50vh] space-y-3 overflow-auto">
+    <ol class="messages max-h-[50vh] space-y-3 overflow-auto" style="list-style:none;margin:0;padding:0">
       {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
-        <li class="message message-{message.role} rounded-lg bg-slate-50 p-3">
-          <strong class="text-xs uppercase tracking-wide text-slate-500">{message.role}</strong>
-          <p class="mt-1 whitespace-pre-wrap text-sm text-slate-900">{message.content}</p>
+        <li class="message message-{message.role} message-bubble">
+          <strong>{message.role}</strong>
+          <p>{message.content}</p>
         </li>
       {/each}
     </ol>
 
-    <p class="run-status text-sm text-slate-600" role="status" aria-live="polite">{runLabel}</p>
+    <p class="run-status text-sm text-slate-600" role="status" aria-live="polite" style="margin:0">{runLabel}</p>
 
     {#if alertText}
-      <p class="error rounded-md bg-red-50 p-2 text-sm text-red-700" role="alert" data-chat-alert>{alertText}</p>
+      <p class="error alert alert--error" role="alert" data-chat-alert>{alertText}</p>
     {/if}
 
     <!-- Composer ancestry is stable: never conditionally remount this form during polls. -->
@@ -337,7 +337,7 @@
       <label class="block text-sm">
         <span class="font-medium">Message</span>
         <textarea
-          class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+          class="field-textarea mt-1"
           name="message"
           required
           rows="3"
@@ -346,7 +346,7 @@
       </label>
       <button
         type="submit"
-        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        class="btn btn--primary"
         disabled={sendDisabled}
       >Send</button>
     </form>

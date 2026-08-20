@@ -22,4 +22,19 @@ describe('visual baseline', () => {
     expect(css).toContain('@media (max-width: 767px)');
     expect(css).not.toMatch(/linear-gradient|radial-gradient|backdrop-filter/);
   });
+
+  it('declares full-surface craft primitives', () => {
+    for (const token of [
+      '.panel',
+      '.form-stack',
+      '.field-input',
+      '.scope-chip',
+      '.list-panel',
+      '.link-accent',
+      '.catalog-grid',
+      '.alert--error',
+    ]) {
+      expect(css).toContain(token);
+    }
+  });
 });

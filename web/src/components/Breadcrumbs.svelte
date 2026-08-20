@@ -22,12 +22,12 @@
   <ol class="flex flex-wrap items-center gap-1">
     {#if vaulted}
       <li class="flex items-center gap-1">
-        <a class="font-medium text-indigo-700 hover:underline" href="#/vaults">Vaults</a>
+        <a class="link-accent" href="#/vaults">Vaults</a>
         <span aria-hidden="true" class="text-slate-400">/</span>
       </li>
       <li class="flex min-w-0 items-center gap-1">
         <a
-          class="max-w-[12rem] truncate font-medium text-indigo-700 hover:underline"
+          class="link-accent max-w-[12rem] truncate"
           href={vaultHref}
           title={project.vault_name ?? 'Vault'}
         >{project.vault_name ?? 'Vault'}</a>
@@ -35,7 +35,7 @@
       </li>
     {:else}
       <li class="flex items-center gap-1">
-        <a class="font-medium text-indigo-700 hover:underline" href="#/projects">Projects</a>
+        <a class="link-accent" href="#/projects">Projects</a>
         <span aria-hidden="true" class="text-slate-400">/</span>
       </li>
     {/if}
@@ -43,7 +43,7 @@
     <li class="flex min-w-0 items-center gap-1">
       {#if leaf}
         <a
-          class="max-w-[12rem] truncate font-medium text-indigo-700 hover:underline"
+          class="link-accent max-w-[12rem] truncate"
           href={projectHref}
           title={project.name}
         >{project.name}</a>

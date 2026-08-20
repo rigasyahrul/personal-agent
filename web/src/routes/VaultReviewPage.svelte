@@ -27,10 +27,12 @@
 
 <svelte:head><title>Review · {vaultName}</title></svelte:head>
 
-<div class="space-y-6">
-  <header>
-    <p class="text-sm text-slate-500">{vaultName}</p>
-    <h1 class="text-2xl font-semibold">Review</h1>
+<div class="page-stack">
+  <header class="page-header">
+    <div>
+      <p class="page-header__eyebrow">{vaultName}</p>
+      <h1>Review</h1>
+    </div>
   </header>
 
   <ReviewRunner scope="all" showScopeChips={false} {loadQueue} />

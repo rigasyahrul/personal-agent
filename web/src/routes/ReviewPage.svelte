@@ -18,7 +18,6 @@
   const scope = $derived(rawScope && rawScope.length > 0 ? rawScope : 'all')
 
   onMount(() => {
-    // Default missing scope to all via hash (legacy parity).
     if (rawScope === null || rawScope === '') {
       location.hash = routeToHash({ name: 'review', scope: 'all' })
     }
@@ -38,10 +37,9 @@
 
 <svelte:head><title>Review · Personal Agent</title></svelte:head>
 
-<div class="space-y-6">
-  <header>
-    <p class="text-sm text-slate-500">Global desk</p>
-    <h1 class="text-2xl font-semibold text-slate-950">Review</h1>
+<div class="page-stack">
+  <header class="page-header">
+    <div><h1>Review</h1></div>
   </header>
 
   <ReviewRunner {scope} {projectScopes} showScopeChips={true} />

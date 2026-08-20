@@ -39,7 +39,6 @@
   )
 
   $effect(() => {
-    // Reset local override when parent settings change.
     void settings.backup_schedule
     void settings.backup?.schedule
     scheduleOverride = null
@@ -88,7 +87,6 @@
     try {
       await api.createBackup()
       await loadHistory()
-      // Refresh settings summary (last success/failure) via parent callback if available
       try {
         const refreshed = await api.getSettings()
         onsettingschange?.(refreshed)
@@ -104,10 +102,10 @@
   }
 </script>
 
-<section class="settings-backup space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-  <h2 class="text-lg font-semibold text-slate-950">Backup</h2>
+<section class="settings-backup panel panel--pad form-stack">
+  <h2 class="text-lg font-semibold text-slate-950" style="margin:0">Backup</h2>
 
-  <p class="text-sm text-slate-700">
+  <p class="text-sm text-slate-700" style="margin:0">
     {#if lastSuccess?.completed_at}
       Last successful backup: {lastSuccess.completed_at}
     {:else}
@@ -116,20 +114,20 @@
   </p>
 
   {#if showFailure && lastFailure}
-    <p class="error text-sm text-red-700">
+    <p class="error alert alert--error">
       Last attempt failed: {lastFailure.error || 'unknown error'}
     </p>
   {/if}
 
-  <p class="muted text-sm text-slate-500">
+  <p class="muted text-sm text-slate-500" style="margin:0">
     Remote sink configured: {sinkConfigured ? 'yes' : 'no'}
   </p>
 
-  <label class="block text-sm font-medium text-slate-800">
+  <label>
     Schedule
     <select
       id="backup-schedule"
-      class="mt-1 block w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+      class="field-select"
       aria-label="Schedule"
       value={schedule}
       disabled={savingSchedule}
@@ -139,33 +137,33 @@
       <option value="daily">Daily</option>
     </select>
   </label>
-  <p class="text-sm text-slate-600" aria-live="polite">{scheduleMsg}</p>
+  <p class="text-sm text-slate-600" aria-live="polite" style="margin:0">{scheduleMsg}</p>
 
   <div class="flex flex-wrap items-center gap-3">
     <button
       type="button"
       id="backup-now"
-      class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      class="btn btn--primary"
       disabled={runningBackup}
       onclick={() => runBackup()}
     >Backup now</button>
-    <p class="text-sm text-slate-600" aria-live="polite">{backupMsg}</p>
+    <p class="text-sm text-slate-600" aria-live="polite" style="margin:0">{backupMsg}</p>
   </div>
 
-  <div class="space-y-2">
-    <h3 class="text-sm font-semibold text-slate-800">History</h3>
+  <div class="form-stack">
+    <h3 class="text-sm font-semibold text-slate-800" style="margin:0">History</h3>
     {#if historyError}
       <p class="text-sm text-red-700" role="alert">{historyError}</p>
     {:else if history.length === 0}
-      <p class="text-sm text-slate-500">No backups yet.</p>
+      <p class="text-sm text-slate-500" style="margin:0">No backups yet.</p>
     {:else}
-      <ul class="divide-y divide-slate-100 rounded-md border border-slate-200">
+      <ul class="list-panel">
         {#each history as run (run.id)}
-          <li class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+          <li class="list-row" style="cursor:default">
             <span class="font-medium capitalize text-slate-800">{run.status}</span>
-            <span class="text-slate-500">{run.completed_at || run.started_at || run.id}</span>
+            <span class="text-slate-500 text-sm">{run.completed_at || run.started_at || run.id}</span>
             {#if run.error}
-              <span class="w-full text-red-700">{run.error}</span>
+              <span class="w-full text-red-700 text-sm">{run.error}</span>
             {/if}
           </li>
         {/each}

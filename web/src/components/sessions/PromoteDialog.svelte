@@ -110,16 +110,16 @@
 
 <dialog
   bind:this={dialogEl}
-  class="promote-dialog w-full max-w-md rounded-xl border border-slate-200 p-0 shadow-xl backdrop:bg-slate-900/40"
+  class="promote-dialog panel w-full max-w-md p-0 shadow-xl backdrop:bg-slate-900/40"
   onclose={close}
 >
-  <form method="dialog" class="space-y-4 p-5" onsubmit={submit}>
-    <h2 class="text-lg font-semibold">Save to source</h2>
-    <p class="text-sm text-slate-600">Project: {projectName}</p>
-    <label class="block text-sm">
-      <span class="font-medium">Target path</span>
+  <form method="dialog" class="form-stack p-5" onsubmit={submit}>
+    <h2 class="text-lg font-semibold" style="margin:0">Save to source</h2>
+    <p class="text-sm text-slate-600" style="margin:0">Project: {projectName}</p>
+    <label>
+      Target path
       <input
-        class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+        class="field-input"
         name="target_relative_path"
         required
         bind:value={targetPath}
@@ -128,22 +128,18 @@
     <fieldset class="space-y-1 text-sm">
       <legend class="font-medium">Review mode</legend>
       {#each ['none', 'whole', 'bites'] as mode (mode)}
-        <label class="flex items-center gap-2">
+        <label class="flex items-center gap-2" style="display:flex">
           <input type="radio" name="review_mode" value={mode} bind:group={reviewMode} />
           {mode}
         </label>
       {/each}
     </fieldset>
     {#if error}
-      <p role="alert" class="text-sm text-red-700">{error}</p>
+      <p role="alert" class="alert alert--error">{error}</p>
     {/if}
     <div class="flex justify-end gap-2">
-      <button type="button" class="rounded-md border px-3 py-1.5 text-sm" onclick={close}>Cancel</button>
-      <button
-        type="submit"
-        class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        disabled={saving}
-      >Save</button>
+      <button type="button" class="btn btn--secondary" onclick={close}>Cancel</button>
+      <button type="submit" class="btn btn--primary" disabled={saving}>Save</button>
     </div>
   </form>
 </dialog>

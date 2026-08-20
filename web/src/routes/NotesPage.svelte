@@ -62,7 +62,6 @@
   }
 
   $effect(() => {
-    // Track projectId so list reloads when the route project changes.
     void projectId
     void loadProjectAndTree()
   })
@@ -90,12 +89,12 @@
 {/if}
 
 {#if treeError}
-  <p role="alert" class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{treeError}</p>
+  <p role="alert" class="alert alert--error mb-4">{treeError}</p>
 {/if}
 
-<div class="flex flex-col gap-4 md:flex-row md:items-start">
-  <aside class="w-full shrink-0 rounded-xl border border-slate-200 bg-white p-4 md:w-72">
-    <h1 class="mb-3 text-lg font-semibold">Notes</h1>
+<div class="notes-layout">
+  <aside class="notes-layout__tree panel">
+    <h1 class="mb-3 text-lg font-semibold" style="margin-top:0">Notes</h1>
     {#if treeLoading}
       <div class="space-y-2" aria-busy="true">
         <Skeleton class="h-6" />
@@ -114,9 +113,9 @@
     {/if}
   </aside>
 
-  <section class="min-h-48 flex-1 rounded-xl border border-slate-200 bg-white p-4">
+  <section class="notes-layout__reader panel min-h-48">
     {#if detailError}
-      <p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{detailError}</p>
+      <p role="alert" class="alert alert--error">{detailError}</p>
     {:else if detailLoading}
       <div class="space-y-3" aria-busy="true">
         <Skeleton class="h-8 w-1/2" />

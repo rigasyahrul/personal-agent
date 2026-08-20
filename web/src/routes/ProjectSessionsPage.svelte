@@ -106,14 +106,14 @@
     <SessionChat session={activeSession} {projectId} onclose={closeSession} />
   {/key}
 {:else}
-  <div class="space-y-6">
-    <header>
-      <h1 class="text-2xl font-semibold">Sessions</h1>
+  <div class="page-stack">
+    <header class="page-header">
+      <div><h1>Sessions</h1></div>
     </header>
 
     {#if error}
-      <p role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
-      <button type="button" class="rounded-md border px-3 py-1.5 text-sm" onclick={() => void load()}>Retry</button>
+      <p role="alert" class="alert alert--error">{error}</p>
+      <button type="button" class="btn btn--secondary" onclick={() => void load()}>Retry</button>
     {:else if loading}
       <div class="space-y-3" aria-busy="true">
         <Skeleton class="h-24" />
@@ -121,28 +121,20 @@
       </div>
     {:else}
       {#if models.length}
-        <form
-          class="grid max-w-xl gap-3 rounded-xl border border-slate-200 bg-white p-4"
-          onsubmit={createSession}
-        >
-          <label class="block text-sm">
-            <span class="font-medium">Title</span>
+        <form class="panel form-stack max-w-xl" onsubmit={createSession}>
+          <label>
+            Title
             <input
-              class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              class="field-input"
               name="title"
               maxlength="200"
               required
               bind:value={title}
             />
           </label>
-          <label class="block text-sm">
-            <span class="font-medium">Model</span>
-            <select
-              class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
-              name="model"
-              required
-              bind:value={modelValue}
-            >
+          <label>
+            Model
+            <select class="field-select" name="model" required bind:value={modelValue}>
               {#each models as model (model.provider + model.model_id)}
                 <option value={`${model.provider}\u0000${model.model_id}`}>
                   {model.provider}:{model.model_id}
@@ -150,23 +142,21 @@
               {/each}
             </select>
           </label>
-          <label class="flex items-center gap-2 text-sm">
+          <label class="flex items-center gap-2 text-sm font-medium text-slate-700" style="display:flex">
             <input type="checkbox" name="workspace_files" bind:checked={workspaceFiles} />
             Allow workspace files
           </label>
           {#if createError}
             <p role="alert" class="text-sm text-red-700">{createError}</p>
           {/if}
-          <button
-            type="submit"
-            class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            disabled={creating}
-          >New session</button>
+          <div>
+            <button type="submit" class="btn btn--primary" disabled={creating}>New session</button>
+          </div>
         </form>
       {:else}
-        <section class="rounded-xl border border-dashed border-slate-300 bg-white p-6">
-          <p>Configure a model before creating a session.</p>
-          <a class="mt-3 inline-block text-sm font-medium text-indigo-700" href="#/settings">Open settings</a>
+        <section class="panel panel--dashed">
+          <p style="margin:0">Configure a model before creating a session.</p>
+          <a class="link-accent mt-3 inline-block" href="#/settings">Open settings</a>
         </section>
       {/if}
 
