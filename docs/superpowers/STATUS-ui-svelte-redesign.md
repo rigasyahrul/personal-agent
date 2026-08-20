@@ -12,7 +12,7 @@
 | C Global grids | 20–25 | B | no | done | impl/ui-svelte-phase-C-global-grids | [T-01a01a54…](https://ampcode.com/threads/T-01a01a54-0d40-769f-ad58-587595e51efa) **grok45** | [T-01a01cee…](https://ampcode.com/threads/T-01a01cee-528a-7621-8b07-472ae3f98b1d) YES | 2026-08-20 |
 | D Vault context | 30–35 | C | no | done | impl/ui-svelte-phase-D-vault-context | [T-01a01cf1…](https://ampcode.com/threads/T-01a01cf1-a728-7684-8005-157a66eb7428) **grok45** | [T-01a01cf8…](https://ampcode.com/threads/T-01a01cf8-bd16-73e3-a3e3-8269decbb40b) YES | 2026-08-20 |
 | E Project surfaces | 40–46 | D | no | done | impl/ui-svelte-phase-E-project-surfaces | [T-01a01cfc…](https://ampcode.com/threads/T-01a01cfc-6430-76ad-ad45-be0cefbafa63) **grok45** | [T-01a01d09…](https://ampcode.com/threads/T-01a01d09-bcb7-75a8-bda0-b77afd3f0894) YES | 2026-08-20 |
-| F Review + harden | 50–55 | E | no | todo | | | | |
+| F Review + harden | 50–55 | E | no | running | impl/ui-svelte-phase-F-review-harden | [T-01a01d10…](https://ampcode.com/threads/T-01a01d10-8b16-76da-8bc7-93edb154ed30) **grok45** | | 2026-08-20 |
 
 **Status:** todo | running | review | done | blocked
 
@@ -44,6 +44,7 @@
 | 2026-08-20 | Phase E worker DONE @ `3c49617` — tasks 40–46, 112 web tests incl. SessionChat.focus, branch pushed. |
 | 2026-08-20 | Master verify E: 112/112 + build green. consulting-grok-review YES on focus (Important: hub projectId $effect — fixed on main). https://ampcode.com/threads/T-01a01d09-bcb7-75a8-bda0-b77afd3f0894 |
 | 2026-08-20 | Phase E FF-merged to main @ `3c49617` + projectId reactivity fix. |
+| 2026-08-20 | Phase F dispatched → grok45 worker https://ampcode.com/threads/T-01a01d10-8b16-76da-8bc7-93edb154ed30 branch `impl/ui-svelte-phase-F-review-harden` (Tasks 50–55). |
 
 ## Active blockers
 _None._
