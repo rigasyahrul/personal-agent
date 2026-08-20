@@ -22,8 +22,8 @@
 | 9 | Hub embeds SessionChat | complete | T-01a0205c-773f-755b-84c7-d2c51e81fac4 | f7e65be |
 | 10 | Vault projects name-first | complete | T-01a02060-f8bc-752e-a53f-69390b1169d6 | f1025c4 |
 | 11 | frontend-ui-craft benchmark gate | complete | T-01a02064-4446-718b-911b-630dec238af3 | 2f279aa |
-| 12 | Full suite + dist + vibe-pass | review | — | suite+dist+vibe done |
-| — | Whole-branch review | todo | — | After Task 12 |
+| 12 | Full suite + dist + vibe-pass | complete | T-01a0206b-37f5-7351-9926-6cf48cfa03df | vibe+suite |
+| — | Whole-branch review | implementing | — | After Task 12 |
 
 Status values: `todo | implementing | review | PASS | complete`
 
@@ -40,6 +40,7 @@ Status values: `todo | implementing | review | PASS | complete`
 - Task 9: PASS T-01a0205c-773f-755b-84c7-d2c51e81fac4 (Critical none, Important none) — f7e65be hub Back
 - Task 10: PASS T-01a02060-f8bc-752e-a53f-69390b1169d6 (Critical none, Important none) — f1025c4 name-first
 - Task 11: PASS T-01a02064-4446-718b-911b-630dec238af3 (Critical none, Important none) — 2f279aa craft gate
+- Task 12: PASS T-01a0206b-37f5-7351-9926-6cf48cfa03df (Critical none, Important none) — suite+vibe
 
 
 ## Merge / push log
