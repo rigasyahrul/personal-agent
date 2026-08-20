@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { parseRoute, type AppRoute } from './lib/router';
   import { api } from './lib/api/client';
-  import type { Vault } from './lib/api/types';
+  import type { Project, Vault } from './lib/api/types';
   import { loadAuthState, refreshAuth, type AuthState } from './lib/stores/auth';
   import { deriveShellContext, type VaultSummary } from './lib/stores/shell-context';
   import AppShell from './shell/AppShell.svelte';
@@ -16,20 +16,38 @@
   import VaultProjectsPage from './routes/VaultProjectsPage.svelte';
   import VaultSessionsPage from './routes/VaultSessionsPage.svelte';
   import VaultReviewPage from './routes/VaultReviewPage.svelte';
+  import ProjectHubPage from './routes/ProjectHubPage.svelte';
+  import NotesPage from './routes/NotesPage.svelte';
+  import ProjectSessionsPage from './routes/ProjectSessionsPage.svelte';
+  import ProjectReviewPage from './routes/ProjectReviewPage.svelte';
 
   let { authLoader = loadAuthState }: { authLoader?: typeof loadAuthState } = $props();
   let auth = $state<AuthState>({ status: 'loading' });
   let route = $state<AppRoute>(parseRoute(location.hash));
   let vaults = $state<VaultSummary[]>([]);
-  const context = $derived(deriveShellContext(route, vaults));
+  let routeProject = $state<Project | null>(null);
+  const context = $derived(deriveShellContext(route, vaults, routeProject ?? undefined));
 
   const vaultName = $derived(
     context.mode === 'vault' ? context.vaultName : 'Vault',
   );
 
+  const projectRouteNames = new Set(['project', 'notes', 'note', 'sessions', 'project-review']);
+
   onMount(() => {
     const updateRoute = () => {
-      route = parseRoute(location.hash);
+      const next = parseRoute(location.hash);
+      if (!projectRouteNames.has(next.name)) {
+        routeProject = null;
+      } else if (
+        !routeProject ||
+        !('projectId' in next) ||
+        routeProject.id !== next.projectId
+      ) {
+        // Clear stale membership until the page loads the project.
+        routeProject = null;
+      }
+      route = next;
     };
     addEventListener('hashchange', updateRoute);
     void authLoader().then((value) => {
@@ -50,6 +68,10 @@
     await refreshAuth();
     auth = await authLoader();
     if (!location.hash) location.hash = '#/home';
+  }
+
+  function handleProjectLoad(project: Project | null) {
+    routeProject = project;
   }
 </script>
 
@@ -77,6 +99,18 @@
       <VaultSessionsPage vaultId={route.vaultId} {vaultName} />
     {:else if route.name === 'vault-review'}
       <VaultReviewPage vaultId={route.vaultId} {vaultName} />
+    {:else if route.name === 'project'}
+      <ProjectHubPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
+    {:else if route.name === 'notes' || route.name === 'note'}
+      <NotesPage
+        projectId={route.projectId}
+        noteId={route.name === 'note' ? route.noteId : undefined}
+        onProjectLoad={handleProjectLoad}
+      />
+    {:else if route.name === 'sessions'}
+      <ProjectSessionsPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
+    {:else if route.name === 'project-review'}
+      <ProjectReviewPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
     {:else}
       <p>Route: {route.name}</p>
     {/if}
