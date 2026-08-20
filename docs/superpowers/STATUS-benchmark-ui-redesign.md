@@ -23,11 +23,13 @@
 | 10 | Vault projects name-first | complete | T-01a02060-f8bc-752e-a53f-69390b1169d6 | f1025c4 |
 | 11 | frontend-ui-craft benchmark gate | complete | T-01a02064-4446-718b-911b-630dec238af3 | 2f279aa |
 | 12 | Full suite + dist + vibe-pass | complete | T-01a0206b-37f5-7351-9926-6cf48cfa03df | vibe+suite |
-| — | Whole-branch review | implementing | — | After Task 12 |
+| — | Whole-branch review | complete | T-01a02074-8bd1-7719-8c52-13432e9a871a | after 0e8c63d fix |
 
 Status values: `todo | implementing | review | PASS | complete`
 
 ## Review ledger
+
+- Branch: PASS T-01a02074-8bd1-7719-8c52-13432e9a871a (Critical none, Important none) after hub soft-fail fix 0e8c63d
 
 - Task 1: PASS T-01a02026-f4f2-7198-9155-b573e707f290 (Critical none, Important none) — 0be1b94 shell density
 - Task 2: PASS T-01a0202b-817d-702d-8690-ab814509cb2a (Critical none, Important none) — a27c824 Modal
@@ -46,3 +48,5 @@ Status values: `todo | implementing | review | PASS | complete`
 ## Merge / push log
 
 - Branch created from `main` @ 7ff6b97
+
+- Ship HEAD: ref: refs/heads/impl/benchmark-ui-redesign — will update after push
