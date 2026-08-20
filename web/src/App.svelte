@@ -18,7 +18,6 @@
   import VaultReviewPage from './routes/VaultReviewPage.svelte';
   import ProjectHubPage from './routes/ProjectHubPage.svelte';
   import NotesPage from './routes/NotesPage.svelte';
-  import ProjectSessionsPage from './routes/ProjectSessionsPage.svelte';
   import ProjectReviewPage from './routes/ProjectReviewPage.svelte';
   import ReviewPage from './routes/ReviewPage.svelte';
   import SettingsPage from './routes/SettingsPage.svelte';
@@ -159,7 +158,7 @@
       <VaultSessionsPage vaultId={route.vaultId} {vaultName} />
     {:else if route.name === 'vault-review'}
       <VaultReviewPage vaultId={route.vaultId} {vaultName} />
-    {:else if route.name === 'project'}
+    {:else if route.name === 'project' || route.name === 'sessions'}
       <ProjectHubPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
     {:else if route.name === 'notes' || route.name === 'note'}
       <NotesPage
@@ -167,8 +166,6 @@
         noteId={route.name === 'note' ? route.noteId : undefined}
         onProjectLoad={handleProjectLoad}
       />
-    {:else if route.name === 'sessions'}
-      <ProjectSessionsPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
     {:else if route.name === 'project-review'}
       <ProjectReviewPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
     {:else if route.name === 'review'}
