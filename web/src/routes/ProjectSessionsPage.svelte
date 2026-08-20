@@ -1,6 +1,7 @@
 <!-- web/src/routes/ProjectSessionsPage.svelte -->
 <script lang="ts">
   import Breadcrumbs from '../components/Breadcrumbs.svelte'
+  import SessionChat from '../components/sessions/SessionChat.svelte'
   import SessionList from '../components/sessions/SessionList.svelte'
   import Skeleton from '../components/Skeleton.svelte'
   import { api } from '../lib/api'
@@ -101,12 +102,9 @@
 {/if}
 
 {#if activeSession}
-  <section class="space-y-3 rounded-xl border border-slate-200 bg-white p-4" data-session-open={activeSession.id}>
-    <button type="button" class="text-sm font-medium text-indigo-700" onclick={closeSession}>Sessions</button>
-    <h2 class="text-xl font-semibold">{activeSession.title}</h2>
-    <p class="text-sm text-slate-600">{activeSession.provider}:{activeSession.model_id}</p>
-    <!-- SessionChat mounts here in Task 44 -->
-  </section>
+  {#key activeSession.id}
+    <SessionChat session={activeSession} {projectId} onclose={closeSession} />
+  {/key}
 {:else}
   <div class="space-y-6">
     <header>
