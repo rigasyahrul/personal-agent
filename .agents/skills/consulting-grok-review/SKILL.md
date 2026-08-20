@@ -9,9 +9,11 @@ description: "Use when you need a high-stakes second-opinion code or design revi
 
 This skill does **not** invent a new model API. It forces the parent agent to:
 1. Frame the question the way Oracle expects.
-2. Dispatch an isolated reviewer (Task/subagent) with a fixed prompt.
+2. Dispatch an **isolated Grok 4.5 Amp thread** (not Task/OpenAI) with a fixed prompt.
 3. Accept only Oracle-grade output (verdict + evidence + decision impact).
 4. Act on Critical/Important findings before claiming done.
+
+**Project dispatch (personal-agent):** see standing rules in `AGENTS.md` and lesson `docs/memory/lessons.md` (2026-08-20 Master Grok spawn).
 
 Evaluation of model quality vs real Oracle is **out of scope here**—run that later deliberately.
 
@@ -124,18 +126,33 @@ Collect:
 - Exact SHAs
 - The filled Oracle task block above
 
-### 3. Dispatch isolated reviewer
+### 3. Dispatch isolated reviewer (Grok 4.5 thread — not Task)
 
-Use the **Task** tool (or equivalent general-purpose subagent) with:
+On this project, **do not** use the Amp `Task` tool or ChatGPT-backed subagents for the review (they fail without OpenAI / are forbidden by standing rules).
 
-- `description`: short label, e.g. `Grok-style oracle review: <topic>`
-- `prompt`: full contents of [reviewer-prompt.md](reviewer-prompt.md) with placeholders replaced
+**Preferred command:**
+
+```bash
+# Write filled reviewer-prompt.md content to a file first.
+amp -m grok45 --no-archive-after-execute \
+  -l consulting-grok-review \
+  -x "$(cat /tmp/review-prompt.txt)"
+```
+
+**Orb-execute (`-ox`):** optional. If the CLI returns `Agent mode is invalid` (plugin agent modes often break under `-ox` after Amp CLI updates), **immediately retry without `-ox`** (local `-x`). Do not stall or fall back to self-review.
+
+Then:
+
+1. Note the new thread URL/ID from the CLI or `amp threads list`.
+2. Poll `amp threads markdown T-…` until a top-level `## Verdict` appears.
+3. Adjudicate Critical/Important before merge.
 
 **Hard rules for the dispatch:**
 
-- Reviewer is **read-only** on the product checkout (no commits, no “helpful” refactors).
+- Reviewer is **read-only** on the product checkout (no commits, no “helpful” refactors). Prefer a **separate temp git worktree** if the reviewer needs a clean tree; local `-x` shares the caller's workspace.
 - Reviewer must **not** see the parent’s full chat history—only the packaged task.
-- One question per dispatch. Split independent questions into parallel Tasks only if truly independent.
+- One question per dispatch. Split independent questions into parallel Grok threads only if truly independent.
+- **Never** substitute built-in `oracle`, Task/OpenAI, or silent self-review for this gate.
 
 ### 4. Consume feedback (Oracle output contract)
 

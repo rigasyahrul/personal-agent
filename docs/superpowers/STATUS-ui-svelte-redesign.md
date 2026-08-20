@@ -49,6 +49,7 @@
 | 2026-08-20 | Phase F worker DONE @ `78f134f` — tasks 50–55, 137 web tests, go test ./... green, web-legacy removed, branch pushed. |
 | 2026-08-20 | Master verify F: web-test 137/137 + web-build + go test ./... green; prod compose clean. consulting-grok-review YES: https://ampcode.com/threads/T-01a01d20-827d-73cf-b4f0-764e69b778d5 |
 | 2026-08-20 | Phase F merged to main @ `78f134f`. **UI Svelte redesign phases A–F complete.** Residual: live `make docker-dev` HMR smoke needs Docker host. |
+| 2026-08-20 | Compounding-engineering: Grok spawn local `-x`, master worktree isolation, Node 22 web, FF/cherry-pick merge — `docs/memory/lessons.md`. |
 
 ## Active blockers
 _None._
@@ -57,7 +58,7 @@ _None._
 - URL: https://ampcode.com/threads/T-01a01a38-e05a-74e6-9e81-dc97622bab29
 
 ## Worker mode rule
-Spawn workers with `amp -m grok45 -ox --no-archive-after-execute ...`. High-stakes review = new grok45 thread + `consulting-grok-review`.
+Spawn workers with `amp -m grok45 --no-archive-after-execute -x ...` (`-ox` best-effort; fall back if invalid). High-stakes review = new grok45 thread + `consulting-grok-review`. Master board/merge from a separate main worktree. Node 22 for web tests.
 
 ## Accepted phases (on origin/main after push)
 
@@ -77,4 +78,4 @@ Spawn workers with `amp -m grok45 -ox --no-archive-after-execute ...`. High-stak
 - [ ] `make docker-dev` HMR smoke (or documented manual check)
 - [x] Prod image build path serves `web/dist`
 - [x] `git push`; main not ahead of origin
-- [ ] Optional: compound lesson if new traps appeared
+- [x] Optional: compound lesson if new traps appeared (2026-08-20 Grok spawn / master worktree)

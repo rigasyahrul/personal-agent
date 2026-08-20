@@ -16,9 +16,10 @@
 
 | Concern | Rule |
 |---------|------|
-| **Worker / execution model** | **Grok 4.5 only** — spawn with `amp --mode grok45` (or orb equivalent). No Claude/GPT workers for implementation. |
-| **High-stakes review** | **`consulting-grok-review` only** — new Grok 4.5 thread + skill contract. **Never** built-in `oracle`, Task/OpenAI reviewers, or silent self-review as a substitute. |
-| **Master** | Coordinate only; no bulk app code. May edit board, handoffs, tiny merge fixes. |
+| **Worker / execution model** | **Grok 4.5 only** — `amp -m grok45 --no-archive-after-execute -x '…'` (prompt file recommended). **`-ox` optional:** if `Agent mode is invalid`, drop `-ox` immediately. No Claude/GPT workers for implementation. |
+| **High-stakes review** | **`consulting-grok-review` only** — new Grok 4.5 thread + skill contract (same spawn as workers). **Never** built-in `oracle`, Task/OpenAI reviewers, or silent self-review as a substitute. |
+| **Master workspace** | Coordinate only; no bulk app code. Board/merge from a **separate clean `main` worktree** — local Grok `-x` shares the caller's checkout with the worker. |
+| **Master** | May edit board, handoffs, tiny merge fixes. Do **not** pause between unblocked phases. |
 | **Plan authority** | **Canonical contracts** in the assembled plan win over task snippets. Spec wins over plan if product conflict. |
 | **Ship** | Commit ≠ ship. After phase accept: merge/FF as appropriate, **`git push`**, confirm not ahead of origin. |
 | **Parallelism** | Phases sequential by default. Parallel workers only if board marks parallel-safe **and** path ownership does not overlap. |
@@ -28,13 +29,14 @@
 ## Architecture
 
 ```text
-MASTER (this thread, orb) — board, dispatch, merge, ship gate
-   │ amp --mode grok45 worker threads
+MASTER (this thread) — board/merge in isolated main worktree
+   │ amp -m grok45 --no-archive-after-execute -x '…'
+   │ (-ox best-effort only; fall back to local -x)
    ▼
 WORKER phases (Tasks 1–8 → 10–15 → 20–25 → 30–35 → 40–46 → 50–55)
-   │ phase done → master runs consulting-grok-review (Grok 4.5)
+   │ phase done → master: verify (Node 22 web + go) → consulting-grok-review
    ▼
-MASTER accept → update board → push → next phase
+MASTER accept → board commit → git push → dispatch next phase (no stall)
 ```
 
 ---
@@ -59,7 +61,7 @@ You are the MASTER execution coordinator for personal-agent **UI Svelte redesign
 ## Your job
 - Own the board: docs/superpowers/STATUS-ui-svelte-redesign.md (create from template in the handoff if missing).
 - Drive the plan **phase-by-phase** (task ranges below).
-- Spawn **WORKER threads only with Grok 4.5** (`amp --mode grok45` / orb grok45 mode). No other model for implementation.
+- Spawn **WORKER threads only with Grok 4.5** (`amp -m grok45 --no-archive-after-execute -x …`; `-ox` best-effort). Board/merge from a separate main worktree. No other model for implementation.
 - High-stakes review **only** via skill **consulting-grok-review** in a **new Grok 4.5 thread**. Forbidden substitutes: built-in oracle, Task/OpenAI subagent review, ChatGPT, silent self-review claiming “looks good.”
 - Prefer NOT writing bulk application code in this master thread. Coordinate, verify, merge, push.
 - Do NOT rewrite product design. Plan changes only if truly blocked (document on board).
@@ -79,7 +81,7 @@ You are the MASTER execution coordinator for personal-agent **UI Svelte redesign
 1. git fetch; read STATUS board; git status -sb; confirm on latest origin/main (or known integration branch).
 2. Pick next ready phase (dependencies done).
 3. Create worker branch name e.g. impl/ui-svelte-phase-A-tooling.
-4. Open a **new Grok 4.5 worker thread** with the WORKER prompt from the handoff (fill PHASE, TASK range, BRANCH, PATH ownership).
+4. Open a **new Grok 4.5 worker thread** (`amp -m grok45 --no-archive-after-execute -x …`) with the WORKER prompt from the handoff (fill PHASE, TASK range, BRANCH, PATH ownership). Prefer a prompt file. Master stays on a clean main worktree.
 5. Wait for WORKER REPORT (template in handoff). Poll thread or ask user to paste.
 6. Verify before accept:
    - Claimed tests actually run green (go test ./..., make web-test / npm test as applicable)
