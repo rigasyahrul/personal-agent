@@ -2,9 +2,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import EmptyState from '../components/EmptyState.svelte'
+  import SessionCardRow from '../components/sessions/SessionCardRow.svelte'
   import Skeleton from '../components/Skeleton.svelte'
   import { api } from '../lib/api/client'
   import type { HomeResponse, Project, Session } from '../lib/api/types'
+  import { formatRelativeTime } from '../lib/format-relative-time'
   import { navigate } from '../lib/router'
   import { loadVaultSessions, type VaultSession } from '../lib/vault-sessions'
 
@@ -57,6 +59,14 @@
         ? `#/projects/${encodeURIComponent(projects[0].id)}/sessions`
         : `#/vaults/${encodeURIComponent(vaultId)}/projects?new=1`,
   )
+
+  function sessionMeta(session: VaultSession): string {
+    const model = `${session.provider}:${session.model_id}`
+    const parts = [session.project_name, model]
+    const rel = formatRelativeTime(session.updated_at ?? session.created_at)
+    if (rel) parts.push(rel)
+    return parts.join(' · ')
+  }
 </script>
 
 <svelte:head><title>Sessions · {vaultName}</title></svelte:head>
@@ -108,19 +118,14 @@
     </label>
 
     {#if displaySessions.length}
-      <ul class="list-panel">
+      <ul class="flex flex-col gap-2">
         {#each displaySessions as session (session.id)}
           <li>
-            <div class="list-row" style="cursor:default">
-              <div>
-                <p class="font-medium text-slate-950" style="margin:0">{session.title || 'Untitled session'}</p>
-                <p class="text-sm text-slate-500" style="margin:0">{session.project_name}</p>
-              </div>
-              <a
-                class="link-accent"
-                href={`#/projects/${encodeURIComponent(session.project_id)}/sessions`}
-              >Open</a>
-            </div>
+            <SessionCardRow
+              title={session.title || 'Untitled session'}
+              meta={sessionMeta(session)}
+              href={`#/projects/${encodeURIComponent(session.project_id)}/sessions`}
+            />
           </li>
         {/each}
       </ul>

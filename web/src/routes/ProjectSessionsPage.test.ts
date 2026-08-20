@@ -79,4 +79,14 @@ describe('ProjectSessionsPage', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
     expect(document.querySelector('.content-canvas--session-focus')).toBeTruthy()
   })
+
+  it('renders the session list as session-card rows when sessions are loaded', async () => {
+    render(ProjectSessionsPage, { props: { projectId: 'p1' } })
+    expect(await screen.findByText('Old')).toBeInTheDocument()
+    expect(document.querySelectorAll('.session-card').length).toBeGreaterThan(0)
+    expect(document.querySelector('.session-card__title')?.textContent).toBe('Old')
+    // Create form stays primary above the list
+    expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Title')).toBeInTheDocument()
+  })
 })
