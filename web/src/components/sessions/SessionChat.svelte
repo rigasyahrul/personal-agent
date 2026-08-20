@@ -27,7 +27,22 @@
   import { createSessionPoller } from './session-poller'
   import OperationBadges from './OperationBadges.svelte'
   import PromoteDialog from './PromoteDialog.svelte'
+  import SessionFileTab from './SessionFileTab.svelte'
   import SessionFilesBar from './SessionFilesBar.svelte'
+
+  type TabId = 'agent' | `file:${string}`
+  type FileTabState = { path: string; mode: 'preview' | 'source' }
+
+  const FILE_TAB_CAP = 8
+
+  function basename(path: string): string {
+    const parts = path.split('/')
+    return parts[parts.length - 1] || path
+  }
+
+  function fileTabId(path: string): TabId {
+    return `file:${path}`
+  }
 
   let {
     session,
@@ -62,8 +77,11 @@
   let promoteOpen = $state(false)
   let promoteSource = $state<WorkspaceFile | null>(null)
   let showWorkspace = $derived(workspaceEnabled(session))
-  /** Stub active path until Task 7 file tabs; highlights selection in files bar. */
   let activePath = $state<string | null>(null)
+  let openFileTabs = $state<FileTabState[]>([])
+  let activeTab = $state<TabId>('agent')
+  /** Activation order among file tabs (most recent last). Agent never participates. */
+  let fileTabLru = $state<string[]>([])
 
   let filesOpen = $state(false)
   let mainPct = $state(DEFAULT_MAIN_PCT)
@@ -73,6 +91,12 @@
   const alertText = $derived([operationError, error].filter(Boolean).join(' — '))
   const runLabel = $derived(run ? `Run: ${run.status}` : 'Idle')
   const sendDisabled = $derived(Boolean(sending || run))
+  const agentActive = $derived(activeTab === 'agent')
+  const activeFileTab = $derived(
+    activeTab.startsWith('file:')
+      ? openFileTabs.find((t) => fileTabId(t.path) === activeTab) ?? null
+      : null,
+  )
 
   function messagesEqual(left: ChatMessage[], right: ChatMessage[]): boolean {
     if (left === right) return true
@@ -248,8 +272,57 @@
     promoteOpen = true
   }
 
+  function bumpFileLru(path: string) {
+    fileTabLru = [...fileTabLru.filter((p) => p !== path), path]
+  }
+
   function openFile(path: string) {
+    if (!path) return
+    const existing = openFileTabs.find((t) => t.path === path)
+    if (existing) {
+      activeTab = fileTabId(path)
+      activePath = path
+      bumpFileLru(path)
+      return
+    }
+    let nextTabs = openFileTabs
+    if (nextTabs.length >= FILE_TAB_CAP) {
+      const lruPath = fileTabLru[0] ?? nextTabs[0]?.path
+      if (lruPath) {
+        nextTabs = nextTabs.filter((t) => t.path !== lruPath)
+        fileTabLru = fileTabLru.filter((p) => p !== lruPath)
+        if (activePath === lruPath) activePath = null
+      }
+    }
+    openFileTabs = [...nextTabs, { path, mode: 'preview' }]
+    activeTab = fileTabId(path)
     activePath = path
+    bumpFileLru(path)
+  }
+
+  function closeFile(path: string) {
+    const wasActive = activeTab === fileTabId(path)
+    openFileTabs = openFileTabs.filter((t) => t.path !== path)
+    fileTabLru = fileTabLru.filter((p) => p !== path)
+    if (activePath === path) activePath = null
+    if (wasActive) {
+      activeTab = 'agent'
+    }
+  }
+
+  function selectAgentTab() {
+    activeTab = 'agent'
+  }
+
+  function selectFileTab(path: string) {
+    if (!openFileTabs.some((t) => t.path === path)) return
+    activeTab = fileTabId(path)
+    activePath = path
+    bumpFileLru(path)
+  }
+
+  function setFileTabMode(path: string, mode: 'preview' | 'source') {
+    openFileTabs = openFileTabs.map((t) => (t.path === path ? { ...t, mode } : t))
   }
 
   function onPromoteSuccess(operationId: string) {
@@ -327,6 +400,9 @@
     promoteOpen = false
     promoteSource = null
     activePath = null
+    openFileTabs = []
+    activeTab = 'agent'
+    fileTabLru = []
     operationResults = new Map()
     retryingPending = new Set()
     operations = loadOperationIds(value.id, storage)
@@ -385,8 +461,43 @@
   {/if}
 
   <div class="session-tabs" role="tablist" aria-label="Session tabs">
-    <button type="button" class="session-tab session-tab--active" role="tab" aria-selected="true"
+    <button
+      type="button"
+      class="session-tab {agentActive ? 'session-tab--active' : ''}"
+      role="tab"
+      aria-selected={agentActive}
+      onclick={selectAgentTab}
     >Agent</button>
+    {#each openFileTabs as tab (tab.path)}
+      {@const selected = activeTab === fileTabId(tab.path)}
+      <button
+        type="button"
+        class="session-tab {selected ? 'session-tab--active' : ''}"
+        role="tab"
+        aria-selected={selected}
+        title={tab.path}
+        onclick={() => selectFileTab(tab.path)}
+      >
+        <span class="session-tab__label">{basename(tab.path)}</span>
+        <span
+          class="session-tab__close"
+          role="button"
+          tabindex="0"
+          aria-label="Close {basename(tab.path)}"
+          onclick={(event) => {
+            event.stopPropagation()
+            closeFile(tab.path)
+          }}
+          onkeydown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              event.stopPropagation()
+              closeFile(tab.path)
+            }
+          }}
+        >×</span>
+      </button>
+    {/each}
   </div>
 
   <div
@@ -395,46 +506,63 @@
     bind:this={splitEl}
   >
     <div class="session-split__main">
-      <ol class="messages message-thread session-focus__messages">
-        {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
-          {#if message.role === 'user'}
-            <li
-              class="message message-row message-row--user"
-              data-role="user"
-              data-raw-role={message.role}
-            >
-              <div class="message-bubble message-bubble--user">
-                <p>{message.content}</p>
-              </div>
-            </li>
-          {:else if message.role === 'assistant'}
-            <li
-              class="message message-row message-row--assistant"
-              data-role="assistant"
-              data-raw-role={message.role}
-            >
-              <div class="message-prose">
-                <MarkdownView source={message.content} />
-              </div>
-            </li>
-          {:else}
-            <li
-              class="message message-row message-row--other"
-              data-role="other"
-              data-raw-role={message.role}
-            >
-              <div class="message-meta text-sm text-slate-500">
-                <span class="font-medium uppercase tracking-wide" style="font-size:11px"
-                >{message.role}</span>
-                <p style="margin:0.25rem 0 0; white-space:pre-wrap">{message.content}</p>
-              </div>
-            </li>
-          {/if}
-        {/each}
-      </ol>
+      {#if agentActive}
+        <ol class="messages message-thread session-focus__messages">
+          {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
+            {#if message.role === 'user'}
+              <li
+                class="message message-row message-row--user"
+                data-role="user"
+                data-raw-role={message.role}
+              >
+                <div class="message-bubble message-bubble--user">
+                  <p>{message.content}</p>
+                </div>
+              </li>
+            {:else if message.role === 'assistant'}
+              <li
+                class="message message-row message-row--assistant"
+                data-role="assistant"
+                data-raw-role={message.role}
+              >
+                <div class="message-prose">
+                  <MarkdownView source={message.content} />
+                </div>
+              </li>
+            {:else}
+              <li
+                class="message message-row message-row--other"
+                data-role="other"
+                data-raw-role={message.role}
+              >
+                <div class="message-meta text-sm text-slate-500">
+                  <span class="font-medium uppercase tracking-wide" style="font-size:11px"
+                  >{message.role}</span>
+                  <p style="margin:0.25rem 0 0; white-space:pre-wrap">{message.content}</p>
+                </div>
+              </li>
+            {/if}
+          {/each}
+        </ol>
+      {:else if activeFileTab}
+        <SessionFileTab
+          sessionId={session.id}
+          path={activeFileTab.path}
+          {projectId}
+          mode={activeFileTab.mode}
+          onmode={(m) => setFileTabMode(activeFileTab.path, m)}
+          onpromote={openPromote}
+        />
+      {/if}
 
-      <!-- Composer ancestry is stable: never conditionally remount this form during polls. -->
-      <form class="sticky bottom-0 space-y-2 border-t border-slate-100 bg-white pt-3" onsubmit={send}>
+      <!-- Composer ancestry is stable: never destroy/recreate this form on poll or tab switch. -->
+      <form
+        class="sticky bottom-0 space-y-2 border-t border-slate-100 bg-white pt-3"
+        class:session-composer--hidden={!agentActive}
+        hidden={!agentActive}
+        inert={!agentActive ? true : undefined}
+        onsubmit={send}
+      >
         <label class="block text-sm">
           <span class="font-medium">Message</span>
           <textarea

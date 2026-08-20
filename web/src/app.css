@@ -774,6 +774,24 @@ a.list-row:hover {
   gap: 8px 12px;
   flex-shrink: 0;
 }
+.session-file-tab .workspace-preview {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fafafa;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.session-composer--hidden {
+  /* Keep form in DOM for focus/draft stability; hide when a file tab is active. */
+  display: none !important;
+}
 .message-prose {
   width: 100%;
   max-width: 48rem;

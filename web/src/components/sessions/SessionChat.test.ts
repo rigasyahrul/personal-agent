@@ -217,4 +217,140 @@ describe('SessionChat', () => {
     })
     expect(screen.getByText('New')).toBeInTheDocument()
   })
+
+  describe('file tabs', () => {
+    const memStorage = () => {
+      const m = new Map<string, string>()
+      return {
+        get length() {
+          return m.size
+        },
+        clear: () => m.clear(),
+        getItem: (k: string) => m.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          m.set(k, String(v))
+        },
+        removeItem: (k: string) => {
+          m.delete(k)
+        },
+        key: () => null,
+      } satisfies Storage
+    }
+
+    const wsSession = {
+      ...session,
+      tool_grants: { workspace_files: true as const },
+    }
+
+    async function openFilesBarAndTree(paths: string[]) {
+      const mem = memStorage()
+      mem.setItem('pa.session.filesBarOpen', '1')
+      vi.mocked(api.workspaceTree).mockResolvedValue({
+        entries: paths.map((path) => ({ path, kind: 'file' as const })),
+      })
+      vi.mocked(api.workspaceFile).mockImplementation(async (_sid, path) => ({
+        path,
+        kind: 'file',
+        content: path.endsWith('.md') ? `# ${path}` : `content:${path}`,
+      }))
+      render(SessionChat, {
+        props: {
+          session: wsSession,
+          projectId: 'p1',
+          pollInterval: 60_000,
+          storage: mem,
+        },
+      })
+      await screen.findByLabelText('Session files')
+      for (const path of paths) {
+        await screen.findByRole('button', { name: path })
+      }
+      return mem
+    }
+
+    it('opens file from bar and focuses that tab', async () => {
+      await openFilesBarAndTree(['draft.md'])
+      await fireEvent.click(screen.getByRole('button', { name: 'draft.md' }))
+      const fileTab = await screen.findByRole('tab', { name: /draft\.md/i })
+      expect(fileTab).toHaveAttribute('aria-selected', 'true')
+      expect(fileTab.className).toMatch(/session-tab--active/)
+      expect(screen.getByRole('tab', { name: /^Agent$/i })).toHaveAttribute('aria-selected', 'false')
+      await waitFor(() => expect(api.workspaceFile).toHaveBeenCalledWith('s1', 'draft.md'))
+      expect(await screen.findByRole('heading', { level: 1, name: 'draft.md' })).toBeInTheDocument()
+      // Composer stays mounted while file tab is active
+      expect(screen.getByLabelText('Message').closest('form')).toBeTruthy()
+    })
+
+    it('reuses the same path instead of duplicating tabs', async () => {
+      await openFilesBarAndTree(['a.md', 'b.md'])
+      await fireEvent.click(screen.getByRole('button', { name: 'a.md' }))
+      await screen.findByRole('tab', { name: /a\.md/i })
+      await fireEvent.click(screen.getByRole('button', { name: 'b.md' }))
+      await screen.findByRole('tab', { name: /b\.md/i })
+      await fireEvent.click(screen.getByRole('button', { name: 'a.md' }))
+      const tabs = screen.getAllByRole('tab')
+      // Agent + a + b only
+      expect(tabs).toHaveLength(3)
+      expect(tabs.filter((t) => (t.textContent ?? '').includes('a.md'))).toHaveLength(1)
+      expect(screen.getByRole('tab', { name: /a\.md/i })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: /b\.md/i })).toBeInTheDocument()
+    })
+
+    it('closes least-recently-activated file tab when opening a 9th path', async () => {
+      const paths = Array.from({ length: 9 }, (_, i) => `f${i}.md`)
+      await openFilesBarAndTree(paths)
+      // Open f0..f7 first (8 tabs), activating in order so f0 is LRU
+      for (let i = 0; i < 8; i++) {
+        await fireEvent.click(screen.getByRole('button', { name: paths[i]! }))
+        await screen.findByRole('tab', { name: new RegExp(paths[i]!.replace('.', '\\.')) })
+      }
+      // Open 9th → should close f0
+      await fireEvent.click(screen.getByRole('button', { name: 'f8.md' }))
+      await screen.findByRole('tab', { name: /f8\.md/i })
+      expect(screen.queryByRole('tab', { name: /f0\.md/i })).not.toBeInTheDocument()
+      // Still 8 file tabs + Agent
+      const tabs = screen.getAllByRole('tab')
+      expect(tabs).toHaveLength(9) // Agent + 8 files
+      expect(screen.getByRole('tab', { name: /^Agent$/i })).toBeInTheDocument()
+    })
+
+    it('close button removes file tab and returns to Agent when it was active', async () => {
+      await openFilesBarAndTree(['draft.md'])
+      await fireEvent.click(screen.getByRole('button', { name: 'draft.md' }))
+      const fileTab = await screen.findByRole('tab', { name: /draft\.md/i })
+      const close = fileTab.querySelector('.session-tab__close') as HTMLButtonElement
+      expect(close).toBeTruthy()
+      await fireEvent.click(close)
+      expect(screen.queryByRole('tab', { name: /draft\.md/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: /^Agent$/i })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByLabelText('Message')).toBeVisible()
+    })
+
+    it('keeps Agent draft when switching to file tab and back', async () => {
+      await openFilesBarAndTree(['draft.md'])
+      const composer = await screen.findByLabelText('Message')
+      await fireEvent.input(composer, { target: { value: 'keep me' } })
+      await fireEvent.click(screen.getByRole('button', { name: 'draft.md' }))
+      await screen.findByRole('tab', { name: /draft\.md/i })
+      await fireEvent.click(screen.getByRole('tab', { name: /^Agent$/i }))
+      expect(screen.getByLabelText('Message')).toHaveValue('keep me')
+    })
+
+    it('shows Save to source from file tab for .md and opens PromoteDialog', async () => {
+      // jsdom dialog polyfill (same as PromoteDialog.test.ts)
+      if (!HTMLDialogElement.prototype.showModal) {
+        HTMLDialogElement.prototype.showModal = function showModal() {
+          this.setAttribute('open', '')
+        }
+        HTMLDialogElement.prototype.close = function close() {
+          this.removeAttribute('open')
+        }
+      }
+      await openFilesBarAndTree(['draft.md', 'raw.txt'])
+      await fireEvent.click(screen.getByRole('button', { name: 'draft.md' }))
+      const promote = await screen.findByRole('button', { name: 'Save to source' })
+      await fireEvent.click(promote)
+      expect(await screen.findByRole('heading', { name: 'Save to source' })).toBeInTheDocument()
+    })
+  })
 })
