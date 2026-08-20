@@ -45,6 +45,7 @@ describe('visual baseline', () => {
       '.btn--primary',
       '.entity-card',
       '.metric-card',
+      '.modal', // benchmark B1 shared dialog primitive
     ]) {
       expect(css).toContain(token);
     }
