@@ -129,3 +129,54 @@ export interface ReviewQueue {
   caught_up: boolean
   items: ReviewItem[]
 }
+
+export type ReviewRating = 'again' | 'hard' | 'good' | 'easy'
+
+export interface RateReviewPayload {
+  rating: ReviewRating | string
+  request_key: string
+  row_version: number
+  duration_ms: number
+}
+
+export interface Settings {
+  timezone: string
+  default_provider: string
+  default_model_id: string
+  backup_schedule: 'off' | 'daily' | string
+  backup?: BackupStatus
+  last_success?: BackupRun | null
+  last_failure?: BackupRun | null
+}
+
+export interface BackupStatus {
+  last_success?: BackupRun | null
+  last_failure?: BackupRun | null
+  sink_configured?: boolean
+  schedule?: string
+}
+
+export interface BackupRun {
+  id: string
+  status: string
+  cutoff_at?: string
+  started_at?: string
+  local_path?: string
+  object_key?: string
+  manifest_hash?: string
+  completed_at?: string
+  error?: string
+}
+
+export interface BackupListResponse {
+  backups: BackupRun[]
+  last_success?: BackupRun | null
+  last_failure?: BackupRun | null
+}
+
+export interface UpdateSettingsInput {
+  timezone: string
+  default_provider: string
+  default_model_id: string
+  backup_schedule: 'off' | 'daily' | string
+}

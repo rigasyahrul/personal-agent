@@ -1,7 +1,8 @@
-<!-- web/src/routes/ProjectReviewPage.svelte — Phase F surface; stub keeps project vault shell wiring -->
+<!-- web/src/routes/ProjectReviewPage.svelte -->
 <script lang="ts">
-    import Breadcrumbs from '../components/Breadcrumbs.svelte'
+  import Breadcrumbs from '../components/Breadcrumbs.svelte'
   import Skeleton from '../components/Skeleton.svelte'
+  import ReviewRunner from '../components/review/ReviewRunner.svelte'
   import { api } from '../lib/api'
   import type { Project } from '../lib/api/types'
 
@@ -16,6 +17,8 @@
   let project = $state<Project | null>(null)
   let loading = $state(true)
   let error = $state('')
+
+  const scope = $derived(`project:${projectId}`)
 
   async function load() {
     loading = true
@@ -37,6 +40,8 @@
   })
 </script>
 
+<svelte:head><title>Review · Personal Agent</title></svelte:head>
+
 {#if loading}
   <Skeleton class="h-24" />
 {:else if error}
@@ -44,7 +49,13 @@
 {:else if project}
   <div class="space-y-4">
     <Breadcrumbs {project} leaf="Review" />
-    <h1 class="text-2xl font-semibold">Review</h1>
-    <p class="text-sm text-slate-600">Project review arrives in a later phase.</p>
+    <header>
+      <h1 class="text-2xl font-semibold text-slate-950">Review</h1>
+    </header>
+    <ReviewRunner
+      {scope}
+      showScopeChips={true}
+      projectScopes={[{ scope: `project:${projectId}`, label: 'This project' }]}
+    />
   </div>
 {/if}

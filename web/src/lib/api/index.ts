@@ -1,6 +1,8 @@
 // web/src/lib/api/index.ts
 import { request, api as baseApi } from './client'
 import type {
+  BackupListResponse,
+  BackupRun,
   ChatMessage,
   CreateSessionInput,
   ModelsResponse,
@@ -10,8 +12,12 @@ import type {
   Project,
   PromotePayload,
   PromoteResult,
+  RateReviewPayload,
+  ReviewQueue,
   RunStatus,
   Session,
+  Settings,
+  UpdateSettingsInput,
   WorkspaceFile,
   WorkspaceTree,
 } from './types'
@@ -24,6 +30,9 @@ const enc = (value: string) => encodeURIComponent(value)
 export const api = {
   get: baseApi.get,
   post: baseApi.post,
+
+  listProjects: () =>
+    request<Project[]>('/api/v1/projects') as Promise<Project[]>,
 
   getProject: (projectId: string) =>
     request<Project>(`/api/v1/projects/${enc(projectId)}`) as Promise<Project>,
@@ -76,9 +85,42 @@ export const api = {
   operationStatus: (operationId: string) =>
     request<OperationStatus>(`/api/v1/operations/${enc(operationId)}`) as Promise<OperationStatus>,
 
+  getReviewQueue: (scope: string) =>
+    request<ReviewQueue>(`/api/v1/review/queue?scope=${enc(scope)}`) as Promise<ReviewQueue>,
+
+  rateReviewItem: (itemId: string, payload: RateReviewPayload) =>
+    request(`/api/v1/review/items/${enc(itemId)}/rate`, {
+      method: 'POST',
+      body: payload,
+    }),
+
+  suspendReviewItem: (itemId: string) =>
+    request(`/api/v1/review/items/${enc(itemId)}/suspend`, {
+      method: 'POST',
+      body: {},
+    }),
+
   retryReviewPending: (pendingId: string) =>
     request(`/api/v1/review/pending/${enc(pendingId)}/retry`, {
       method: 'POST',
       body: {},
     }),
+
+  getSettings: () =>
+    request<Settings>('/api/v1/settings') as Promise<Settings>,
+
+  updateSettings: (input: UpdateSettingsInput) =>
+    request<Settings>('/api/v1/settings', {
+      method: 'PUT',
+      body: input,
+    }) as Promise<Settings>,
+
+  listBackups: () =>
+    request<BackupListResponse>('/api/v1/backups') as Promise<BackupListResponse>,
+
+  createBackup: () =>
+    request<BackupRun>('/api/v1/backups', {
+      method: 'POST',
+      body: {},
+    }) as Promise<BackupRun>,
 }

@@ -1,10 +1,20 @@
 // web/src/routes/VaultReviewPage.test.ts
-import { render, screen } from '@testing-library/svelte'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/svelte'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import VaultReviewPage from './VaultReviewPage.svelte'
-import { api } from '../lib/api/client'
+import { api } from '../lib/api'
 
-vi.mock('../lib/api/client', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('../lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/api')>()
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      get: vi.fn(),
+      getReviewQueue: vi.fn(),
+    },
+  }
+})
 
 const vaultItem = {
   id: 'r1',
@@ -25,8 +35,13 @@ const otherItem = {
   row_version: 1,
 }
 
+afterEach(cleanup)
+
 describe('VaultReviewPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset()
+    vi.mocked(api.getReviewQueue).mockReset()
+  })
 
   it('requests all and passes only vault items to the runner', async () => {
     vi.mocked(api.get).mockImplementation(async (path: string) => {
@@ -39,17 +54,19 @@ describe('VaultReviewPage', () => {
           ],
         }
       }
-      if (path.startsWith('/api/v1/review/queue')) {
-        return { scope: 'all', items: [vaultItem, otherItem], caught_up: false }
-      }
       throw new Error(`unexpected ${path}`)
+    })
+    vi.mocked(api.getReviewQueue).mockResolvedValue({
+      scope: 'all',
+      items: [vaultItem, otherItem],
+      caught_up: false,
     })
 
     render(VaultReviewPage, { props: { vaultId: 'v1', vaultName: 'HEALTH' } })
 
     expect(await screen.findByText('Vault prompt')).toBeInTheDocument()
     expect(screen.queryByText('Other prompt')).not.toBeInTheDocument()
-    expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/api/v1/review/queue?scope=all'))
+    expect(api.getReviewQueue).toHaveBeenCalledWith('all')
   })
 
   it('shows caught up when no vault items remain', async () => {
@@ -60,10 +77,12 @@ describe('VaultReviewPage', () => {
           projects: [{ id: 'p-v', name: 'Sleep', vault_id: 'v1', note_count: 0 }],
         }
       }
-      if (path.startsWith('/api/v1/review/queue')) {
-        return { scope: 'all', items: [otherItem], caught_up: false }
-      }
       throw new Error(`unexpected ${path}`)
+    })
+    vi.mocked(api.getReviewQueue).mockResolvedValue({
+      scope: 'all',
+      items: [otherItem],
+      caught_up: false,
     })
     render(VaultReviewPage, { props: { vaultId: 'v1', vaultName: 'HEALTH' } })
     expect(await screen.findByText(/caught up/i)).toBeInTheDocument()

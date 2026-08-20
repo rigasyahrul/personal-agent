@@ -20,6 +20,7 @@
   import NotesPage from './routes/NotesPage.svelte';
   import ProjectSessionsPage from './routes/ProjectSessionsPage.svelte';
   import ProjectReviewPage from './routes/ProjectReviewPage.svelte';
+  import ReviewPage from './routes/ReviewPage.svelte';
 
   let { authLoader = loadAuthState }: { authLoader?: typeof loadAuthState } = $props();
   let auth = $state<AuthState>({ status: 'loading' });
@@ -33,6 +34,12 @@
   );
 
   const projectRouteNames = new Set(['project', 'notes', 'note', 'sessions', 'project-review']);
+
+  const reviewQuery = $derived(
+    route.name === 'review'
+      ? new URLSearchParams(route.scope ? `scope=${route.scope}` : '')
+      : new URLSearchParams(),
+  );
 
   onMount(() => {
     const updateRoute = () => {
@@ -111,6 +118,8 @@
       <ProjectSessionsPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
     {:else if route.name === 'project-review'}
       <ProjectReviewPage projectId={route.projectId} onProjectLoad={handleProjectLoad} />
+    {:else if route.name === 'review'}
+      <ReviewPage query={reviewQuery} />
     {:else}
       <p>Route: {route.name}</p>
     {/if}
