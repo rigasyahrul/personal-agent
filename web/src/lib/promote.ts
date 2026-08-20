@@ -45,7 +45,11 @@ export function saveOperationIds(
 }
 
 export function isPromotableWorkspaceFile(entry: { kind?: string; path?: string } | null | undefined): boolean {
-  return entry?.kind === 'file' && typeof entry.path === 'string' && entry.path.endsWith('.md')
+  if (!entry || typeof entry.path !== 'string' || !entry.path.endsWith('.md')) return false
+  // Workspace file API may omit kind; treat missing kind as a regular file.
+  // Directories are never promotable.
+  if (entry.kind === 'directory' || entry.kind === 'folder') return false
+  return entry.kind === undefined || entry.kind === '' || entry.kind === 'file'
 }
 
 export function workspaceEnabled(session: {

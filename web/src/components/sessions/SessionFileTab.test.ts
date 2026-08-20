@@ -69,6 +69,18 @@ describe('SessionFileTab', () => {
     expect(onpromote).toHaveBeenCalledWith(expect.objectContaining({ path: 'draft.md', kind: 'file' }))
   })
 
+  it('shows Save to source when API omits kind on .md files', async () => {
+    // Matches real GET /workspace/file payload shape (path + content only).
+    vi.mocked(api.workspaceFile).mockResolvedValue({
+      path: 'notes/outline.md',
+      content: '# Outline',
+    } as Awaited<ReturnType<typeof api.workspaceFile>>)
+    render(SessionFileTab, {
+      props: { sessionId: 's1', path: 'notes/outline.md', projectId: 'p1' },
+    })
+    expect(await screen.findByRole('button', { name: 'Save to source' })).toBeInTheDocument()
+  })
+
   it('hides Save to source for non-markdown files', async () => {
     vi.mocked(api.workspaceFile).mockResolvedValue({
       path: 'raw.txt',

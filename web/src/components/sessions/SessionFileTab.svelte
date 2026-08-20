@@ -41,7 +41,10 @@
     try {
       const next = await api.workspaceFile(sessionId, path)
       if (token !== loadToken) return
-      file = next ?? { path, kind: 'file', content: '' }
+      // API may omit kind; normalize so promote gating sees a regular file.
+      file = next
+        ? { ...next, path: next.path || path, kind: next.kind || 'file' }
+        : { path, kind: 'file', content: '' }
     } catch (cause) {
       if (token !== loadToken) return
       error = cause instanceof Error ? cause.message : 'Unable to load file.'

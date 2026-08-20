@@ -34,6 +34,9 @@ describe('promote helpers', () => {
     expect(isPromotableWorkspaceFile({ kind: 'file', path: 'a.md' })).toBe(true)
     expect(isPromotableWorkspaceFile({ kind: 'file', path: 'a.txt' })).toBe(false)
     expect(isPromotableWorkspaceFile({ kind: 'directory', path: 'a.md' })).toBe(false)
+    // Real workspace/file responses often omit kind — still promotable when path ends in .md
+    expect(isPromotableWorkspaceFile({ path: 'notes/outline.md' })).toBe(true)
+    expect(isPromotableWorkspaceFile({ path: 'raw.txt' })).toBe(false)
   })
 
   it('clamps unknown badges to Ready', () => {
