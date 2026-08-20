@@ -60,6 +60,8 @@ describe('visual baseline', () => {
       '.session-files',
       '.session-card',
       '.message-prose',
+      '.session-composer',
+      '.message-copy',
       '.content-canvas--session-focus',
     ]) {
       expect(css).toContain(token);

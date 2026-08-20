@@ -147,6 +147,41 @@ describe('SessionChat', () => {
     expect(assistantRow?.querySelector('.message-prose')).toBeTruthy()
   })
 
+  it('copy control copies assistant plain text', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    vi.mocked(api.listMessages).mockResolvedValue([
+      { sequence: 1, role: 'user', content: 'hello' },
+      {
+        sequence: 2,
+        role: 'assistant',
+        content: 'Hi — how can I help you today?',
+      },
+    ])
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000 },
+    })
+    expect(await screen.findByText('Hi — how can I help you today?')).toBeInTheDocument()
+
+    const copyBtn = screen.getByRole('button', { name: 'Copy response' })
+    expect(copyBtn).toHaveClass('message-copy')
+    await fireEvent.click(copyBtn)
+    expect(writeText).toHaveBeenCalledWith('Hi — how can I help you today?')
+    expect(await screen.findByText('Copied')).toBeInTheDocument()
+  })
+
+  it('composer has no visible Message label text node soup', async () => {
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000 },
+    })
+    const composer = await screen.findByLabelText('Message')
+    expect(composer).toBeInTheDocument()
+    expect(composer.tagName).toBe('TEXTAREA')
+    expect(screen.queryByText('Message', { selector: 'span.font-medium' })).toBeNull()
+    expect(composer.closest('form')?.className).toMatch(/session-composer/)
+  })
+
   const memStorage = () => {
     const m = new Map<string, string>()
     return {

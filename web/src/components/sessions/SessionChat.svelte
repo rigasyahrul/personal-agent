@@ -88,6 +88,9 @@
   let error = $state('')
   let operationError = $state('')
   let pollFailed = $state(false)
+  /** Sequence of assistant message last copied; drives brief "Copied" feedback. */
+  let copiedSeq = $state<number | null>(null)
+  let copiedClearTimer: ReturnType<typeof setTimeout> | null = null
   let generation = 0
   let destroyed = false
   let sendToken: object | null = null
@@ -287,6 +290,21 @@
       } else if (sendToken === token) {
         sendingLock = false
       }
+    }
+  }
+
+  async function copyAssistant(text: string, sequence: number) {
+    try {
+      await navigator.clipboard.writeText(text)
+      if (destroyed) return
+      copiedSeq = sequence
+      if (copiedClearTimer) clearTimeout(copiedClearTimer)
+      copiedClearTimer = setTimeout(() => {
+        if (copiedSeq === sequence) copiedSeq = null
+        copiedClearTimer = null
+      }, 1500)
+    } catch {
+      /* clipboard may be unavailable; ignore */
     }
   }
 
@@ -514,6 +532,10 @@
     generation += 1
     poller.stop()
     promoteOpen = false
+    if (copiedClearTimer) {
+      clearTimeout(copiedClearTimer)
+      copiedClearTimer = null
+    }
   })
 </script>
 
@@ -607,7 +629,7 @@
                   <p>{message.content}</p>
                 </div>
               </li>
-            {:else if message.role === 'assistant'}
+            {:else if message.role === 'assistant' || message.role === 'model'}
               <li
                 class="message message-row message-row--assistant"
                 data-role="assistant"
@@ -616,6 +638,12 @@
                 <div class="message-prose">
                   <MarkdownView source={message.content} />
                 </div>
+                <button
+                  type="button"
+                  class="message-copy"
+                  aria-label="Copy response"
+                  onclick={() => void copyAssistant(message.content, message.sequence)}
+                >{copiedSeq === message.sequence ? 'Copied' : 'Copy'}</button>
               </li>
             {:else}
               <li
@@ -647,27 +675,27 @@
 
       <!-- Composer ancestry is stable: never destroy/recreate this form on poll or tab switch. -->
       <form
-        class="sticky bottom-0 space-y-2 border-t border-slate-100 bg-white pt-3"
+        class="session-composer"
         class:session-composer--hidden={!agentActive}
         hidden={!agentActive}
         inert={!agentActive ? true : undefined}
         onsubmit={send}
       >
-        <label class="block text-sm">
-          <span class="font-medium">Message</span>
-          <textarea
-            class="field-textarea mt-1"
-            name="message"
-            required
-            rows="3"
-            bind:value={draft}
-          ></textarea>
-        </label>
-        <button
-          type="submit"
-          class="btn btn--primary"
-          disabled={sendDisabled}
-        >Send</button>
+        <textarea
+          class="field-textarea"
+          name="message"
+          aria-label="Message"
+          required
+          rows="3"
+          bind:value={draft}
+        ></textarea>
+        <div class="session-composer__actions">
+          <button
+            type="submit"
+            class="btn btn--primary"
+            disabled={sendDisabled}
+          >Send</button>
+        </div>
       </form>
     </div>
 
