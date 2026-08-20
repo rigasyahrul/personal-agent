@@ -49,4 +49,4 @@ Status values: `todo | implementing | review | PASS | complete`
 
 - Branch created from `main` @ 7ff6b97
 
-- Ship HEAD: ref: refs/heads/impl/benchmark-ui-redesign — will update after push
+- Ship push: 70abe3fb3ca2e15374936175c5bd07cf66ac7945 on origin/impl/benchmark-ui-redesign
