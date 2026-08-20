@@ -11,6 +11,8 @@ Execute plan by dispatching a fresh implementer subagent per task, a task review
 
 **Core principle:** Fresh subagent per task + task review (spec + quality) + broad final review = high quality, fast iteration
 
+**Personal-agent standing rule:** After each implementer task, the controller must run **consulting-grok-review** (new grok45 `-x` thread + reviewer-prompt) on the task diff and clear Critical/Important before marking the task complete / merging. Tests alone are not a review gate.
+
 **Narration:** between tool calls, narrate at most one short line — the
 ledger and the tool results carry the record.
 
