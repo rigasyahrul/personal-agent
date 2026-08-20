@@ -11,6 +11,7 @@ If there is even a small chance a Superpowers skill applies, invoke it with the 
 - Creative / build work → `brainstorming` first (hard gate: no implementation until design is approved)
 - Bugs / unexpected behavior → `systematic-debugging` first
 - Implementing a planned task → `test-driven-development` (and related plan/execution skills)
+- Frontend / UI visible changes → `frontend-ui-craft` (with TDD); browser vibe-pass before claiming UI done
 - About to claim done → `verification-before-completion`
 - After non-trivial work / user asks to compound → `compounding-engineering`
 
@@ -25,6 +26,7 @@ Announce which skill you are using, then follow it exactly.
 - `using-git-worktrees` / `finishing-a-development-branch`
 - `requesting-code-review` / `receiving-code-review`
 - `dispatching-parallel-agents` / `writing-skills`
+- `frontend-ui-craft` — any frontend/UI touch: screen spec, browser vibe-pass, anti-AI-slop craft gate
 - `compounding-engineering` — after a unit of work: codify into AGENTS.md / skills / tests / hooks; optional evidence as `docs/memory/YYYYMMDD-HHmm-slug.md` + thin index row in `docs/memory/lessons.md`
 - `synthesize-memory` — promote recurring lesson entries (3+) into durable standing rules
 
@@ -62,6 +64,7 @@ After non-trivial work or a user correction: run **`compounding-engineering`** �
 - **Makefile UX:** `.DEFAULT_GOAL` is `help`. Public targets need `## description`, a `.PHONY` entry, and inclusion in the matching `print-help-section` list. Do not let bare `make` run tests/build. Root binary from `make build` is gitignored (`/personal-agent`). → `docs/memory/`
 - **Skill tool miss ≠ skip.** If Amp’s Skill tool says a skill in this file / `.agents/skills/` is “not found”, `Read .agents/skills/<name>/SKILL.md` and follow it (especially `compounding-engineering`, `synthesize-memory`). → `docs/memory/`
 - **Polled SPA UIs:** never `innerHTML`-replace a focused composer/input on every poll. Patch messages/status/disabled in place; full shell rebuild only on session switch / missing shell. Keep a focus regression test. → `docs/memory/` (sessions focus)
+- **Frontend UI craft:** any visible UI work loads `frontend-ui-craft` — short screen spec, browser vibe-pass when reachable (blocked ≠ passed), craft red flags before “done.” → `.agents/skills/frontend-ui-craft/`
 - **UI fix ≠ served fix.** If user hits `localhost:8080`, check who listens (`lsof`/Docker) and that served asset bytes match the edit (`curl …/js/…`) before claiming success. Baked images do not see host `web/` until rebuild or a dev mount.
 - **Docker local loop:** prod compose stays image-baked (no host source mounts). Live API+web = `make docker-dev` (`docker-compose.yml` + `docker-compose.dev.yml` override, `air`, `..:/src`). Do not put live mounts on the prod compose file. → `docs/memory/`, `docs/ops/deploy.md`
 

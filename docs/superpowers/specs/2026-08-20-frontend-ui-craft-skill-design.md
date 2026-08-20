@@ -1,6 +1,6 @@
 # Design: Frontend UI craft skill
 
-**Status:** Approved for implementation (user sign-off 2026-08-20)  
+**Status:** Implemented (skill landed 2026-08-20; user approved design then implementation)  
 **Date:** 2026-08-20  
 **Skill name:** `frontend-ui-craft`  
 **Location:** `.agents/skills/frontend-ui-craft/` (project-only, `personal-agent`)  
