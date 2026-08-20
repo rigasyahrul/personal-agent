@@ -11,8 +11,8 @@
 
 | N | Task | Status | Review thread | Notes |
 |---|------|--------|---------------|-------|
-| 1 | Shell nav density | implementing | — | |
-| 2 | Modal.svelte + tokens | todo | — | |
+| 1 | Shell nav density | complete | T-01a02026-f4f2-7198-9155-b573e707f290 | 0be1b94 |
+| 2 | Modal.svelte + tokens | implementing | — | |
 | 3 | Creates → Modal | todo | — | |
 | 4 | ProjectRail + CSS | todo | — | |
 | 5 | ProjectHubPage Claude stack | todo | — | |
@@ -29,7 +29,8 @@ Status values: `todo | implementing | review | PASS | complete`
 
 ## Review ledger
 
-(Append after each consulting-grok-review)
+- Task 1: PASS T-01a02026-f4f2-7198-9155-b573e707f290 (Critical none, Important none) — 0be1b94 shell density
+
 
 ## Merge / push log
 
