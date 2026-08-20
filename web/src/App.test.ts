@@ -8,7 +8,13 @@ vi.mock('./lib/api/client', async (importOriginal) => {
   return {
     ...actual,
     api: {
-      get: vi.fn().mockResolvedValue({ generated_at: '', projects: [], due_count: 0 }),
+      get: vi.fn().mockImplementation(async (path: string) => {
+        if (path === '/api/v1/vaults') return []
+        if (path.startsWith('/api/v1/review/queue')) {
+          return { scope: 'all', items: [], caught_up: true }
+        }
+        return { generated_at: '', projects: [], due_count: 0 }
+      }),
       post: vi.fn(),
     },
   }
@@ -30,6 +36,23 @@ describe('global catalog routes', () => {
     ['#/home', 'Home'],
     ['#/projects', 'Projects'],
     ['#/vaults', 'Vaults'],
+  ] as const) {
+    it(`renders ${hash}`, async () => {
+      window.location.hash = hash
+      render(App, {
+        props: { authLoader: vi.fn().mockResolvedValue({ status: 'authenticated' }) },
+      })
+      expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument()
+    })
+  }
+})
+
+describe('vault context routes', () => {
+  for (const [hash, heading] of [
+    ['#/vaults/v1', 'Vault'],
+    ['#/vaults/v1/projects', 'Projects'],
+    ['#/vaults/v1/sessions', 'Sessions'],
+    ['#/vaults/v1/review', 'Review'],
   ] as const) {
     it(`renders ${hash}`, async () => {
       window.location.hash = hash

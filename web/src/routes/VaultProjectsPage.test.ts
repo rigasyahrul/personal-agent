@@ -1,0 +1,52 @@
+// web/src/routes/VaultProjectsPage.test.ts
+import { fireEvent, render, screen } from '@testing-library/svelte'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import VaultProjectsPage from './VaultProjectsPage.svelte'
+import { api } from '../lib/api/client'
+
+vi.mock('../lib/api/client', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
+
+const vaultProject = {
+  id: 'p-v',
+  name: 'Sleep',
+  vault_id: 'v1',
+  vault_name: 'HEALTH',
+  note_count: 0,
+}
+const other = { id: 'p-o', name: 'Budget', vault_id: 'v2', vault_name: 'WORK', note_count: 0 }
+const unfiled = { id: 'p-u', name: 'Inbox', note_count: 0 }
+
+describe('VaultProjectsPage', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('lists only vault projects and searches by name', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      generated_at: '',
+      projects: [vaultProject, other, unfiled],
+    })
+    render(VaultProjectsPage, { props: { vaultId: 'v1', vaultName: 'HEALTH' } })
+    expect(await screen.findByText('Sleep')).toBeInTheDocument()
+    expect(screen.queryByText('Budget')).not.toBeInTheDocument()
+    expect(screen.queryByText('Inbox')).not.toBeInTheDocument()
+    await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'none' } })
+    expect(screen.getByText('No matching projects')).toBeInTheDocument()
+  })
+
+  it('locks the vault and submits it even when the dialog is reopened', async () => {
+    vi.mocked(api.get).mockResolvedValue({ generated_at: '', projects: [] })
+    vi.mocked(api.post).mockResolvedValue({
+      id: 'new',
+      name: 'Sleep',
+      vault_id: 'v1',
+      note_count: 0,
+    })
+    render(VaultProjectsPage, { props: { vaultId: 'v1', vaultName: 'HEALTH' } })
+    await fireEvent.click(await screen.findByRole('button', { name: /new project/i }))
+    const vaultField = screen.getByLabelText('Vault')
+    expect(vaultField).toHaveValue('HEALTH')
+    expect(vaultField).toBeDisabled()
+    await fireEvent.input(screen.getByLabelText('Project name'), { target: { value: 'Sleep' } })
+    await fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
+    expect(api.post).toHaveBeenCalledWith('/api/v1/projects', { name: 'Sleep', vault_id: 'v1' })
+  })
+})

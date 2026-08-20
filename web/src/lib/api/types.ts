@@ -21,3 +21,33 @@ export interface HomeResponse {
   due_count?: number
   generated_at: string
 }
+
+export interface Session {
+  id: string
+  title: string
+  status: string
+  provider: string
+  model_id: string
+  home?: string
+  vault_id?: string | null
+  project_id?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ReviewItem {
+  id: string
+  project_id: string
+  note_id?: string
+  kind: string
+  prompt: string
+  answer?: string | null
+  row_version?: number
+  [key: string]: unknown
+}
+
+export interface ReviewQueue {
+  scope: string
+  caught_up: boolean
+  items: ReviewItem[]
+}
