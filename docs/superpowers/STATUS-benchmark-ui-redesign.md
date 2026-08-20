@@ -13,8 +13,8 @@
 |---|------|--------|---------------|-------|
 | 1 | Shell nav density | complete | T-01a02026-f4f2-7198-9155-b573e707f290 | 0be1b94 |
 | 2 | Modal.svelte + tokens | complete | T-01a0202b-817d-702d-8690-ab814509cb2a | a27c824 |
-| 3 | Creates → Modal | implementing | — | |
-| 4 | ProjectRail + CSS | todo | — | |
+| 3 | Creates → Modal | complete | T-01a02031-549d-7188-9e7b-95c3baf8a5e6 | 0c29f91 |
+| 4 | ProjectRail + CSS | implementing | — | |
 | 5 | ProjectHubPage Claude stack | todo | — | |
 | 6 | sessions route → hub | todo | — | |
 | 7 | SessionChat openPath / embeddedInHub | todo | — | |
@@ -31,6 +31,7 @@ Status values: `todo | implementing | review | PASS | complete`
 
 - Task 1: PASS T-01a02026-f4f2-7198-9155-b573e707f290 (Critical none, Important none) — 0be1b94 shell density
 - Task 2: PASS T-01a0202b-817d-702d-8690-ab814509cb2a (Critical none, Important none) — a27c824 Modal
+- Task 3: PASS T-01a02031-549d-7188-9e7b-95c3baf8a5e6 (Critical none, Important none) — 0c29f91 creates→Modal
 
 
 ## Merge / push log
