@@ -82,4 +82,24 @@ describe('visual baseline', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it('packs sidebar nav rows without stretch (benchmark Phase A density)', () => {
+    // Expanded sidebar chrome: 220–240px width, ~12×10 padding
+    expect(css).toMatch(/\.sidebar\s*\{[^}]*width:\s*(220|240|230|225|235)px/s);
+    expect(css).toMatch(/\.sidebar\s*\{[^}]*padding:\s*12px\s+10px/s);
+
+    // Nav grows to push collapse down, but rows pack to start (no stretch fill)
+    const navBlock = css.match(/\.sidebar nav\s*\{[^}]*\}/);
+    expect(navBlock?.[0]).toBeTruthy();
+    expect(navBlock![0]).toMatch(/flex:\s*1/);
+    expect(navBlock![0]).toMatch(/display:\s*grid/);
+    expect(navBlock![0]).toMatch(/align-content:\s*start/);
+    // Default grid stretch is the bug; explicit stretch must not reappear on nav
+    expect(navBlock![0]).not.toMatch(/align-content:\s*stretch/);
+
+    // Row min-height stays compact (36–40px)
+    expect(css).toMatch(
+      /\.sidebar nav a,\s*\n\s*\.sidebar__disabled\s*\{[^}]*min-height:\s*(36|37|38|39|40)px/s,
+    );
+  });
 });
