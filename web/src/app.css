@@ -916,8 +916,33 @@ a.list-row:hover {
   flex-wrap: wrap;
   gap: 8px 12px;
 }
-.session-files-drawer {
-  display: none;
+/* Narrow overlay drawer: class from JS matchMedia('(max-width: 1023px)'). */
+.session-files-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgb(24 24 27 / 0.35);
+  cursor: pointer;
+}
+.session-split__files.session-files-drawer {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: 30;
+  inset: 0 0 0 auto;
+  width: min(100%, 360px);
+  max-width: 100%;
+  flex: none;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 24px rgb(0 0 0 / 0.08);
+  padding: 12px;
+  overflow: auto;
 }
 @media (max-width: 1023px) {
   .session-split {
@@ -931,26 +956,13 @@ a.list-row:hover {
   .session-split__handle {
     display: none;
   }
-  .session-split__files {
+  /* Without JS drawer class, hide the desktop side column on narrow. */
+  .session-split__files:not(.session-files-drawer) {
     display: none;
     flex: none;
     max-width: none;
     width: 100%;
     border-left: 0;
-  }
-  .session-files-drawer {
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    z-index: 30;
-    inset: 0 0 0 auto;
-    width: min(100%, 360px);
-    max-width: 100%;
-    background: var(--panel);
-    border-left: 1px solid var(--border);
-    box-shadow: -8px 0 24px rgb(0 0 0 / 0.08);
-    padding: 12px;
-    overflow: auto;
   }
 }
 

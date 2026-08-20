@@ -146,24 +146,26 @@ describe('SessionChat', () => {
     expect(assistantRow?.querySelector('.message-prose')).toBeTruthy()
   })
 
+  const memStorage = () => {
+    const m = new Map<string, string>()
+    return {
+      get length() {
+        return m.size
+      },
+      clear: () => m.clear(),
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        m.set(k, String(v))
+      },
+      removeItem: (k: string) => {
+        m.delete(k)
+      },
+      key: () => null,
+    } satisfies Storage
+  }
+
   it('toggles files bar and persists pref', async () => {
-    const mem = (() => {
-      const m = new Map<string, string>()
-      return {
-        get length() {
-          return m.size
-        },
-        clear: () => m.clear(),
-        getItem: (k: string) => m.get(k) ?? null,
-        setItem: (k: string, v: string) => {
-          m.set(k, String(v))
-        },
-        removeItem: (k: string) => {
-          m.delete(k)
-        },
-        key: () => null,
-      } satisfies Storage
-    })()
+    const mem = memStorage()
     const wsSession = {
       ...session,
       tool_grants: { workspace_files: true as const },
@@ -184,6 +186,155 @@ describe('SessionChat', () => {
       'aria-pressed',
       'true',
     )
+  })
+
+  describe('narrow files drawer', () => {
+    const wsSession = {
+      ...session,
+      tool_grants: { workspace_files: true as const },
+    }
+
+    type MediaListener = (event: MediaQueryListEvent) => void
+
+    function mockMatchMedia(matches: boolean) {
+      const listeners = new Set<MediaListener>()
+      const mql = {
+        matches,
+        media: '(max-width: 1023px)',
+        onchange: null as ((this: MediaQueryList, ev: MediaQueryListEvent) => void) | null,
+        addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+          listeners.add(listener as MediaListener)
+        },
+        removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+          listeners.delete(listener as MediaListener)
+        },
+        addListener: (listener: MediaListener) => {
+          listeners.add(listener)
+        },
+        removeListener: (listener: MediaListener) => {
+          listeners.delete(listener)
+        },
+        dispatchEvent: () => true,
+      }
+      const spy = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => {
+        if (query.includes('1023')) return mql as unknown as MediaQueryList
+        return {
+          matches: false,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => true,
+        } as unknown as MediaQueryList
+      })
+      return {
+        mql,
+        spy,
+        setMatches(next: boolean) {
+          mql.matches = next
+          const event = { matches: next, media: mql.media } as MediaQueryListEvent
+          for (const listener of listeners) listener(event)
+          mql.onchange?.call(mql as unknown as MediaQueryList, event)
+        },
+      }
+    }
+
+    it('uses session-files-drawer + backdrop when narrow and files open', async () => {
+      const media = mockMatchMedia(true)
+      const mem = memStorage()
+      mem.setItem('pa.session.filesBarOpen', '1')
+      try {
+        const { container } = render(SessionChat, {
+          props: {
+            session: wsSession,
+            projectId: 'p1',
+            pollInterval: 60_000,
+            storage: mem,
+          },
+        })
+        await screen.findByLabelText('Session files')
+        const root = container.querySelector('.session-focus')
+        expect(root).toHaveAttribute('data-files-open', '1')
+        const files = container.querySelector('.session-split__files')
+        expect(files?.classList.contains('session-files-drawer')).toBe(true)
+        expect(screen.getByRole('button', { name: /close files/i })).toBeInTheDocument()
+      } finally {
+        media.spy.mockRestore()
+      }
+    })
+
+    it('Escape closes drawer and writes open pref false', async () => {
+      const media = mockMatchMedia(true)
+      const mem = memStorage()
+      mem.setItem('pa.session.filesBarOpen', '1')
+      try {
+        const { container } = render(SessionChat, {
+          props: {
+            session: wsSession,
+            projectId: 'p1',
+            pollInterval: 60_000,
+            storage: mem,
+          },
+        })
+        await screen.findByLabelText('Session files')
+        await fireEvent.keyDown(window, { key: 'Escape' })
+        await waitFor(() => {
+          expect(container.querySelector('.session-split__files')).toBeNull()
+        })
+        expect(mem.getItem('pa.session.filesBarOpen')).toBe('0')
+        expect(container.querySelector('.session-focus')).toHaveAttribute('data-files-open', '0')
+      } finally {
+        media.spy.mockRestore()
+      }
+    })
+
+    it('backdrop click closes drawer and writes open pref false', async () => {
+      const media = mockMatchMedia(true)
+      const mem = memStorage()
+      mem.setItem('pa.session.filesBarOpen', '1')
+      try {
+        const { container } = render(SessionChat, {
+          props: {
+            session: wsSession,
+            projectId: 'p1',
+            pollInterval: 60_000,
+            storage: mem,
+          },
+        })
+        await screen.findByLabelText('Session files')
+        await fireEvent.click(screen.getByRole('button', { name: /close files/i }))
+        await waitFor(() => {
+          expect(container.querySelector('.session-split__files')).toBeNull()
+        })
+        expect(mem.getItem('pa.session.filesBarOpen')).toBe('0')
+      } finally {
+        media.spy.mockRestore()
+      }
+    })
+
+    it('does not apply drawer class on wide viewport', async () => {
+      const media = mockMatchMedia(false)
+      const mem = memStorage()
+      mem.setItem('pa.session.filesBarOpen', '1')
+      try {
+        const { container } = render(SessionChat, {
+          props: {
+            session: wsSession,
+            projectId: 'p1',
+            pollInterval: 60_000,
+            storage: mem,
+          },
+        })
+        await screen.findByLabelText('Session files')
+        const files = container.querySelector('.session-split__files')
+        expect(files?.classList.contains('session-files-drawer')).toBe(false)
+        expect(screen.queryByRole('button', { name: /close files/i })).not.toBeInTheDocument()
+      } finally {
+        media.spy.mockRestore()
+      }
+    })
   })
 
   it('ignores stale poll results after session switch', async () => {
@@ -219,24 +370,6 @@ describe('SessionChat', () => {
   })
 
   describe('file tabs', () => {
-    const memStorage = () => {
-      const m = new Map<string, string>()
-      return {
-        get length() {
-          return m.size
-        },
-        clear: () => m.clear(),
-        getItem: (k: string) => m.get(k) ?? null,
-        setItem: (k: string, v: string) => {
-          m.set(k, String(v))
-        },
-        removeItem: (k: string) => {
-          m.delete(k)
-        },
-        key: () => null,
-      } satisfies Storage
-    }
-
     const wsSession = {
       ...session,
       tool_grants: { workspace_files: true as const },

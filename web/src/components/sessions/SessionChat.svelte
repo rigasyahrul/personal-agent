@@ -1,6 +1,6 @@
 <!-- web/src/components/sessions/SessionChat.svelte -->
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { api } from '../../lib/api'
   import type {
     ChatMessage,
@@ -87,6 +87,9 @@
   let mainPct = $state(DEFAULT_MAIN_PCT)
   let splitEl: HTMLElement | undefined = $state()
   let dragging = false
+  let isNarrow = $state(false)
+
+  const NARROW_MQ = '(max-width: 1023px)'
 
   const alertText = $derived([operationError, error].filter(Boolean).join(' — '))
   const runLabel = $derived(run ? `Run: ${run.status}` : 'Idle')
@@ -340,6 +343,12 @@
     writeFilesBarOpen(storage, filesOpen)
   }
 
+  function closeFiles() {
+    if (!filesOpen) return
+    filesOpen = false
+    writeFilesBarOpen(storage, false)
+  }
+
   function onHandlePointerDown(event: PointerEvent) {
     if (!splitEl) return
     dragging = true
@@ -418,6 +427,34 @@
     destroyed = false
     startedFor = value.id
     resetForSession(value)
+  })
+
+  onMount(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const mql = window.matchMedia(NARROW_MQ)
+    const apply = () => {
+      isNarrow = mql.matches
+    }
+    apply()
+    const onChange = () => apply()
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', onChange)
+      return () => mql.removeEventListener('change', onChange)
+    }
+    mql.addListener(onChange)
+    return () => mql.removeListener(onChange)
+  })
+
+  $effect(() => {
+    if (!isNarrow || !filesOpen || !showWorkspace) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeFiles()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   })
 
   onDestroy(() => {
@@ -582,17 +619,27 @@
     </div>
 
     {#if filesOpen && showWorkspace}
-      <div
-        class="session-split__handle"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize files pane"
-        onpointerdown={onHandlePointerDown}
-        onpointermove={onHandlePointerMove}
-        onpointerup={onHandlePointerUp}
-        onpointercancel={onHandlePointerUp}
-      ></div>
-      <aside class="session-split__files">
+      {#if !isNarrow}
+        <div
+          class="session-split__handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize files pane"
+          onpointerdown={onHandlePointerDown}
+          onpointermove={onHandlePointerMove}
+          onpointerup={onHandlePointerUp}
+          onpointercancel={onHandlePointerUp}
+        ></div>
+      {/if}
+      {#if isNarrow}
+        <button
+          type="button"
+          class="session-files-backdrop"
+          aria-label="Close files"
+          onclick={closeFiles}
+        ></button>
+      {/if}
+      <aside class="session-split__files {isNarrow ? 'session-files-drawer' : ''}">
         <SessionFilesBar
           sessionId={session.id}
           {messages}
