@@ -98,10 +98,19 @@ describe('visual baseline', () => {
       '.hub-start__title',
       '.hub-composer',
       '.hub-session-list',
+      '.session-row',
+      '.session-row__icon',
+      '.session-row__title',
+      '.session-row__date',
+      '.session-row__menu',
       '.content-canvas--project-workspace',
     ]) {
       expect(css).toContain(token);
     }
+  });
+
+  it('hub project title is 1.5rem', () => {
+    expect(css).toMatch(/\.hub-header__title\s*\{[^}]*font-size:\s*1\.5rem/s);
   });
 
   it('bans scaffold soup leftovers in Svelte markup', () => {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -161,6 +162,47 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 		defer unlock()
 	}
 	return s.withBarrier(func() error { return s.delete(ctx, id) })
+}
+
+// RenameTitle updates an active session's title.
+func (s *SessionStore) RenameTitle(ctx context.Context, id, title string) (domain.Session, error) {
+	var out domain.Session
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return out, ErrValidation
+	}
+	err := s.withBarrier(func() error {
+		var e error
+		out, e = s.renameTitle(ctx, id, title)
+		return e
+	})
+	return out, err
+}
+
+func (s *SessionStore) renameTitle(ctx context.Context, id, title string) (domain.Session, error) {
+	now := s.Now().UTC()
+	result, err := s.DB.ExecContext(ctx,
+		`UPDATE sessions SET title=?, updated_at=? WHERE id=? AND status='active' AND deleted_at IS NULL`,
+		title, formatTime(now), id)
+	if err != nil {
+		return domain.Session{}, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return domain.Session{}, err
+	}
+	if rows != 1 {
+		// Distinguish missing vs terminal/busy
+		_, getErr := s.Get(ctx, id)
+		if errors.Is(getErr, ErrNotFound) {
+			return domain.Session{}, ErrNotFound
+		}
+		if getErr != nil {
+			return domain.Session{}, getErr
+		}
+		return domain.Session{}, ErrNotFound
+	}
+	return s.Get(ctx, id)
 }
 
 func (s *SessionStore) delete(ctx context.Context, id string) error {

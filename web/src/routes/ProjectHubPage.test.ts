@@ -16,6 +16,8 @@ vi.mock('../lib/api', async (importOriginal) => {
       listProjectNotes: vi.fn(),
       getProjectNote: vi.fn(),
       createProjectSession: vi.fn(),
+      renameSession: vi.fn(),
+      deleteSession: vi.fn(),
       sendMessage: vi.fn(),
       listMessages: vi.fn(),
       currentRun: vi.fn(),
@@ -46,6 +48,8 @@ describe('ProjectHubPage', () => {
     vi.mocked(api.listModels).mockReset().mockResolvedValue(models)
     vi.mocked(api.listProjectNotes).mockReset().mockResolvedValue([])
     vi.mocked(api.createProjectSession).mockReset()
+    vi.mocked(api.renameSession).mockReset()
+    vi.mocked(api.deleteSession).mockReset()
     vi.mocked(api.sendMessage).mockReset().mockResolvedValue(undefined)
     vi.mocked(api.listMessages).mockReset().mockResolvedValue([])
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
@@ -57,7 +61,10 @@ describe('ProjectHubPage', () => {
   it('shows Claude start prompt and no metric destination grid', async () => {
     render(ProjectHubPage, { props: { projectId: 'p1' } })
 
-    expect(await screen.findByRole('heading', { name: /how can i help you today/i })).toBeVisible()
+    const composer = await screen.findByRole('textbox', { name: /message/i })
+    expect(composer).toHaveAttribute('placeholder', 'How can I help you today?')
+    expect(screen.queryByRole('heading', { name: /how can i help you today/i })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Sleep Protocol' })).toHaveClass('hub-header__title')
     expect(screen.queryByRole('region', { name: 'Project metrics' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Project surfaces' })).toBeNull()
     expect(screen.queryByRole('button', { name: /new session/i })).toBeNull()
@@ -66,7 +73,7 @@ describe('ProjectHubPage', () => {
     expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
   })
 
-  it('lists sessions below the composer', async () => {
+  it('lists sessions below the composer as icon/title/date rows', async () => {
     vi.mocked(api.listProjectSessions).mockResolvedValue([
       {
         id: 's1',
@@ -74,17 +81,19 @@ describe('ProjectHubPage', () => {
         status: 'idle',
         provider: 'openai',
         model_id: 'gpt',
+        created_at: '2026-05-30T12:00:00.000Z',
       },
     ])
 
     render(ProjectHubPage, { props: { projectId: 'p1' } })
 
-    const heading = await screen.findByRole('heading', { name: /how can i help you today/i })
-    const composer = screen.getByRole('textbox', { name: /message/i })
+    const composer = await screen.findByRole('textbox', { name: /message/i })
+    expect(composer).toHaveAttribute('placeholder', 'How can I help you today?')
     const sessionBtn = await screen.findByRole('button', { name: /Test 1/i })
-
-    const position = heading.compareDocumentPosition(composer)
-    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(sessionBtn.className).toMatch(/session-row/)
+    expect(document.querySelector('.session-row__icon')).toBeTruthy()
+    expect(screen.getByText('May 30')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /session actions/i })).toBeInTheDocument()
 
     const afterComposer = composer.compareDocumentPosition(sessionBtn)
     expect(afterComposer & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -95,7 +104,7 @@ describe('ProjectHubPage', () => {
 
     render(ProjectHubPage, { props: { projectId: 'p1' } })
 
-    expect(await screen.findByRole('heading', { name: /how can i help you today/i })).toBeVisible()
+    expect(await screen.findByRole('textbox', { name: /message/i })).toBeVisible()
     expect(screen.getByRole('textbox', { name: /message/i })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent(/sessions down/i)
     expect(screen.getByRole('button', { name: /retry sessions/i })).toBeInTheDocument()
@@ -132,7 +141,7 @@ describe('ProjectHubPage', () => {
       .mockResolvedValue([created])
 
     render(ProjectHubPage, { props: { projectId: 'p1' } })
-    await screen.findByRole('heading', { name: /how can i help you today/i })
+    await screen.findByRole('textbox', { name: /message/i })
     await fireEvent.input(screen.getByRole('textbox', { name: /message/i }), {
       target: { value: 'Plan the week' },
     })
@@ -214,7 +223,7 @@ describe('ProjectHubPage', () => {
 
     render(ProjectHubPage, { props: { projectId: 'p1' } })
 
-    expect(await screen.findByRole('heading', { name: /how can i help you today/i })).toBeVisible()
+    expect(await screen.findByRole('textbox', { name: /message/i })).toBeVisible()
     await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
 
     expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
@@ -224,7 +233,7 @@ describe('ProjectHubPage', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Back' }))
 
-    expect(await screen.findByRole('heading', { name: /how can i help you today/i })).toBeVisible()
+    expect(await screen.findByRole('textbox', { name: /message/i })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
     expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
   })
@@ -279,7 +288,7 @@ describe('ProjectHubPage', () => {
 
   it('wires quiet Notes and Review header links', async () => {
     render(ProjectHubPage, { props: { projectId: 'p1' } })
-    await screen.findByRole('heading', { name: /how can i help you today/i })
+    await screen.findByRole('textbox', { name: /message/i })
     expect(screen.getByRole('link', { name: /notes/i })).toHaveAttribute(
       'href',
       '#/projects/p1/notes',

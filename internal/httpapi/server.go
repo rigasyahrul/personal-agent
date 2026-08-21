@@ -79,6 +79,7 @@ func New(deps ServerDeps) http.Handler {
 	mux.Handle("GET /api/v1/projects/{id}/sessions", auth(http.HandlerFunc(sh.projectSessions)))
 	mux.Handle("POST /api/v1/projects/{id}/sessions", mutation(http.HandlerFunc(sh.projectSessions)))
 	mux.Handle("GET /api/v1/sessions/{id}", auth(http.HandlerFunc(sh.session)))
+	mux.Handle("PATCH /api/v1/sessions/{id}", mutation(http.HandlerFunc(sh.session)))
 	mux.Handle("DELETE /api/v1/sessions/{id}", mutation(http.HandlerFunc(sh.session)))
 	mux.Handle("GET /api/v1/sessions/{id}/messages", auth(http.HandlerFunc(ch.messagesRoute)))
 	mux.Handle("POST /api/v1/sessions/{id}/messages", mutation(http.HandlerFunc(ch.messagesRoute)))

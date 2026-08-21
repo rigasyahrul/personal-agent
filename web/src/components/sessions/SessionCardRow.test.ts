@@ -38,4 +38,39 @@ describe('SessionCardRow', () => {
     expect(link).toHaveAttribute('href', '#/projects/p1/sessions')
     expect(link).toHaveClass('session-card')
   })
+
+  it('list variant: chat icon, title, date right, menu with Rename and Delete', async () => {
+    const onclick = vi.fn()
+    const onrename = vi.fn()
+    const ondelete = vi.fn()
+    render(SessionCardRow, {
+      props: {
+        title: 'Test 1',
+        meta: '',
+        variant: 'list',
+        dateLabel: 'May 30',
+        onclick,
+        onrename,
+        ondelete,
+      },
+    })
+
+    expect(document.querySelector('.session-row')).toBeTruthy()
+    expect(document.querySelector('.session-row__icon')).toBeTruthy()
+    expect(screen.getByText('Test 1')).toBeInTheDocument()
+    expect(screen.getByText('May 30')).toBeInTheDocument()
+
+    const menuBtn = screen.getByRole('button', { name: /session actions/i })
+    await fireEvent.click(menuBtn)
+    expect(screen.getByRole('menuitem', { name: /^rename$/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('menuitem', { name: /^rename$/i }))
+    expect(onrename).toHaveBeenCalledOnce()
+    expect(onclick).not.toHaveBeenCalled()
+
+    await fireEvent.click(menuBtn)
+    await fireEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
+    expect(ondelete).toHaveBeenCalledOnce()
+  })
 })

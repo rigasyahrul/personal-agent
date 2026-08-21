@@ -55,6 +55,17 @@ export const api = {
       body: input,
     }) as Promise<Session>,
 
+  renameSession: (sessionId: string, title: string) =>
+    request<Session>(`/api/v1/sessions/${enc(sessionId)}`, {
+      method: 'PATCH',
+      body: { title },
+    }) as Promise<Session>,
+
+  deleteSession: (sessionId: string) =>
+    request<null>(`/api/v1/sessions/${enc(sessionId)}`, {
+      method: 'DELETE',
+    }),
+
   listMessages: (sessionId: string) =>
     request<ChatMessage[]>(`/api/v1/sessions/${enc(sessionId)}/messages`) as Promise<ChatMessage[]>,
 

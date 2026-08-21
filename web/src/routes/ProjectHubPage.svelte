@@ -7,7 +7,7 @@
   import SessionChat from '../components/sessions/SessionChat.svelte'
   import { api } from '../lib/api'
   import type { Project, Session } from '../lib/api/types'
-  import { formatRelativeTime } from '../lib/format-relative-time'
+  import { formatSessionDate } from '../lib/format-session-date'
   import { workspaceEnabled } from '../lib/promote'
   import { routeToHash } from '../lib/router'
 
@@ -88,12 +88,6 @@
     activeSession ? workspaceEnabled(activeSession) : false,
   )
 
-  function sessionMeta(session: Session): string {
-    const model = `${session.provider}:${session.model_id}`
-    const rel = formatRelativeTime(session.updated_at ?? session.created_at)
-    return rel ? `${model} · ${rel}` : model
-  }
-
   function openSession(session: Session) {
     activeSession = session
   }
@@ -102,6 +96,35 @@
     activeSession = null
     openFileRequest = null
     void reloadSessions()
+  }
+
+  async function renameSession(session: Session) {
+    const next = window.prompt('Rename session', session.title)
+    if (next == null) return
+    const title = next.trim()
+    if (!title || title === session.title) return
+    try {
+      const updated = await api.renameSession(session.id, title)
+      sessions = sessions.map((s) =>
+        s.id === session.id ? { ...s, title: updated?.title ?? title } : s,
+      )
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Could not rename session.'
+    }
+  }
+
+  async function deleteSession(session: Session) {
+    if (!window.confirm(`Delete “${session.title}”? This cannot be undone.`)) return
+    try {
+      await api.deleteSession(session.id)
+      sessions = sessions.filter((s) => s.id !== session.id)
+      if (activeSession?.id === session.id) {
+        activeSession = null
+        openFileRequest = null
+      }
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Could not delete session.'
+    }
   }
 
   async function startSession(e: Event) {
@@ -183,12 +206,12 @@
         </header>
 
         <section class="hub-start">
-          <h1 class="hub-start__title">How can I help you today?</h1>
           <form class="hub-composer" onsubmit={startSession}>
             <textarea
               class="field-textarea"
               bind:value={draft}
               aria-label="Message"
+              placeholder="How can I help you today?"
               rows="4"
             ></textarea>
             <div class="hub-composer__row">
@@ -217,9 +240,12 @@
           {/if}
           {#each sessions as s (s.id)}
             <SessionCardRow
+              variant="list"
               title={s.title}
-              meta={sessionMeta(s)}
+              dateLabel={formatSessionDate(s.created_at) ?? ''}
               onclick={() => openSession(s)}
+              onrename={() => void renameSession(s)}
+              ondelete={() => void deleteSession(s)}
             />
           {/each}
           {#if !sessions.length && !sessionsError}

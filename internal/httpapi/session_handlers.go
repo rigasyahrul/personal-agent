@@ -157,6 +157,34 @@ func (h *sessionHandlers) session(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if r.Method == http.MethodPatch {
+		var in struct {
+			Title string `json:"title"`
+		}
+		if err := decodeStrictJSON(r, &in); err != nil {
+			apiError(w, http.StatusBadRequest, "invalid_body")
+			return
+		}
+		if strings.TrimSpace(in.Title) == "" {
+			apiError(w, http.StatusBadRequest, "invalid_title")
+			return
+		}
+		out, err := h.sessions.RenameTitle(r.Context(), id, in.Title)
+		if errors.Is(err, store.ErrNotFound) {
+			apiError(w, http.StatusNotFound, "session_not_found")
+			return
+		}
+		if errors.Is(err, store.ErrValidation) {
+			apiError(w, http.StatusBadRequest, "invalid_title")
+			return
+		}
+		if err != nil {
+			internalError(w)
+			return
+		}
+		jsonResponse(w, http.StatusOK, out)
+		return
+	}
 	out, err := h.sessions.Get(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		apiError(w, 404, "session_not_found")
