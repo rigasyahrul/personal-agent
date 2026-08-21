@@ -203,7 +203,7 @@
   </div>
 {:else if project}
   <div class="project-workspace" data-rail={railMode}>
-    <div class="project-workspace__main">
+    <div class="project-workspace__main" hidden={railMode === 'expanded'}>
       {#if activeSession}
         {#key activeSession.id}
           <SessionChat

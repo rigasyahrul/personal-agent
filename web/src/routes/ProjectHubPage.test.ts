@@ -43,6 +43,7 @@ afterEach(cleanup)
 
 describe('ProjectHubPage', () => {
   beforeEach(() => {
+    localStorage.clear()
     vi.mocked(api.getProject).mockReset().mockResolvedValue(project)
     vi.mocked(api.listProjectSessions).mockReset().mockResolvedValue([])
     vi.mocked(api.listModels).mockReset().mockResolvedValue(models)
@@ -70,7 +71,8 @@ describe('ProjectHubPage', () => {
     expect(screen.queryByRole('button', { name: /new session/i })).toBeNull()
     expect(screen.getByRole('link', { name: /notes/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /review/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Memory' })).toBeNull()
   })
 
   it('lists sessions below the composer as icon/title/date rows', async () => {
@@ -254,7 +256,7 @@ describe('ProjectHubPage', () => {
     await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
     expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
   })
 
   it('clicking a session row shows chat and Back returns to prompt', async () => {
@@ -276,13 +278,13 @@ describe('ProjectHubPage', () => {
     expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /how can i help you today/i })).toBeNull()
-    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
 
     await fireEvent.click(screen.getByRole('button', { name: 'Back' }))
 
     expect(await screen.findByRole('textbox', { name: /message/i })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
-    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
   })
 
   it('rail Files open drives SessionChat file tab and hides Show files', async () => {
@@ -355,5 +357,47 @@ describe('ProjectHubPage', () => {
       'aria-selected',
       'true',
     )
+  })
+
+  it('expands, collapses, and restores the project rail canvas', async () => {
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+
+    await screen.findByRole('textbox', { name: /message/i })
+    const workspace = document.querySelector('.project-workspace')
+    expect(workspace).not.toBeNull()
+    expect(workspace).toHaveAttribute('data-rail', 'open')
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand workspace' }))
+    expect(workspace).toHaveAttribute('data-rail', 'expanded')
+    expect(document.querySelector('.project-workspace__main')).not.toBeVisible()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse canvas' }))
+    expect(workspace).toHaveAttribute('data-rail', 'collapsed')
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Config' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Files' })).toBeNull()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(workspace).toHaveAttribute('data-rail', 'open')
+    expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
+  })
+
+  it('hydrates rail mode from localStorage and persists mode changes', async () => {
+    localStorage.setItem('pa.projectRail.mode', 'collapsed')
+
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+
+    await screen.findByRole('textbox', { name: /message/i })
+    const workspace = document.querySelector('.project-workspace')
+    expect(workspace).toHaveAttribute('data-rail', 'collapsed')
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(workspace).toHaveAttribute('data-rail', 'open')
+    expect(localStorage.getItem('pa.projectRail.mode')).toBe('open')
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse canvas' }))
+    expect(workspace).toHaveAttribute('data-rail', 'collapsed')
+    expect(localStorage.getItem('pa.projectRail.mode')).toBe('collapsed')
   })
 })
