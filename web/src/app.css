@@ -843,17 +843,9 @@ a.list-row:hover {
   line-height: 1.2;
 }
 .hub-composer {
-  display: flex;
-  justify-content: stretch;
+  display: block;
   width: 100%;
   max-width: none;
-}
-/* Beat .session-composer__card { max-width: 44rem } — hub is full canvas width */
-.hub-composer .session-composer__card,
-.hub-composer__card.session-composer__card {
-  width: 100%;
-  max-width: none;
-  border-radius: 20px;
 }
 .hub-composer .session-composer__input {
   min-height: 72px;
@@ -1249,6 +1241,13 @@ a.list-row:hover {
   border-radius: 16px;
   background: var(--panel, #fff);
   box-shadow: 0 1px 2px rgb(24 24 27 / 0.04), 0 4px 16px rgb(24 24 27 / 0.06);
+}
+/* Hub start: full main-column width (must follow .session-composer__card). */
+.hub-composer .session-composer__card,
+.hub-composer__card.session-composer__card {
+  width: 100% !important;
+  max-width: none !important;
+  border-radius: 20px;
 }
 .session-composer__input {
   width: 100%;

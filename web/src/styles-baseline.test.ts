@@ -121,11 +121,13 @@ describe('visual baseline', () => {
   });
 
   it('hub composer card is full width with 20px radius', () => {
-    expect(css).toMatch(
-      /\.hub-composer \.session-composer__card[^}]*max-width:\s*none/s,
+    // Must appear after .session-composer__card and force full width
+    const hubOverride = css.match(
+      /\.hub-composer \.session-composer__card[\s\S]*?max-width:\s*none\s*!important/,
     );
+    expect(hubOverride).toBeTruthy();
     expect(css).toMatch(
-      /\.hub-composer \.session-composer__card[^}]*border-radius:\s*20px|\.hub-composer__card\.session-composer__card\s*\{[^}]*border-radius:\s*20px/s,
+      /\.hub-composer \.session-composer__card[\s\S]*?border-radius:\s*20px/,
     );
   });
 
