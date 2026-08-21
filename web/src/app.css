@@ -829,8 +829,9 @@ a.list-row:hover {
 .hub-start {
   display: grid;
   gap: 0;
-  max-width: 40rem;
-  margin: 28px auto 0;
+  width: 100%;
+  max-width: none;
+  margin: 28px 0 0;
 }
 .hub-start__title {
   /* Legacy; hub start prompt lives in textarea placeholder now */
@@ -842,28 +843,46 @@ a.list-row:hover {
   line-height: 1.2;
 }
 .hub-composer {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  justify-content: stretch;
+  width: 100%;
 }
-.hub-composer .field-textarea {
-  min-height: 96px;
+.hub-composer__card {
+  width: 100%;
+  max-width: none;
+  border-radius: 20px;
 }
-.hub-composer .field-textarea::placeholder {
+.hub-composer .session-composer__input {
+  min-height: 72px;
+}
+.hub-composer .session-composer__input::placeholder {
   color: #a1a1aa;
 }
+/* Legacy row (unused on hub after session-composer toolbar align) */
 .hub-composer__row {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
+.session-composer__model--muted {
+  color: var(--muted);
+  border-style: dashed;
+}
 .hub-session-list {
   margin-top: 28px;
   display: grid;
   gap: 2px;
-  max-width: 40rem;
-  margin-left: auto;
-  margin-right: auto;
   width: 100%;
+  max-width: none;
+}
+.hub-session-list__label {
+  margin: 0 0 8px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 /* Hub session history rows: icon · title · date · ⋮ */
@@ -875,9 +894,19 @@ a.list-row:hover {
   min-height: 44px;
   border-radius: var(--radius-sm);
   position: relative;
+  transition: background 0.12s ease;
 }
 .session-row:hover {
-  background: #f4f4f5;
+  background: #ececef;
+}
+.session-row:hover .session-row__title {
+  color: #09090b;
+}
+.session-row:hover .session-row__icon {
+  color: #3f3f46;
+}
+.session-row:hover .session-row__menu-btn {
+  color: #3f3f46;
 }
 .session-row__main {
   display: flex;

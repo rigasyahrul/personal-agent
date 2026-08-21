@@ -98,6 +98,7 @@ describe('visual baseline', () => {
       '.hub-start__title',
       '.hub-composer',
       '.hub-session-list',
+      '.hub-session-list__label',
       '.session-row',
       '.session-row__icon',
       '.session-row__title',
@@ -111,6 +112,16 @@ describe('visual baseline', () => {
 
   it('hub project title is 1.5rem', () => {
     expect(css).toMatch(/\.hub-header__title\s*\{[^}]*font-size:\s*1\.5rem/s);
+  });
+
+  it('hub start and session list are full width; session rows have hover', () => {
+    expect(css).toMatch(/\.hub-start\s*\{[^}]*max-width:\s*none/s);
+    expect(css).toMatch(/\.hub-session-list\s*\{[^}]*max-width:\s*none/s);
+    expect(css).toMatch(/\.session-row:hover\s*\{[^}]*background:/s);
+  });
+
+  it('hub composer card matches session chat (20px radius)', () => {
+    expect(css).toMatch(/\.hub-composer__card\s*\{[^}]*border-radius:\s*20px/s);
   });
 
   it('bans scaffold soup leftovers in Svelte markup', () => {

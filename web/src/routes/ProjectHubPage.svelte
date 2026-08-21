@@ -6,7 +6,7 @@
   import SessionCardRow from '../components/sessions/SessionCardRow.svelte'
   import SessionChat from '../components/sessions/SessionChat.svelte'
   import { api } from '../lib/api'
-  import type { Project, Session } from '../lib/api/types'
+  import type { ModelOption, Project, Session } from '../lib/api/types'
   import { formatSessionDate } from '../lib/format-session-date'
   import { workspaceEnabled } from '../lib/promote'
   import { routeToHash } from '../lib/router'
@@ -28,12 +28,23 @@
   let draft = $state('')
   let starting = $state(false)
   let activeSession = $state<Session | null>(null)
+  /** Default model for hub start (same chip as open-session composer). */
+  let defaultModel = $state<ModelOption | null>(null)
   /** Rail → SessionChat file tab bridge (cleared by SessionChat after open). */
   let openFileRequest = $state<{
     path: string
     source: 'project-note' | 'workspace'
     noteId?: string
   } | null>(null)
+
+  async function loadDefaultModel() {
+    try {
+      const { models } = await api.listModels()
+      defaultModel = models?.[0] ?? null
+    } catch {
+      defaultModel = null
+    }
+  }
 
   async function load() {
     loading = true
@@ -52,6 +63,8 @@
       loading = false
       return
     }
+
+    void loadDefaultModel()
 
     try {
       const listed = await api.listProjectSessions(projectId)
@@ -128,6 +141,10 @@
     }
   }
 
+  const hubModelLabel = $derived(
+    defaultModel ? `${defaultModel.provider}:${defaultModel.model_id}` : '',
+  )
+
   async function startSession(e: Event) {
     e.preventDefault()
     const content = draft.trim()
@@ -135,11 +152,15 @@
     starting = true
     error = ''
     try {
-      const { models } = await api.listModels()
-      if (!models?.length) {
+      let m = defaultModel
+      if (!m) {
+        const { models } = await api.listModels()
+        m = models?.[0] ?? null
+        defaultModel = m
+      }
+      if (!m) {
         throw new Error('Configure a model in Settings before starting a session.')
       }
-      const m = models[0]
       const session = await api.createProjectSession(projectId, {
         home: 'project',
         title: randomSessionTitle(),
@@ -218,20 +239,29 @@
 
         <section class="hub-start">
           <form class="hub-composer" onsubmit={startSession}>
-            <textarea
-              class="field-textarea"
-              bind:value={draft}
-              aria-label="Message"
-              placeholder="How can I help you today?"
-              rows="4"
-              onkeydown={onComposerKeydown}
-            ></textarea>
-            <div class="hub-composer__row">
-              <button
-                class="btn btn--primary"
-                type="submit"
-                disabled={starting || !draft.trim()}
-              >Send</button>
+            <div class="session-composer__card hub-composer__card">
+              <textarea
+                class="session-composer__input"
+                bind:value={draft}
+                aria-label="Message"
+                placeholder="How can I help you today?"
+                rows="3"
+                onkeydown={onComposerKeydown}
+              ></textarea>
+              <div class="session-composer__toolbar">
+                {#if hubModelLabel}
+                  <span class="session-composer__model">{hubModelLabel}</span>
+                {:else}
+                  <span class="session-composer__model session-composer__model--muted"
+                  >No model</span>
+                {/if}
+                <button
+                  type="submit"
+                  class="session-composer__send btn btn--primary"
+                  disabled={starting || !draft.trim()}
+                  aria-label="Send"
+                >Send</button>
+              </div>
             </div>
           </form>
           {#if error}
