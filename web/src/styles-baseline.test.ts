@@ -102,7 +102,11 @@ describe('visual baseline', () => {
   it('pads collapsed rail restore control away from top chrome', () => {
     expect(css).toContain('.project-rail--collapsed');
     expect(css).toContain('.rail-collapsed-chrome');
-    expect(css).toMatch(/\.project-rail--collapsed\s*\{[^}]*padding-top:\s*10px/s);
+    expect(css).toMatch(
+      /\.project-workspace\[data-rail=["']collapsed["']\]\s+\.project-workspace__rail\s*\{[^}]*padding-top:\s*12px/s,
+    );
+    expect(css).toMatch(/\.rail-collapsed-chrome\s*\{[^}]*height:\s*48px/s);
+    expect(css).toMatch(/\.rail-collapsed-chrome\s*\{[^}]*border-bottom:\s*1px\s+solid/s);
   });
 
   it('user bubbles use soft lavender not solid accent fill (Claude chat)', () => {
@@ -153,7 +157,7 @@ describe('visual baseline', () => {
     expect(css).toMatch(
       /\.project-workspace\[data-rail=['"]expanded['"]\]\s+\.project-workspace__main\s*\{[^}]*display:\s*none/s,
     );
-    expect(css).toMatch(/data-rail=['"]collapsed['"][^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+46px/s);
+    expect(css).toMatch(/data-rail=['"]collapsed['"][^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+48px/s);
   });
 
   it('hub project title is 1.5rem', () => {

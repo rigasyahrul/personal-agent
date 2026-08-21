@@ -140,9 +140,13 @@
   </svg>
 {/snippet}
 
-<div class="project-rail" class:project-rail--collapsed={activeMode === 'collapsed'}>
+<div
+  class="project-rail"
+  class:project-rail--collapsed={activeMode === 'collapsed'}
+  data-rail-mode={activeMode}
+>
   {#if activeMode === 'collapsed'}
-    <div class="rail-collapsed-chrome">
+    <div class="rail-collapsed-chrome" data-testid="rail-collapsed-chrome">
       <button
         type="button"
         class="rail-icon"

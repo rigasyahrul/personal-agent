@@ -685,7 +685,12 @@ a.list-row:hover {
   display: none;
 }
 .project-workspace[data-rail="collapsed"] {
-  grid-template-columns: minmax(0, 1fr) 46px;
+  grid-template-columns: minmax(0, 1fr) 48px;
+}
+/* Collapsed rail: clear space under topbar, then 48px chrome row for the restore icon. */
+.project-workspace[data-rail="collapsed"] .project-workspace__rail {
+  padding-top: 12px;
+  align-items: stretch;
 }
 .project-workspace__main {
   min-width: 0;
@@ -809,18 +814,30 @@ a.list-row:hover {
   min-height: 0;
   flex: 1;
 }
-/* Collapsed strip: pad restore control so it is not flush under the topbar. */
+/* Collapsed strip: 48px top chrome row (matches .rail-iconbar / session header). */
 .project-rail--collapsed {
-  align-items: center;
-  padding-top: 10px;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding-top: 0;
+  width: 100%;
 }
 .rail-collapsed-chrome {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
+  height: 48px;
   min-height: 48px;
+  flex-shrink: 0;
   padding: 0 4px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+/* Fallback if wrapper missing: still keep the icon off the topbar edge. */
+.project-workspace[data-rail="collapsed"] .project-rail > .rail-icon {
+  margin-top: 5px;
+  margin-inline: auto;
 }
 .session-focus__header-lead :global(nav[aria-label='Breadcrumb']) {
   min-width: 0;
@@ -833,9 +850,7 @@ a.list-row:hover {
 .session-focus__header-lead :global(nav[aria-label='Breadcrumb'] .font-medium) {
   max-width: 14rem;
 }
-.project-workspace[data-rail='collapsed'] .project-rail--collapsed {
-  padding-top: 10px;
-}
+
 .hub-header {
   display: flex;
   flex-wrap: wrap;
