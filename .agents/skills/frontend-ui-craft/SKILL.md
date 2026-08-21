@@ -24,18 +24,30 @@ This skill is the agent loop for frontend work: screen spec → build → vibe-p
 
 **Skip browser vibe-pass only when** the change cannot affect rendered UI (e.g. API client types only). State the skip reason. When in doubt, do not skip.
 
+## HARD GATE — open the browser (user mandate)
+
+**Whenever you write or edit UI code** (Svelte markup, CSS, layout, spacing, chrome, copy on screen):
+
+1. **Before claiming done**, open the **real running app** in a browser automation tool (Chrome DevTools MCP, puppeteer, agent-browser, etc.).
+2. Navigate to the **changed route**, interact like a user, and capture **evidence**: screenshot and/or measured layout metrics (getBoundingClientRect gaps, heights).
+3. Report in the completion message: **URL**, **viewport**, **what you checked**, **pass/fail**.
+4. If the app is not up: start it (`make docker-dev` preferred) or mark **blocked**. Never invent “looks correct from CSS.”
+
+**Blind UI coding is a process failure** equal to shipping without tests. Unit tests + reading `app.css` do **not** satisfy this gate.
+
 ## Mandatory loop
 
 For every visible UI change:
 
 1. **Screen spec (short)** — goal, surfaces, states (empty / loading / error / populated), primary action, out of scope. Freeze it.
 2. **Build cheaply** — reuse tokens/components. Tangled or generic-soup draft → regenerate from a sharper spec; do not nurse AI markup forever.
-3. **Browser vibe-pass (hard when possible)**
-   - **Reachable:** open the real URL for the changed surface; a11y snapshot and/or screenshot; drive it like a naive user (primary actions, empty/error paths when relevant). Prefer Chrome DevTools MCP/CLI when configured.
-   - **Not reachable:** say **blocked**; start the app or ask the user. **Do not** claim visual done.
+3. **Browser vibe-pass (HARD — not optional)**
+   - Open the real URL for the changed surface; a11y snapshot and/or screenshot; drive it like a naive user (primary actions, empty/error paths when relevant). Prefer Chrome DevTools MCP/CLI or puppeteer against `make docker-dev` `:8080`.
+   - Measure what the user complained about (padding, alignment, overflow) in the **live DOM** — do not trust code inspection alone.
+   - **Not reachable:** say **blocked**; start the app or ask the user. **Do not** claim visual done. Blocked ≠ passed.
 4. **Craft gate** — run [Red flags](#red-flags--stop) and [Positive recipe](#positive-recipe). Unwaived red flag ⇒ not done.
 5. **Spec-as-test** — add/update at least one automated check for what you changed (component/unit preferred; interaction test when focus/keyboard/multi-step is the risk).
-6. **Done means** — automated gates green **and** vibe-pass evidence (URL opened + what you checked) **and** no silent red flags.
+6. **Done means** — automated gates green **and** vibe-pass evidence (URL opened + screenshot/metrics + what you checked) **and** no silent red flags.
 
 Load **`reference/craft.md`** when polishing, when red flags fire, or when hierarchy/density/tokens need detail.
 
@@ -76,19 +88,21 @@ Do not ship or claim done while these remain unless the user **explicitly** waiv
 | Excuse | Reality |
 |--------|---------|
 | "I read the Svelte/CSS; it looks fine" | Code ≠ pixels. Open the browser. |
-| "App isn't running so I'll skip" | Blocked ≠ passed. |
+| "App isn't running so I'll skip" | Start `make docker-dev` or blocked ≠ passed. |
 | "Just a small CSS tweak" | Small tweaks accumulate slop. Snapshot the surface. |
 | "Craft is subjective" | Red flags block ship; waive only with user OK. |
-| "Tests passed" | Green units ≠ hierarchy or chrome. |
+| "Tests passed" | Green units ≠ hierarchy or chrome. Open the browser. |
 | "I'll polish in a follow-up" | Gate now or record an explicit waiver. |
+| "I'll open the browser next time" | Next time is already late. Open it this turn. |
+| "docker-dev is slow / npm ci again" | Still open browser after code lands; do not skip UX. |
 
 ## Done checklist
 
 - [ ] Short screen spec frozen (or explicitly tiny one-liner for trivial tweak)
-- [ ] Browser vibe-pass done **or** explicit blocked (not silently skipped)
+- [ ] Browser opened on real URL; vibe-pass done **or** explicit blocked (not silently skipped)
+- [ ] Completion includes URL + viewport + evidence (screenshot path and/or layout metrics)
 - [ ] Red flags clear or user-waived
 - [ ] Automated check updated when behavior/contract changed
-- [ ] Completion claim includes evidence (URL + what was checked)
 
 ## Personal-agent appendix
 
@@ -99,10 +113,12 @@ Do not ship or claim done while these remain unless the user **explicitly** waiv
 - **Project hub (Claude stack):** startSession is not create∧send atomic — after create, always list+open session even if first send fails. Sessions list errors soft-fail (composer stays; Retry in list). Rail Files: project notes → `getProjectNote` (`source: 'project-note'` + `noteId`); workspace paths → `workspaceFile`. Default hub grant is `workspace_files: false`. → `AGENTS.md` hub/rail bullets + hub tests
 - **Token class collisions:** when a shared token (e.g. `.name-row`) becomes a dense list-row button, remove it from unrelated chrome that only needed a flex helper (hub header).
 - **Health pill:** pass status keys (`unknown` / `ready` / `error`) from `/health`; never hardcode “Storage status unavailable”.
-- **Localhost / orb serve path:** process on `:8080` is Go → **`web/dist`**. After edits: rebuild dist, match asset hashes in `index.html`, `curl` for new tokens, vibe-pass with `?v=<timestamp>#/route` (browser caches old JS/CSS).
-- **Docker:** `make docker-dev` for live API+web; prod compose stays image-baked
-- **Web tests:** Node `>=22 <23` on `PATH` before `make web-test` (orb may only have Node 20 — install Node 22 under `~/.local/node-v22` if needed)
-- **Browser:** `agent-browser` against localhost or portal; Chrome DevTools at `http://localhost:9222` when configured. A11y snapshot is enough for craft gates; screenshots may land under temp dirs — copy to `.amp/in/artifacts/` if durable. Prefer **local ref files** the user dropped in-repo over `read_thread` for attachments.
+- **Local UI loop (preferred):** `make docker-dev` → Vite HMR via Go on `:8080`. After UI edits: open browser (hard-refresh if needed). **No** `web/dist` rebuild required for docker-dev.
+- **Prod / bare `go run` path:** Go serves **`web/dist`**. After UI edits: rebuild dist, match asset hashes, vibe-pass with `?v=<timestamp>#/route`.
+- **Docker:** `make docker-dev` for live API+web; prod compose stays image-baked. First container start may run `npm ci` (slow) — still verify in browser after.
+- **Web tests:** Node `>=22 <23` on `PATH` before `make web-test`. Prefer running web tests **inside** the docker-dev container when host `node_modules` is Linux-oriented.
+- **Browser (required for UI):** Chrome DevTools MCP, puppeteer against `:8080`, or agent-browser. Auth: seed `pa_session` if needed for automated checks. Screenshots → `.amp/in/artifacts/` when durable. Prefer **local ref files** the user dropped in-repo.
+- **Responsive:** hub is desktop-first but must not starve chat (fixed sidebar + fixed 300px rail). Check ≤1280 / ≤1100 / ≤960 viewports when changing workspace chrome.
 - **Full-surface rule:** polishing shell/home does **not** finish catalogs/review/settings/sessions/notes. Audit every route or explicitly scope the task.
 - **Product look intent:** clean dashboard, light-first, Inter — `docs/superpowers/specs/2026-08-19-ui-svelte-redesign-design.md` (shell IA). **Benchmark fidelity redesign** (Claude hub / Grok rail / Amp session): `docs/superpowers/specs/2026-08-20-benchmark-ui-redesign-design.md` + plan `docs/superpowers/plans/2026-08-20-benchmark-ui-redesign.md`. Session-focus design is superseded where they conflict (rail default-open, copy, hub structure).
 - **Plan for multi-screen polish (older token pass):** `docs/superpowers/plans/2026-08-20-ui-full-surface-craft.md` — do not treat token polish as benchmark fidelity.
