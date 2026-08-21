@@ -120,8 +120,13 @@ describe('visual baseline', () => {
     expect(css).toMatch(/\.session-row:hover\s*\{[^}]*background:/s);
   });
 
-  it('hub composer card matches session chat (20px radius)', () => {
-    expect(css).toMatch(/\.hub-composer__card\s*\{[^}]*border-radius:\s*20px/s);
+  it('hub composer card is full width with 20px radius', () => {
+    expect(css).toMatch(
+      /\.hub-composer \.session-composer__card[^}]*max-width:\s*none/s,
+    );
+    expect(css).toMatch(
+      /\.hub-composer \.session-composer__card[^}]*border-radius:\s*20px|\.hub-composer__card\.session-composer__card\s*\{[^}]*border-radius:\s*20px/s,
+    );
   });
 
   it('bans scaffold soup leftovers in Svelte markup', () => {

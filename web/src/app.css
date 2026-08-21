@@ -846,8 +846,11 @@ a.list-row:hover {
   display: flex;
   justify-content: stretch;
   width: 100%;
+  max-width: none;
 }
-.hub-composer__card {
+/* Beat .session-composer__card { max-width: 44rem } — hub is full canvas width */
+.hub-composer .session-composer__card,
+.hub-composer__card.session-composer__card {
   width: 100%;
   max-width: none;
   border-radius: 20px;
