@@ -147,16 +147,18 @@ describe('SessionChat', () => {
     expect(assistantRow?.querySelector('.message-prose')).toBeTruthy()
   })
 
-  it('copy control copies assistant plain text', async () => {
+  it('copy control is an icon under assistant prose and copies plain text', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
 
+    const created = new Date(2026, 4, 30, 22, 36, 0)
     vi.mocked(api.listMessages).mockResolvedValue([
       { sequence: 1, role: 'user', content: 'hello' },
       {
         sequence: 2,
         role: 'assistant',
         content: 'Hi — how can I help you today?',
+        created_at: created.toISOString(),
       },
     ])
     render(SessionChat, {
@@ -164,11 +166,38 @@ describe('SessionChat', () => {
     })
     expect(await screen.findByText('Hi — how can I help you today?')).toBeInTheDocument()
 
+    const row = screen.getByText('Hi — how can I help you today?').closest('li')
+    expect(row?.querySelector('.message-assistant__footer')).toBeTruthy()
+
+    const dateEl = screen.getByText('May 30')
+    expect(dateEl.tagName).toBe('TIME')
+    expect(dateEl).toHaveAttribute('title', 'May 30, 2026 10:36 PM')
+    expect(dateEl).toHaveAttribute('datetime', created.toISOString())
+
     const copyBtn = screen.getByRole('button', { name: 'Copy response' })
     expect(copyBtn).toHaveClass('message-copy')
+    expect(copyBtn.querySelector('svg')).toBeTruthy()
+    expect(copyBtn).not.toHaveTextContent(/^Copy$/)
+    // Footer sits after prose in DOM order
+    const prose = row?.querySelector('.message-prose')
+    const footer = row?.querySelector('.message-assistant__footer')
+    expect(prose && footer && (prose.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy()
+
     await fireEvent.click(copyBtn)
     expect(writeText).toHaveBeenCalledWith('Hi — how can I help you today?')
-    expect(await screen.findByText('Copied')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+  })
+
+  it('omits assistant date when created_at is missing', async () => {
+    vi.mocked(api.listMessages).mockResolvedValue([
+      { sequence: 1, role: 'assistant', content: 'no stamp' },
+    ])
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000 },
+    })
+    expect(await screen.findByText('no stamp')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy response' })).toBeInTheDocument()
+    expect(document.querySelector('.message-assistant__date')).toBeNull()
   })
 
   it('composer has no visible Message label text node soup', async () => {

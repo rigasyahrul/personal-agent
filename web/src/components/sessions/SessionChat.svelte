@@ -23,6 +23,7 @@
     writeFilesBarOpen,
     writeFilesBarWidthPct,
   } from '../../lib/session-prefs'
+  import { formatMessageDateTime, formatSessionDate } from '../../lib/format-session-date'
   import MarkdownView from '../markdown/MarkdownView.svelte'
   import { createSessionPoller } from './session-poller'
   import OperationBadges from './OperationBadges.svelte'
@@ -631,20 +632,63 @@
                   </div>
                 </li>
               {:else if message.role === 'assistant' || message.role === 'model'}
+                {@const shortDate = formatSessionDate(message.created_at)}
+                {@const fullDate = formatMessageDateTime(message.created_at)}
                 <li
                   class="message message-row message-row--assistant"
                   data-role="assistant"
                   data-raw-role={message.role}
                 >
-                  <div class="message-prose">
-                    <MarkdownView source={message.content} />
+                  <div class="message-assistant">
+                    <div class="message-prose">
+                      <MarkdownView source={message.content} />
+                    </div>
+                    <div class="message-assistant__footer">
+                      {#if shortDate && fullDate}
+                        <time
+                          class="message-assistant__date"
+                          datetime={message.created_at}
+                          title={fullDate}
+                        >{shortDate}</time>
+                      {/if}
+                      <button
+                        type="button"
+                        class="message-copy"
+                        aria-label={copiedSeq === message.sequence ? 'Copied' : 'Copy response'}
+                        title={copiedSeq === message.sequence ? 'Copied' : 'Copy response'}
+                        onclick={() => void copyAssistant(message.content, message.sequence)}
+                      >
+                        {#if copiedSeq === message.sequence}
+                          <svg
+                            class="message-copy__icon"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M20 6 9 17l-5-5"></path>
+                          </svg>
+                        {:else}
+                          <svg
+                            class="message-copy__icon"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                            <path d="M5 15V5a2 2 0 0 1 2-2h10"></path>
+                          </svg>
+                        {/if}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    class="message-copy"
-                    aria-label="Copy response"
-                    onclick={() => void copyAssistant(message.content, message.sequence)}
-                  >{copiedSeq === message.sequence ? 'Copied' : 'Copy'}</button>
                 </li>
               {:else}
                 <li

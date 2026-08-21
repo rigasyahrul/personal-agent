@@ -90,6 +90,13 @@ describe('visual baseline', () => {
     expect(css).toMatch(/\.message-bubble\s*\{[^}]*padding:\s*14px\s+18px/s);
   });
 
+  it('places assistant copy as footer icon with date chrome', () => {
+    expect(css).toContain('.message-assistant__footer');
+    expect(css).toContain('.message-assistant__date');
+    expect(css).toMatch(/\.message-copy\s*\{[^}]*width:\s*28px/s);
+    expect(css).toContain('.message-copy__icon');
+  });
+
   it('user bubbles use soft lavender not solid accent fill (Claude chat)', () => {
     const userBubble = css.match(/\.message-bubble--user\s*\{[^}]*\}/);
     expect(userBubble?.[0]).toBeTruthy();
