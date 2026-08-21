@@ -718,13 +718,15 @@ a.list-row:hover {
   flex-direction: column;
   min-height: 0;
 }
+/* Shared chrome height with .session-focus__header (workspace top row). */
 .rail-iconbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  height: 48px;
   min-height: 48px;
-  padding: 4px 6px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -1080,20 +1082,24 @@ a.list-row:hover {
   gap: 0;
   background: var(--panel, #fff);
 }
+/* Match .rail-iconbar height (48px) so workspace top borders align. */
 .session-focus__header {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px 16px;
-  padding: 12px 20px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--panel, #fff);
+  overflow: hidden;
 }
 .session-focus__header-lead {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px 14px;
   min-width: 0;
@@ -1111,10 +1117,11 @@ a.list-row:hover {
 }
 .session-focus__header-meta {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px 12px;
   min-width: 0;
+  flex-shrink: 0;
 }
 .session-focus__model-quiet,
 .session-focus__run {
@@ -1131,13 +1138,13 @@ a.list-row:hover {
   width: 100%;
   max-width: 44rem;
   margin-inline: auto;
-  padding-inline: 20px;
+  padding-inline: 24px;
 }
 .session-focus__messages {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 20px 0 12px;
+  padding: 28px 0 20px;
 }
 .message-row--other {
   justify-content: flex-start;
@@ -1150,13 +1157,13 @@ a.list-row:hover {
   display: flex;
   flex-wrap: nowrap;
   align-items: stretch;
-  gap: 2px;
+  gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   scrollbar-width: thin;
-  padding-inline: 12px;
+  padding: 8px 20px 0;
   background: var(--panel, #fff);
 }
 .session-tab {
@@ -1164,8 +1171,8 @@ a.list-row:hover {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 0 14px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -1585,7 +1592,7 @@ a.list-row:hover {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
 }
 .message-row {
   display: flex;
@@ -1597,11 +1604,11 @@ a.list-row:hover {
 .message-row--assistant {
   justify-content: flex-start;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
 }
 .message-bubble {
   border-radius: 18px;
-  padding: 12px 16px;
+  padding: 14px 18px;
   max-width: min(88%, 34rem);
   box-shadow: none;
 }

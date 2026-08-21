@@ -76,6 +76,20 @@ describe('visual baseline', () => {
     }
   });
 
+  it('aligns session header height with rail iconbar (48px chrome row)', () => {
+    expect(css).toMatch(/\.rail-iconbar\s*\{[^}]*height:\s*48px/s);
+    expect(css).toMatch(/\.session-focus__header\s*\{[^}]*height:\s*48px/s);
+    expect(css).toMatch(/\.session-focus__header\s*\{[^}]*min-height:\s*48px/s);
+  });
+
+  it('gives session tabs and message thread breathing room', () => {
+    expect(css).toMatch(/\.session-tabs\s*\{[^}]*padding:\s*8px\s+20px\s+0/s);
+    expect(css).toMatch(/\.session-tab\s*\{[^}]*min-height:\s*40px/s);
+    expect(css).toMatch(/\.session-focus__messages\s*\{[^}]*padding:\s*28px\s+0\s+20px/s);
+    expect(css).toMatch(/\.message-thread\s*\{[^}]*gap:\s*22px/s);
+    expect(css).toMatch(/\.message-bubble\s*\{[^}]*padding:\s*14px\s+18px/s);
+  });
+
   it('user bubbles use soft lavender not solid accent fill (Claude chat)', () => {
     const userBubble = css.match(/\.message-bubble--user\s*\{[^}]*\}/);
     expect(userBubble?.[0]).toBeTruthy();
