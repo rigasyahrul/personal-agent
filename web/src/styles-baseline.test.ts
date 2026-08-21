@@ -90,14 +90,16 @@ describe('visual baseline', () => {
       '.project-workspace',
       '.project-workspace__main',
       '.project-workspace__rail',
-      '.rail-tabs',
-      '.rail-tab',
-      '.rail-tab--active',
+      '.project-rail',
+      '.rail-iconbar',
+      '.rail-icon',
+      '.rail-icon--active',
       '.rail-panel',
       '.hub-start',
       '.hub-start__title',
       '.hub-composer',
       '.hub-session-list',
+      '.hub-session-list__label',
       '.session-row',
       '.session-row__icon',
       '.session-row__title',
@@ -107,6 +109,12 @@ describe('visual baseline', () => {
     ]) {
       expect(css).toContain(token);
     }
+
+    expect(css).toMatch(/\.project-workspace\[data-rail=['"]open['"]\]/);
+    expect(css).toMatch(/\.project-workspace\[data-rail=['"]expanded['"]\]/);
+    expect(css).toMatch(/\.project-workspace\[data-rail=['"]collapsed['"]\]/);
+    expect(css).toMatch(/data-rail=['"]expanded['"][^}]*grid-template-columns:\s*0\s+minmax\(0,\s*1fr\)/s);
+    expect(css).toMatch(/data-rail=['"]collapsed['"][^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+46px/s);
   });
 
   it('hub project title is 1.5rem', () => {

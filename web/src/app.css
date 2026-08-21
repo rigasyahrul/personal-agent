@@ -671,9 +671,20 @@ a.list-row:hover {
 }
 .project-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
   gap: 0;
   min-height: calc(100vh - 52px);
+}
+.project-workspace[data-rail="open"] {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.project-workspace[data-rail="expanded"] {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+.project-workspace[data-rail="expanded"] .project-workspace__main {
+  display: none;
+}
+.project-workspace[data-rail="collapsed"] {
+  grid-template-columns: minmax(0, 1fr) 46px;
 }
 .project-workspace__main {
   min-width: 0;
@@ -705,6 +716,52 @@ a.list-row:hover {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+.rail-iconbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.rail-iconbar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.rail-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #52525b;
+  cursor: pointer;
+}
+.rail-icon:hover {
+  border-color: var(--border);
+  background: #fafafa;
+  color: #18181b;
+}
+.rail-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.rail-icon--active {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.rail-icon svg {
+  width: 18px;
+  height: 18px;
 }
 .rail-tabs {
   display: flex;
@@ -864,6 +921,15 @@ a.list-row:hover {
   margin-left: auto;
   margin-right: auto;
   width: 100%;
+}
+.hub-session-list__label {
+  margin: 0 0 8px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* Hub session history rows: icon · title · date · ⋮ */
