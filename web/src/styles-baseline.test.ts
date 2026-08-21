@@ -85,7 +85,8 @@ describe('visual baseline', () => {
   it('gives session tabs and message thread breathing room', () => {
     expect(css).toMatch(/\.session-tabs\s*\{[^}]*padding:\s*8px\s+20px\s+0/s);
     expect(css).toMatch(/\.session-tab\s*\{[^}]*min-height:\s*40px/s);
-    expect(css).toMatch(/\.session-focus__messages\s*\{[^}]*padding:\s*28px\s+0\s+20px/s);
+    expect(css).toMatch(/\.session-focus__messages\s*\{[^}]*padding:\s*36px\s+0\s+24px/s);
+    expect(css).toMatch(/\.session-chat-column\s*\{[^}]*padding-top:\s*8px/s);
     expect(css).toMatch(/\.message-thread\s*\{[^}]*gap:\s*22px/s);
     expect(css).toMatch(/\.message-bubble\s*\{[^}]*padding:\s*14px\s+18px/s);
   });

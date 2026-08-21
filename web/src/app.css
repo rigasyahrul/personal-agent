@@ -1139,12 +1139,18 @@ a.list-row:hover {
   max-width: 44rem;
   margin-inline: auto;
   padding-inline: 24px;
+  /* Clear air under Agent tabs before first bubble */
+  padding-top: 8px;
 }
 .session-focus__messages {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 28px 0 20px;
+  padding: 36px 0 24px;
+}
+/* Extra separation when the thread starts with a user bubble (common hub path). */
+.session-focus__messages > .message-row:first-child {
+  margin-top: 4px;
 }
 .message-row--other {
   justify-content: flex-start;
