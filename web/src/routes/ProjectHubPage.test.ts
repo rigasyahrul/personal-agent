@@ -89,6 +89,8 @@ describe('ProjectHubPage', () => {
 
     const composer = await screen.findByRole('textbox', { name: /message/i })
     expect(composer).toHaveAttribute('placeholder', 'How can I help you today?')
+    const recent = await screen.findByRole('heading', { name: /^recent$/i })
+    expect(recent).toHaveClass('hub-session-list__label')
     const sessionBtn = await screen.findByRole('button', { name: /Test 1/i })
     expect(sessionBtn.className).toMatch(/session-row/)
     expect(document.querySelector('.session-row__icon')).toBeTruthy()
@@ -97,6 +99,7 @@ describe('ProjectHubPage', () => {
 
     const afterComposer = composer.compareDocumentPosition(sessionBtn)
     expect(afterComposer & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(recent.compareDocumentPosition(sessionBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('keeps composer when sessions list fails and shows list retry', async () => {
@@ -125,12 +128,15 @@ describe('ProjectHubPage', () => {
   it('opens chat after create even if first message fails (no orphan on retry)', async () => {
     const created = {
       id: 's-orphan',
-      title: 'Plan the week',
+      title: 'calm river',
       status: 'idle',
       provider: 'openai',
       model_id: 'gpt',
     }
-    vi.mocked(api.createProjectSession).mockResolvedValue(created)
+    vi.mocked(api.createProjectSession).mockImplementation(async (_pid, input) => ({
+      ...created,
+      title: input.title,
+    }))
     vi.mocked(api.sendMessage).mockRejectedValue(new Error('send failed'))
     vi.mocked(api.listMessages).mockResolvedValue([])
     vi.mocked(api.currentRun).mockResolvedValue(null)
@@ -138,7 +144,11 @@ describe('ProjectHubPage', () => {
     vi.mocked(api.listProjectSessions)
       .mockReset()
       .mockResolvedValueOnce([])
-      .mockResolvedValue([created])
+      .mockImplementation(async () => {
+        const call = vi.mocked(api.createProjectSession).mock.calls[0]
+        const title = (call?.[1] as { title: string } | undefined)?.title ?? created.title
+        return [{ ...created, title }]
+      })
 
     render(ProjectHubPage, { props: { projectId: 'p1' } })
     await screen.findByRole('textbox', { name: /message/i })
@@ -149,19 +159,20 @@ describe('ProjectHubPage', () => {
 
     expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument()
     expect(api.createProjectSession).toHaveBeenCalledTimes(1)
+    const createArg = vi.mocked(api.createProjectSession).mock.calls[0]![1] as { title: string }
+    expect(createArg.title).toMatch(/^[a-z]+ [a-z]+$/)
     await fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(await screen.findByRole('button', { name: /Plan the week/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: new RegExp(createArg.title, 'i') })).toBeInTheDocument()
   })
 
   it('Send creates session and first message then opens chat', async () => {
-    const created = {
+    vi.mocked(api.createProjectSession).mockImplementation(async (_pid, input) => ({
       id: 's-new',
-      title: 'Plan the week',
+      title: input.title,
       status: 'idle',
       provider: 'openai',
       model_id: 'gpt',
-    }
-    vi.mocked(api.createProjectSession).mockResolvedValue(created)
+    }))
     vi.mocked(api.sendMessage).mockResolvedValue(undefined)
 
     render(ProjectHubPage, { props: { projectId: 'p1' } })
@@ -171,15 +182,21 @@ describe('ProjectHubPage', () => {
     await fireEvent.click(screen.getByRole('button', { name: /^send$/i }))
 
     await waitFor(() => {
-      expect(api.createProjectSession).toHaveBeenCalledWith('p1', {
-        home: 'project',
-        title: 'Plan the week',
-        provider: 'openai',
-        model_id: 'gpt',
-        model_parameters: {},
-        tool_grants: { workspace_files: false },
-      })
+      expect(api.createProjectSession).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          home: 'project',
+          provider: 'openai',
+          model_id: 'gpt',
+          model_parameters: {},
+          tool_grants: { workspace_files: false },
+          title: expect.stringMatching(/^[a-z]+ [a-z]+$/),
+        }),
+      )
     })
+    const createdTitle = (vi.mocked(api.createProjectSession).mock.calls[0]![1] as { title: string })
+      .title
+    expect(createdTitle).not.toBe('Plan the week')
     await waitFor(() => {
       expect(api.sendMessage).toHaveBeenCalledWith(
         's-new',
@@ -187,7 +204,7 @@ describe('ProjectHubPage', () => {
       )
     })
 
-    expect(await screen.findByRole('heading', { name: 'Plan the week' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: createdTitle })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
   })
 

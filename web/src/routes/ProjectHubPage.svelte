@@ -10,6 +10,7 @@
   import { formatSessionDate } from '../lib/format-session-date'
   import { workspaceEnabled } from '../lib/promote'
   import { routeToHash } from '../lib/router'
+  import { randomSessionTitle } from '../lib/session-title'
 
   let {
     projectId,
@@ -141,7 +142,7 @@
       const m = models[0]
       const session = await api.createProjectSession(projectId, {
         home: 'project',
-        title: content.slice(0, 80) || 'Untitled',
+        title: randomSessionTitle(),
         provider: m.provider,
         model_id: m.model_id,
         model_parameters: {},
@@ -237,6 +238,9 @@
                 onclick={() => void reloadSessions()}
               >Retry sessions</button>
             </div>
+          {/if}
+          {#if sessions.length > 0}
+            <h2 class="hub-session-list__label">Recent</h2>
           {/if}
           {#each sessions as s (s.id)}
             <SessionCardRow
