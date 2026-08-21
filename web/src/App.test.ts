@@ -121,12 +121,16 @@ describe('legacy project sessions route', () => {
     })
 
     expect(
-      await screen.findByRole('heading', { name: /how can i help you today/i }),
+      await screen.findByRole('heading', { name: 'Sleep Protocol' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /new session/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
     expect(document.querySelector('.project-workspace')).toBeTruthy()
     expect(document.querySelector('.project-workspace__rail')).toBeTruthy()
+    // Icon chrome: Config + Files only (no Memory rail control)
+    expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument()
   })
 })
 

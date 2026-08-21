@@ -9,6 +9,14 @@
   import type { ModelOption, Project, Session } from '../lib/api/types'
   import { formatSessionDate } from '../lib/format-session-date'
   import { workspaceEnabled } from '../lib/promote'
+  import {
+    readProjectRailMode,
+    readProjectRailTab,
+    writeProjectRailMode,
+    writeProjectRailTab,
+    type ProjectRailMode,
+    type ProjectRailTab,
+  } from '../lib/project-rail-prefs'
   import { routeToHash } from '../lib/router'
   import { randomSessionTitle } from '../lib/session-title'
 
@@ -30,6 +38,8 @@
   let activeSession = $state<Session | null>(null)
   /** Default model for hub start (same chip as open-session composer). */
   let defaultModel = $state<ModelOption | null>(null)
+  let railMode = $state<ProjectRailMode>(readProjectRailMode(localStorage))
+  let railTab = $state<ProjectRailTab>(readProjectRailTab(localStorage))
   /** Rail → SessionChat file tab bridge (cleared by SessionChat after open). */
   let openFileRequest = $state<{
     path: string
@@ -213,8 +223,8 @@
     </div>
   </div>
 {:else if project}
-  <div class="project-workspace">
-    <div class="project-workspace__main">
+  <div class="project-workspace" data-rail={railMode}>
+    <div class="project-workspace__main" hidden={railMode === 'expanded'}>
       {#if activeSession}
         {#key activeSession.id}
           <SessionChat
@@ -306,6 +316,16 @@
         {projectId}
         sessionId={activeSession?.id}
         workspaceFilesEnabled={workspaceFilesEnabled}
+        tab={railTab}
+        mode={railMode}
+        onTabChange={(tab) => {
+          writeProjectRailTab(localStorage, tab)
+          railTab = tab
+        }}
+        onModeChange={(mode) => {
+          writeProjectRailMode(localStorage, mode)
+          railMode = mode
+        }}
         onOpenFile={(path, meta) => {
           if (!activeSession) return
           openFileRequest = {
