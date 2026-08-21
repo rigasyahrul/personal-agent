@@ -137,4 +137,51 @@ describe('ProjectRail', () => {
     await screen.findByText('No project files available.')
     expect(api.workspaceTree).not.toHaveBeenCalled()
   })
+
+  it('renders only Show canvas chrome when collapsed', () => {
+    render(ProjectRail, { props: { projectId: 'p1', mode: 'collapsed' } })
+
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Config' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Expand workspace' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Collapse canvas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Instructions (system)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument()
+  })
+
+  it('requests expanded mode from the open rail', async () => {
+    const onModeChange = vi.fn()
+    render(ProjectRail, { props: { projectId: 'p1', mode: 'open', onModeChange } })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand workspace' }))
+    expect(onModeChange).toHaveBeenCalledWith('expanded')
+  })
+
+  it('requests open mode from the expanded rail', async () => {
+    const onModeChange = vi.fn()
+    render(ProjectRail, { props: { projectId: 'p1', mode: 'expanded', onModeChange } })
+
+    const exit = screen.getByRole('button', { name: 'Exit expanded' })
+    expect(exit).toHaveAttribute('aria-pressed', 'true')
+    await fireEvent.click(exit)
+    expect(onModeChange).toHaveBeenCalledWith('open')
+  })
+
+  it('requests collapsed mode from Collapse canvas', async () => {
+    const onModeChange = vi.fn()
+    render(ProjectRail, { props: { projectId: 'p1', mode: 'open', onModeChange } })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse canvas' }))
+    expect(onModeChange).toHaveBeenCalledWith('collapsed')
+  })
+
+  it('requests open mode from Show canvas', async () => {
+    const onModeChange = vi.fn()
+    render(ProjectRail, { props: { projectId: 'p1', mode: 'collapsed', onModeChange } })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(onModeChange).toHaveBeenCalledWith('open')
+  })
 })
