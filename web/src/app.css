@@ -1413,17 +1413,50 @@ a.list-row:hover {
 .message-assistant__footer {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 28px;
   padding-left: 2px;
 }
+/* Visible CSS tooltip — native title is delayed/unreliable on <time>. */
 .message-assistant__date {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
   font-weight: 500;
   color: var(--muted, #71717a);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
   cursor: default;
+}
+/* Below the label so overflow:auto on the message list does not clip it. */
+.message-assistant__date[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  width: max-content;
+  max-width: min(240px, 70vw);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #3f3f46;
+  background: #18181b;
+  color: #fafafa;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.18);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.1s ease, visibility 0.1s ease;
+}
+.message-assistant__date[data-tooltip]:hover::after,
+.message-assistant__date[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
 }
 .message-copy {
   display: inline-flex;

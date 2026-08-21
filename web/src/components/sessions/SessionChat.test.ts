@@ -167,20 +167,27 @@ describe('SessionChat', () => {
     expect(await screen.findByText('Hi — how can I help you today?')).toBeInTheDocument()
 
     const row = screen.getByText('Hi — how can I help you today?').closest('li')
-    expect(row?.querySelector('.message-assistant__footer')).toBeTruthy()
-
-    const dateEl = screen.getByText('May 30')
-    expect(dateEl.tagName).toBe('TIME')
-    expect(dateEl).toHaveAttribute('title', 'May 30, 2026 10:36 PM')
-    expect(dateEl).toHaveAttribute('datetime', created.toISOString())
+    const footer = row?.querySelector('.message-assistant__footer')
+    expect(footer).toBeTruthy()
 
     const copyBtn = screen.getByRole('button', { name: 'Copy response' })
     expect(copyBtn).toHaveClass('message-copy')
     expect(copyBtn.querySelector('svg')).toBeTruthy()
     expect(copyBtn).not.toHaveTextContent(/^Copy$/)
+
+    const dateEl = screen.getByText('May 30')
+    expect(dateEl.tagName).toBe('TIME')
+    expect(dateEl).toHaveAttribute('data-tooltip', 'May 30, 2026 10:36 PM')
+    expect(dateEl).toHaveAttribute('title', 'May 30, 2026 10:36 PM')
+    expect(dateEl).toHaveAttribute('datetime', created.toISOString())
+
+    // Order: copy icon first, then date
+    const footerKids = Array.from(footer?.children ?? [])
+    expect(footerKids[0]).toBe(copyBtn)
+    expect(footerKids[1]).toBe(dateEl)
+
     // Footer sits after prose in DOM order
     const prose = row?.querySelector('.message-prose')
-    const footer = row?.querySelector('.message-assistant__footer')
     expect(prose && footer && (prose.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy()
 
     await fireEvent.click(copyBtn)

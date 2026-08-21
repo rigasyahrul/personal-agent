@@ -644,13 +644,6 @@
                       <MarkdownView source={message.content} />
                     </div>
                     <div class="message-assistant__footer">
-                      {#if shortDate && fullDate}
-                        <time
-                          class="message-assistant__date"
-                          datetime={message.created_at}
-                          title={fullDate}
-                        >{shortDate}</time>
-                      {/if}
                       <button
                         type="button"
                         class="message-copy"
@@ -687,6 +680,14 @@
                           </svg>
                         {/if}
                       </button>
+                      {#if shortDate && fullDate}
+                        <time
+                          class="message-assistant__date"
+                          datetime={message.created_at}
+                          data-tooltip={fullDate}
+                          title={fullDate}
+                        >{shortDate}</time>
+                      {/if}
                     </div>
                   </div>
                 </li>
