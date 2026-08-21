@@ -677,8 +677,9 @@ a.list-row:hover {
 .project-workspace[data-rail="open"] {
   grid-template-columns: minmax(0, 1fr) 300px;
 }
+/* Single column: main is display:none and leaves the grid, so rail must be the only 1fr track. */
 .project-workspace[data-rail="expanded"] {
-  grid-template-columns: 0 minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 .project-workspace[data-rail="expanded"] .project-workspace__main {
   display: none;

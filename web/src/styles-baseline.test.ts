@@ -113,7 +113,17 @@ describe('visual baseline', () => {
     expect(css).toMatch(/\.project-workspace\[data-rail=['"]open['"]\]/);
     expect(css).toMatch(/\.project-workspace\[data-rail=['"]expanded['"]\]/);
     expect(css).toMatch(/\.project-workspace\[data-rail=['"]collapsed['"]\]/);
-    expect(css).toMatch(/data-rail=['"]expanded['"][^}]*grid-template-columns:\s*0\s+minmax\(0,\s*1fr\)/s);
+    // Single column when expanded: main is display:none and leaves the grid;
+    // a two-track "0 1fr" would assign the rail the zero-width first track.
+    expect(css).toMatch(
+      /data-rail=['"]expanded['"][^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/s,
+    );
+    expect(css).not.toMatch(
+      /data-rail=['"]expanded['"][^}]*grid-template-columns:\s*0\s+minmax\(0,\s*1fr\)/s,
+    );
+    expect(css).toMatch(
+      /\.project-workspace\[data-rail=['"]expanded['"]\]\s+\.project-workspace__main\s*\{[^}]*display:\s*none/s,
+    );
     expect(css).toMatch(/data-rail=['"]collapsed['"][^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+46px/s);
   });
 
