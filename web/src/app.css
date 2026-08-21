@@ -687,9 +687,9 @@ a.list-row:hover {
 .project-workspace[data-rail="collapsed"] {
   grid-template-columns: minmax(0, 1fr) 48px;
 }
-/* Collapsed rail: clear space under topbar, then 48px chrome row for the restore icon. */
+/* Collapsed rail: 48px chrome row only (aligned with open iconbar / session header). */
 .project-workspace[data-rail="collapsed"] .project-workspace__rail {
-  padding-top: 12px;
+  padding-top: 0;
   align-items: stretch;
 }
 .project-workspace__main {
@@ -834,9 +834,8 @@ a.list-row:hover {
   border-bottom: 1px solid var(--border);
   background: var(--panel);
 }
-/* Fallback if wrapper missing: still keep the icon off the topbar edge. */
+/* Fallback if wrapper missing: center icon in the slim strip. */
 .project-workspace[data-rail="collapsed"] .project-rail > .rail-icon {
-  margin-top: 5px;
   margin-inline: auto;
 }
 .session-focus__header-lead :global(nav[aria-label='Breadcrumb']) {
@@ -1797,6 +1796,74 @@ a.list-row:hover {
 }
 .auth-card [role='alert'] { color: var(--danger); }
 
+/* —— Project workspace responsive (desktop-first hub + rail) —— */
+/* Fixed 240 sidebar + 300 rail starves chat below ~1280. Scale the rail down first. */
+@media (max-width: 1280px) {
+  .project-workspace[data-rail='open'] {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  }
+}
+
+/* Icon-only app sidebar while hub is open so main keeps ≥~480px. */
+@media (max-width: 1100px) {
+  .app-shell:has(.project-workspace) .sidebar:not([data-collapsed='true']) {
+    width: 64px;
+  }
+  .app-shell:has(.project-workspace) .sidebar:not([data-collapsed='true']) .sidebar__label,
+  .app-shell:has(.project-workspace) .sidebar:not([data-collapsed='true']) .sidebar__context,
+  .app-shell:has(.project-workspace)
+    .sidebar:not([data-collapsed='true'])
+    .sidebar__collapse-label {
+    display: none;
+  }
+  .app-shell:has(.project-workspace) .sidebar:not([data-collapsed='true']) .sidebar__collapse {
+    justify-content: center;
+    padding: 8px;
+  }
+  .project-workspace[data-rail='open'] {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  }
+  .session-focus__model-quiet {
+    display: none;
+  }
+  .session-focus__header {
+    padding-inline: 12px;
+  }
+  .session-tabs {
+    padding-inline: 12px;
+  }
+}
+
+/* Narrow laptop: open rail becomes a right overlay so chat uses full width. */
+@media (max-width: 960px) {
+  .project-workspace[data-rail='open'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .project-workspace[data-rail='open'] .project-workspace__rail {
+    position: fixed;
+    top: 52px;
+    right: 0;
+    bottom: 0;
+    z-index: 28;
+    width: min(300px, 88vw);
+    border-left: 1px solid var(--border);
+    box-shadow: -10px 0 28px rgb(24 24 27 / 0.12);
+  }
+  .project-workspace[data-rail='collapsed'] {
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+  .session-chat-column {
+    max-width: none;
+    padding-inline: 16px;
+  }
+  .session-focus__header-meta .run-status {
+    max-width: 7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 767px) {
   .app-shell { display: block; }
   .sidebar {
@@ -1810,4 +1877,36 @@ a.list-row:hover {
   .content-canvas { padding: 16px; }
   .topbar { padding: 0 16px; }
   .sidebar__disabled:hover::after { display: none; }
+
+  /* Hub: main full-bleed; open rail stays overlay from 960 rule. */
+  .content-canvas--project-workspace {
+    padding: 0;
+  }
+  .project-workspace {
+    min-height: calc(100vh - 52px);
+  }
+  .project-workspace[data-rail='collapsed'] {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+  .project-workspace[data-rail='collapsed'] .project-workspace__rail {
+    padding-top: 0;
+  }
+  .session-focus__header {
+    height: auto;
+    min-height: 48px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    overflow: visible;
+  }
+  .session-focus__header-lead,
+  .session-focus__header-meta {
+    flex-wrap: wrap;
+  }
+  .session-focus__header-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .hub-header__title {
+    font-size: 1.25rem;
+  }
 }

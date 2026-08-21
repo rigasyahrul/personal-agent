@@ -99,14 +99,24 @@ describe('visual baseline', () => {
     expect(css).toMatch(/\.message-assistant__date\[data-tooltip\]::after/);
   });
 
-  it('pads collapsed rail restore control away from top chrome', () => {
+  it('collapsed rail restore control uses 48px chrome row without extra top pad', () => {
     expect(css).toContain('.project-rail--collapsed');
     expect(css).toContain('.rail-collapsed-chrome');
     expect(css).toMatch(
-      /\.project-workspace\[data-rail=["']collapsed["']\]\s+\.project-workspace__rail\s*\{[^}]*padding-top:\s*12px/s,
+      /\.project-workspace\[data-rail=["']collapsed["']\]\s+\.project-workspace__rail\s*\{[^}]*padding-top:\s*0/s,
     );
     expect(css).toMatch(/\.rail-collapsed-chrome\s*\{[^}]*height:\s*48px/s);
     expect(css).toMatch(/\.rail-collapsed-chrome\s*\{[^}]*border-bottom:\s*1px\s+solid/s);
+  });
+
+  it('declares project-workspace responsive breakpoints', () => {
+    expect(css).toMatch(/@media\s*\(max-width:\s*1280px\)/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*1100px\)/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*960px\)/);
+    // Overlay rail on narrow open mode so chat keeps width
+    expect(css).toMatch(
+      /@media\s*\(max-width:\s*960px\)[\s\S]*?\.project-workspace\[data-rail=['"]open['"]\]\s+\.project-workspace__rail\s*\{[^}]*position:\s*fixed/s,
+    );
   });
 
   it('user bubbles use soft lavender not solid accent fill (Claude chat)', () => {
