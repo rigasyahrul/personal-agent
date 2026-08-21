@@ -208,6 +208,36 @@ describe('ProjectHubPage', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
   })
 
+  it('Enter in hub composer creates session; Shift+Enter does not submit', async () => {
+    vi.mocked(api.createProjectSession).mockImplementation(async (_pid, input) => ({
+      id: 's-enter',
+      title: input.title,
+      status: 'idle',
+      provider: 'openai',
+      model_id: 'gpt',
+    }))
+    vi.mocked(api.sendMessage).mockResolvedValue(undefined)
+
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+    const composer = await screen.findByRole('textbox', { name: /message/i })
+    await fireEvent.input(composer, { target: { value: 'Hello from Enter' } })
+
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true })
+    expect(api.createProjectSession).not.toHaveBeenCalled()
+
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
+    await waitFor(() => {
+      expect(api.createProjectSession).toHaveBeenCalledTimes(1)
+    })
+    await waitFor(() => {
+      expect(api.sendMessage).toHaveBeenCalledWith(
+        's-enter',
+        expect.objectContaining({ content: 'Hello from Enter' }),
+      )
+    })
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument()
+  })
+
   it('opens a session row into chat while keeping the rail', async () => {
     vi.mocked(api.listProjectSessions).mockResolvedValue([
       {

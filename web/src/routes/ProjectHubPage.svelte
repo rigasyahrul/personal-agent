@@ -166,6 +166,16 @@
       starting = false
     }
   }
+
+  /** Enter submits (create session); Shift+Enter inserts a newline. */
+  function onComposerKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.shiftKey) return
+    if (e.isComposing) return
+    e.preventDefault()
+    const form = (e.currentTarget as HTMLTextAreaElement).form
+    if (!form || starting || !draft.trim()) return
+    form.requestSubmit()
+  }
 </script>
 
 {#if loading}
@@ -214,6 +224,7 @@
               aria-label="Message"
               placeholder="How can I help you today?"
               rows="4"
+              onkeydown={onComposerKeydown}
             ></textarea>
             <div class="hub-composer__row">
               <button
