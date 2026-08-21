@@ -345,4 +345,15 @@ describe('ProjectHubPage', () => {
       '#/projects/p1/review',
     )
   })
+
+  it('wires the default rail preferences into the hub and ProjectRail', async () => {
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+
+    await screen.findByRole('textbox', { name: /message/i })
+    expect(document.querySelector('.project-workspace')).toHaveAttribute('data-rail', 'open')
+    expect(screen.getByRole('tab', { name: 'Config' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
 })
