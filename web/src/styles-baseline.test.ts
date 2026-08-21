@@ -65,11 +65,24 @@ describe('visual baseline', () => {
       '.session-card',
       '.message-prose',
       '.session-composer',
+      '.session-composer__card',
+      '.session-composer__model',
+      '.session-composer__send',
+      '.session-chat-column',
       '.message-copy',
       '.content-canvas--session-focus',
     ]) {
       expect(css).toContain(token);
     }
+  });
+
+  it('user bubbles use soft lavender not solid accent fill (Claude chat)', () => {
+    const userBubble = css.match(/\.message-bubble--user\s*\{[^}]*\}/);
+    expect(userBubble?.[0]).toBeTruthy();
+    // Soft surface + dark text (layout-chat.png), not brand-blue pill
+    expect(userBubble![0]).toMatch(/background:\s*(#ede9fe|#eef2ff|#f3e8ff)/i);
+    expect(userBubble![0]).not.toMatch(/background:\s*var\(--accent\)/);
+    expect(css).toMatch(/\.message-bubble--user p\s*\{[^}]*color:\s*#18181b/s);
   });
 
   it('declares hub/rail workspace tokens', () => {

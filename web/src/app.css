@@ -677,7 +677,27 @@ a.list-row:hover {
 }
 .project-workspace__main {
   min-width: 0;
-  padding: 16px 20px 32px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 52px);
+}
+.project-workspace__main > .session-focus {
+  flex: 1;
+  min-height: 0;
+}
+/* Hub start state still needs breathing room */
+.project-workspace__main > .hub-header,
+.project-workspace__main > .hub-start,
+.project-workspace__main > .hub-session-list {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+.project-workspace__main > .hub-header {
+  padding-top: 16px;
+}
+.project-workspace__main > .hub-session-list {
+  padding-bottom: 32px;
 }
 .project-workspace__rail {
   border-left: 1px solid var(--border);
@@ -843,22 +863,66 @@ a.list-row:hover {
   flex-direction: column;
   min-height: calc(100vh - 52px - 40px);
   gap: 0;
+  background: var(--panel, #fff);
 }
 .session-focus__header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
-  padding: 8px 0 10px;
+  gap: 8px 16px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  background: var(--panel, #fff);
+}
+.session-focus__header-lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+}
+.session-focus__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #18181b;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-focus__header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.session-focus__model-quiet,
+.session-focus__run {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.session-chat-column {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 44rem;
+  margin-inline: auto;
+  padding-inline: 20px;
 }
 .session-focus__messages {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px 0 16px;
+  padding: 20px 0 12px;
 }
 .message-row--other {
   justify-content: flex-start;
@@ -877,6 +941,8 @@ a.list-row:hover {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   scrollbar-width: thin;
+  padding-inline: 12px;
+  background: var(--panel, #fff);
 }
 .session-tab {
   display: inline-flex;
@@ -1010,16 +1076,78 @@ a.list-row:hover {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  display: grid;
-  gap: 8px;
+  display: flex;
+  justify-content: center;
   margin-top: auto;
-  padding: 10px 0 4px;
-  border-top: 1px solid var(--border);
+  padding: 12px 20px 20px;
+  border-top: 0;
   background: var(--panel, #fff);
 }
-.session-composer .field-textarea {
-  min-height: 72px;
-  resize: vertical;
+.session-composer__card {
+  width: 100%;
+  max-width: 44rem;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--panel, #fff);
+  box-shadow: 0 1px 2px rgb(24 24 27 / 0.04), 0 4px 16px rgb(24 24 27 / 0.06);
+}
+.session-composer__input {
+  width: 100%;
+  min-height: 52px;
+  max-height: 200px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #18181b;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  box-shadow: none;
+}
+.session-composer__input::placeholder {
+  color: #a1a1aa;
+}
+.session-composer__input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.session-composer__card:focus-within {
+  border-color: #c4b5fd;
+  box-shadow: 0 0 0 3px rgb(196 181 253 / 0.35), 0 4px 16px rgb(24 24 27 / 0.06);
+}
+.session-composer__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.session-composer__model {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fafafa;
+  color: #3f3f46;
+  font-size: 12px;
+  font-weight: 550;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-composer__send {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
 }
 .session-composer__actions {
   display: flex;
@@ -1034,8 +1162,8 @@ a.list-row:hover {
   width: 100%;
   max-width: 48rem;
   color: #18181b;
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.6;
 }
 .message-copy {
   flex-shrink: 0;
@@ -1228,14 +1356,14 @@ a.list-row:hover {
   }
 }
 
-/* Chat thread: user right, assistant/other left */
+/* Chat thread: user right, assistant/other left — Claude-style open session */
 .message-thread {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 .message-row {
   display: flex;
@@ -1247,12 +1375,12 @@ a.list-row:hover {
 .message-row--assistant {
   justify-content: flex-start;
   align-items: flex-start;
-  gap: 4px;
+  gap: 8px;
 }
 .message-bubble {
-  border-radius: 14px;
-  padding: 10px 14px;
-  max-width: min(85%, 36rem);
+  border-radius: 18px;
+  padding: 12px 16px;
+  max-width: min(88%, 34rem);
   box-shadow: none;
 }
 .message-bubble--assistant {
@@ -1262,10 +1390,10 @@ a.list-row:hover {
   color: #18181b;
 }
 .message-bubble--user {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-bottom-right-radius: 4px;
-  color: #fff;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-bottom-right-radius: 6px;
+  color: #18181b;
 }
 .message-bubble strong {
   display: block;
@@ -1281,16 +1409,17 @@ a.list-row:hover {
   opacity: 1;
 }
 .message-bubble--user strong {
-  color: rgb(255 255 255 / 0.85);
+  color: #5b21b6;
+  opacity: 0.85;
 }
 .message-bubble p {
   margin: 0;
   white-space: pre-wrap;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
 }
 .message-bubble--user p {
-  color: #fff;
+  color: #18181b;
 }
 .message-bubble--assistant p {
   color: #18181b;

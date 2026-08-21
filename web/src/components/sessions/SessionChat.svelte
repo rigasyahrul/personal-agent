@@ -541,22 +541,22 @@
 
 <div class="session-focus" data-files-open={filesOpen && showWorkspace ? '1' : '0'}>
   <header class="session-focus__header">
-    <div class="flex flex-wrap items-center gap-3 min-w-0">
+    <div class="session-focus__header-lead">
       <button type="button" class="link-accent" onclick={() => onclose?.()}>Back</button>
-      <h2 class="text-xl font-semibold" style="margin:0">{session.title}</h2>
-      <span class="badge-chip" style="background:#f4f4f5;color:#52525b"
-      >{session.provider}:{session.model_id}</span>
-      <p class="run-status text-sm text-slate-600" role="status" aria-live="polite" style="margin:0"
-      >{runLabel}</p>
+      <h2 class="session-focus__title">{session.title}</h2>
     </div>
-    {#if showWorkspace && !embeddedInHub}
-      <button
-        type="button"
-        class="btn btn--secondary"
-        aria-pressed={filesOpen}
-        onclick={toggleFiles}
-      >{filesOpen ? 'Hide files' : 'Show files'}</button>
-    {/if}
+    <div class="session-focus__header-meta">
+      <span class="session-focus__model-quiet">{session.provider}:{session.model_id}</span>
+      <p class="run-status session-focus__run" role="status" aria-live="polite">{runLabel}</p>
+      {#if showWorkspace && !embeddedInHub}
+        <button
+          type="button"
+          class="btn btn--secondary"
+          aria-pressed={filesOpen}
+          onclick={toggleFiles}
+        >{filesOpen ? 'Hide files' : 'Show files'}</button>
+      {/if}
+    </div>
   </header>
 
   <OperationBadges
@@ -617,49 +617,51 @@
   >
     <div class="session-split__main">
       {#if agentActive}
-        <ol class="messages message-thread session-focus__messages">
-          {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
-            {#if message.role === 'user'}
-              <li
-                class="message message-row message-row--user"
-                data-role="user"
-                data-raw-role={message.role}
-              >
-                <div class="message-bubble message-bubble--user">
-                  <p>{message.content}</p>
-                </div>
-              </li>
-            {:else if message.role === 'assistant' || message.role === 'model'}
-              <li
-                class="message message-row message-row--assistant"
-                data-role="assistant"
-                data-raw-role={message.role}
-              >
-                <div class="message-prose">
-                  <MarkdownView source={message.content} />
-                </div>
-                <button
-                  type="button"
-                  class="message-copy"
-                  aria-label="Copy response"
-                  onclick={() => void copyAssistant(message.content, message.sequence)}
-                >{copiedSeq === message.sequence ? 'Copied' : 'Copy'}</button>
-              </li>
-            {:else}
-              <li
-                class="message message-row message-row--other"
-                data-role="other"
-                data-raw-role={message.role}
-              >
-                <div class="message-meta text-sm text-slate-500">
-                  <span class="font-medium uppercase tracking-wide" style="font-size:11px"
-                  >{message.role}</span>
-                  <p style="margin:0.25rem 0 0; white-space:pre-wrap">{message.content}</p>
-                </div>
-              </li>
-            {/if}
-          {/each}
-        </ol>
+        <div class="session-chat-column">
+          <ol class="messages message-thread session-focus__messages">
+            {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
+              {#if message.role === 'user'}
+                <li
+                  class="message message-row message-row--user"
+                  data-role="user"
+                  data-raw-role={message.role}
+                >
+                  <div class="message-bubble message-bubble--user">
+                    <p>{message.content}</p>
+                  </div>
+                </li>
+              {:else if message.role === 'assistant' || message.role === 'model'}
+                <li
+                  class="message message-row message-row--assistant"
+                  data-role="assistant"
+                  data-raw-role={message.role}
+                >
+                  <div class="message-prose">
+                    <MarkdownView source={message.content} />
+                  </div>
+                  <button
+                    type="button"
+                    class="message-copy"
+                    aria-label="Copy response"
+                    onclick={() => void copyAssistant(message.content, message.sequence)}
+                  >{copiedSeq === message.sequence ? 'Copied' : 'Copy'}</button>
+                </li>
+              {:else}
+                <li
+                  class="message message-row message-row--other"
+                  data-role="other"
+                  data-raw-role={message.role}
+                >
+                  <div class="message-meta text-sm text-slate-500">
+                    <span class="font-medium uppercase tracking-wide" style="font-size:11px"
+                    >{message.role}</span>
+                    <p style="margin:0.25rem 0 0; white-space:pre-wrap">{message.content}</p>
+                  </div>
+                </li>
+              {/if}
+            {/each}
+          </ol>
+        </div>
       {:else if activeFileTab}
         <SessionFileTab
           sessionId={session.id}
@@ -681,20 +683,25 @@
         inert={!agentActive ? true : undefined}
         onsubmit={send}
       >
-        <textarea
-          class="field-textarea"
-          name="message"
-          aria-label="Message"
-          required
-          rows="3"
-          bind:value={draft}
-        ></textarea>
-        <div class="session-composer__actions">
-          <button
-            type="submit"
-            class="btn btn--primary"
-            disabled={sendDisabled}
-          >Send</button>
+        <div class="session-composer__card">
+          <textarea
+            class="session-composer__input"
+            name="message"
+            aria-label="Message"
+            placeholder="Reply…"
+            required
+            rows="2"
+            bind:value={draft}
+          ></textarea>
+          <div class="session-composer__toolbar">
+            <span class="session-composer__model">{session.provider}:{session.model_id}</span>
+            <button
+              type="submit"
+              class="session-composer__send btn btn--primary"
+              disabled={sendDisabled}
+              aria-label="Send"
+            >Send</button>
+          </div>
         </div>
       </form>
     </div>

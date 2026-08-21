@@ -182,6 +182,24 @@ describe('SessionChat', () => {
     expect(composer.closest('form')?.className).toMatch(/session-composer/)
   })
 
+  it('composer shows Reply… placeholder and Claude chat card chrome', async () => {
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000 },
+    })
+    const composer = await screen.findByLabelText('Message')
+    expect(composer).toHaveAttribute('placeholder', 'Reply…')
+    const form = composer.closest('form')
+    expect(form?.className).toMatch(/session-composer/)
+    expect(form?.querySelector('.session-composer__card')).toBeTruthy()
+    expect(form?.querySelector('.session-composer__model')).toBeTruthy()
+    expect(form?.querySelector('.session-composer__model')?.textContent).toMatch(
+      /openai:gpt/,
+    )
+    const send = form?.querySelector('button[type="submit"]')
+    expect(send).toBeTruthy()
+    expect(send?.className).toMatch(/session-composer__send|btn--primary/)
+  })
+
   const memStorage = () => {
     const m = new Map<string, string>()
     return {
