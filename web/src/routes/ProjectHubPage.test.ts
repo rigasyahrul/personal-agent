@@ -146,7 +146,7 @@ describe('ProjectHubPage', () => {
     vi.mocked(api.sendMessage).mockRejectedValue(new Error('send failed'))
     vi.mocked(api.listMessages).mockResolvedValue([])
     vi.mocked(api.currentRun).mockResolvedValue(null)
-    // initial load empty; after Back reload returns created session
+    // initial load empty; after return-to-hub reload returns created session
     vi.mocked(api.listProjectSessions)
       .mockReset()
       .mockResolvedValueOnce([])
@@ -163,11 +163,13 @@ describe('ProjectHubPage', () => {
     })
     await fireEvent.click(screen.getByRole('button', { name: /^send$/i }))
 
-    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sleep Protocol' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
     expect(api.createProjectSession).toHaveBeenCalledTimes(1)
     const createArg = vi.mocked(api.createProjectSession).mock.calls[0]![1] as { title: string }
     expect(createArg.title).toMatch(/^[a-z]+ [a-z]+$/)
-    await fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    await fireEvent.click(screen.getByRole('link', { name: 'Sleep Protocol' }))
     expect(await screen.findByRole('button', { name: new RegExp(createArg.title, 'i') })).toBeInTheDocument()
   })
 
@@ -210,8 +212,10 @@ describe('ProjectHubPage', () => {
       )
     })
 
-    expect(await screen.findByRole('heading', { name: createdTitle })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(screen.getByText(createdTitle)).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Sleep Protocol' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
   })
 
   it('Enter in hub composer creates session; Shift+Enter does not submit', async () => {
@@ -241,7 +245,9 @@ describe('ProjectHubPage', () => {
         expect.objectContaining({ content: 'Hello from Enter' }),
       )
     })
-    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sleep Protocol' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
   })
 
   it('opens a session row into chat while keeping the rail', async () => {
@@ -258,12 +264,14 @@ describe('ProjectHubPage', () => {
     render(ProjectHubPage, { props: { projectId: 'p1' } })
 
     await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
-    expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(screen.getByText('Test 1')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Sleep Protocol' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
     expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
   })
 
-  it('clicking a session row shows chat and Back returns to prompt', async () => {
+  it('clicking a session row shows chat and project crumb returns to prompt', async () => {
     vi.mocked(api.listProjectSessions).mockResolvedValue([
       {
         id: 's1',
@@ -279,15 +287,19 @@ describe('ProjectHubPage', () => {
     expect(await screen.findByRole('textbox', { name: /message/i })).toBeVisible()
     await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
 
-    expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(screen.getByText('Test 1')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Sleep Protocol' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
     expect(screen.queryByRole('heading', { name: /how can i help you today/i })).toBeNull()
     expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    await fireEvent.click(screen.getByRole('link', { name: 'Sleep Protocol' }))
 
     expect(await screen.findByRole('textbox', { name: /message/i })).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+    // Hub start also has breadcrumbs; session leaf should be gone.
+    expect(screen.queryByText('Test 1', { selector: '[aria-current="page"]' })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Sleep Protocol' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument()
   })
 
@@ -319,7 +331,8 @@ describe('ProjectHubPage', () => {
     render(ProjectHubPage, { props: { projectId: 'p1' } })
 
     await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
-    expect(await screen.findByRole('heading', { name: 'Test 1' })).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(screen.getByText('Test 1')).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByRole('button', { name: /show files/i })).toBeNull()
 
     await fireEvent.click(screen.getByRole('tab', { name: 'Files' }))

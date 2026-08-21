@@ -140,15 +140,17 @@
   </svg>
 {/snippet}
 
-<div class="project-rail">
+<div class="project-rail" class:project-rail--collapsed={activeMode === 'collapsed'}>
   {#if activeMode === 'collapsed'}
-    <button
-      type="button"
-      class="rail-icon"
-      aria-label="Show canvas"
-      title="Show canvas"
-      onclick={() => onModeChange?.('open')}
-    >{@render icon('show-canvas')}</button>
+    <div class="rail-collapsed-chrome">
+      <button
+        type="button"
+        class="rail-icon"
+        aria-label="Show canvas"
+        title="Show canvas"
+        onclick={() => onModeChange?.('open')}
+      >{@render icon('show-canvas')}</button>
+    </div>
   {:else}
     <div class="rail-iconbar" role="toolbar" aria-label="Project rail">
       <div class="rail-iconbar__group" role="tablist" aria-label="Project rail panels">

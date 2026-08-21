@@ -5,6 +5,7 @@
   import type {
     ChatMessage,
     OperationStatus,
+    Project,
     RunStatus,
     Session,
     WorkspaceFile,
@@ -24,6 +25,7 @@
     writeFilesBarWidthPct,
   } from '../../lib/session-prefs'
   import { formatMessageDateTime, formatSessionDate } from '../../lib/format-session-date'
+  import Breadcrumbs from '../Breadcrumbs.svelte'
   import MarkdownView from '../markdown/MarkdownView.svelte'
   import { createSessionPoller } from './session-poller'
   import OperationBadges from './OperationBadges.svelte'
@@ -59,6 +61,7 @@
   let {
     session,
     projectId,
+    project: projectProp = null,
     pollInterval = 1500,
     onclose,
     uuid = () => crypto.randomUUID(),
@@ -69,6 +72,8 @@
   }: {
     session: Session
     projectId: string
+    /** When provided (hub), used for header breadcrumbs without an extra fetch. */
+    project?: Project | null
     pollInterval?: number
     onclose?: () => void
     uuid?: () => string
@@ -80,6 +85,9 @@
     /** When true, hide internal Show files toggle / SessionFilesBar (hub ProjectRail owns files). */
     embeddedInHub?: boolean
   } = $props()
+
+  let loadedProject = $state<Project | null>(null)
+  const breadcrumbProject = $derived(projectProp ?? loadedProject)
 
   let messages = $state<ChatMessage[]>([])
   let run = $state<RunStatus | null>(null)
@@ -483,6 +491,27 @@
     resetForSession(value)
   })
 
+  $effect(() => {
+    void projectId
+    void projectProp
+    if (projectProp) {
+      loadedProject = projectProp
+      return
+    }
+    let cancelled = false
+    void api
+      .getProject(projectId)
+      .then((p) => {
+        if (!cancelled) loadedProject = p
+      })
+      .catch(() => {
+        if (!cancelled) loadedProject = null
+      })
+    return () => {
+      cancelled = true
+    }
+  })
+
   onMount(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
     const mql = window.matchMedia(NARROW_MQ)
@@ -543,8 +572,16 @@
 <div class="session-focus" data-files-open={filesOpen && showWorkspace ? '1' : '0'}>
   <header class="session-focus__header">
     <div class="session-focus__header-lead">
-      <button type="button" class="link-accent" onclick={() => onclose?.()}>Back</button>
-      <h2 class="session-focus__title">{session.title}</h2>
+      {#if breadcrumbProject}
+        <Breadcrumbs
+          project={breadcrumbProject}
+          leaf={session.title}
+          onProjectClick={onclose}
+        />
+      {:else}
+        <button type="button" class="link-accent" onclick={() => onclose?.()}>Back</button>
+        <h2 class="session-focus__title">{session.title}</h2>
+      {/if}
     </div>
     <div class="session-focus__header-meta">
       <span class="session-focus__model-quiet">{session.provider}:{session.model_id}</span>

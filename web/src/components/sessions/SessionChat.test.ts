@@ -52,7 +52,40 @@ describe('SessionChat', () => {
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
     vi.mocked(api.sendMessage).mockReset()
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
-    vi.mocked(api.getProject).mockResolvedValue({ id: 'p1', name: 'P', note_count: 0 })
+    vi.mocked(api.getProject).mockReset().mockResolvedValue({
+      id: 'p1',
+      name: 'Sleep Protocol',
+      vault_id: 'v1',
+      vault_name: 'HEALTH',
+      note_count: 0,
+    })
+  })
+
+  it('shows breadcrumbs instead of Back + title when project is known', async () => {
+    const onclose = vi.fn()
+    render(SessionChat, {
+      props: {
+        session: { ...session, title: 'Test 1' },
+        projectId: 'p1',
+        project: {
+          id: 'p1',
+          name: 'Sleep Protocol',
+          vault_id: 'v1',
+          vault_name: 'HEALTH',
+          note_count: 0,
+        },
+        onclose,
+        pollInterval: 60_000,
+      },
+    })
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sleep Protocol' })).toBeInTheDocument()
+    expect(screen.getByText('Test 1')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Test 1' })).toBeNull()
+
+    await fireEvent.click(screen.getByRole('link', { name: 'Sleep Protocol' }))
+    expect(onclose).toHaveBeenCalledTimes(1)
   })
 
   it('posts once with one stable request_key and retains draft after failure', async () => {

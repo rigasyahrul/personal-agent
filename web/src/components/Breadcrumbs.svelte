@@ -6,9 +6,12 @@
   let {
     project,
     leaf,
+    onProjectClick,
   }: {
     project: Project
     leaf?: string
+    /** When set (e.g. open session), project crumb closes/returns without relying on same-hash navigation. */
+    onProjectClick?: () => void
   } = $props()
 
   const vaulted = $derived(!isUnfiled(project) && Boolean(project.vault_id))
@@ -16,6 +19,12 @@
     vaulted ? `#/vaults/${encodeURIComponent(project.vault_id!)}` : '',
   )
   const projectHref = $derived(`#/projects/${encodeURIComponent(project.id)}`)
+
+  function handleProjectClick(e: MouseEvent) {
+    if (!onProjectClick) return
+    e.preventDefault()
+    onProjectClick()
+  }
 </script>
 
 <nav aria-label="Breadcrumb" class="text-sm text-slate-600">
@@ -46,6 +55,7 @@
           class="link-accent max-w-[12rem] truncate"
           href={projectHref}
           title={project.name}
+          onclick={handleProjectClick}
         >{project.name}</a>
         <span aria-hidden="true" class="text-slate-400">/</span>
       {:else}

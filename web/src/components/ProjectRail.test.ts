@@ -143,6 +143,8 @@ describe('ProjectRail', () => {
 
     expect(screen.getAllByRole('button')).toHaveLength(1)
     expect(screen.getByRole('button', { name: 'Show canvas' })).toBeInTheDocument()
+    expect(document.querySelector('.project-rail--collapsed')).toBeTruthy()
+    expect(document.querySelector('.rail-collapsed-chrome')).toBeTruthy()
     expect(screen.queryByRole('tab', { name: 'Config' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Expand workspace' })).not.toBeInTheDocument()

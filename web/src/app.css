@@ -809,6 +809,33 @@ a.list-row:hover {
   min-height: 0;
   flex: 1;
 }
+/* Collapsed strip: pad restore control so it is not flush under the topbar. */
+.project-rail--collapsed {
+  align-items: center;
+  padding-top: 10px;
+}
+.rail-collapsed-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 4px;
+}
+.session-focus__header-lead :global(nav[aria-label='Breadcrumb']) {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.2;
+}
+.session-focus__header-lead :global(nav[aria-label='Breadcrumb'] ol) {
+  flex-wrap: nowrap;
+}
+.session-focus__header-lead :global(nav[aria-label='Breadcrumb'] .font-medium) {
+  max-width: 14rem;
+}
+.project-workspace[data-rail='collapsed'] .project-rail--collapsed {
+  padding-top: 10px;
+}
 .hub-header {
   display: flex;
   flex-wrap: wrap;

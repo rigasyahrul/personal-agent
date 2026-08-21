@@ -1,6 +1,6 @@
 // web/src/components/Breadcrumbs.test.ts
-import { cleanup, render, screen } from '@testing-library/svelte'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/svelte'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import Breadcrumbs from './Breadcrumbs.svelte'
 
 afterEach(cleanup)
@@ -39,5 +39,14 @@ describe('Breadcrumbs', () => {
   it('marks the project as current when there is no leaf', () => {
     render(Breadcrumbs, { props: { project: vaultedProject } })
     expect(screen.getByText('Sleep')).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('invokes onProjectClick when project crumb is clicked with a leaf', async () => {
+    const onProjectClick = vi.fn()
+    render(Breadcrumbs, {
+      props: { project: vaultedProject, leaf: 'Chat', onProjectClick },
+    })
+    await fireEvent.click(screen.getByRole('link', { name: 'Sleep' }))
+    expect(onProjectClick).toHaveBeenCalledTimes(1)
   })
 })

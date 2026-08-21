@@ -45,6 +45,11 @@ describe('SessionChat focus invariant', () => {
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
     vi.mocked(api.sendMessage).mockReset()
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
+    vi.mocked(api.getProject).mockReset().mockResolvedValue({
+      id: 'p1',
+      name: 'P',
+      note_count: 0,
+    })
   })
 
   it('patches messages and run state without replacing the focused composer', async () => {

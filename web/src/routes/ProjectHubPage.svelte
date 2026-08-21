@@ -230,6 +230,7 @@
           <SessionChat
             session={activeSession}
             {projectId}
+            {project}
             onclose={closeSession}
             embeddedInHub={true}
             bind:openFileRequest

@@ -99,6 +99,12 @@ describe('visual baseline', () => {
     expect(css).toMatch(/\.message-assistant__date\[data-tooltip\]::after/);
   });
 
+  it('pads collapsed rail restore control away from top chrome', () => {
+    expect(css).toContain('.project-rail--collapsed');
+    expect(css).toContain('.rail-collapsed-chrome');
+    expect(css).toMatch(/\.project-rail--collapsed\s*\{[^}]*padding-top:\s*10px/s);
+  });
+
   it('user bubbles use soft lavender not solid accent fill (Claude chat)', () => {
     const userBubble = css.match(/\.message-bubble--user\s*\{[^}]*\}/);
     expect(userBubble?.[0]).toBeTruthy();
