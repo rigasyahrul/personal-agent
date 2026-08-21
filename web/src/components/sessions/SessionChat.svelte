@@ -302,6 +302,16 @@
     }
   }
 
+  /** Enter sends; Shift+Enter inserts a newline (same as hub composer). */
+  function onComposerKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.shiftKey) return
+    if (e.isComposing) return
+    e.preventDefault()
+    if (sendDisabled || !draft.trim()) return
+    const form = (e.currentTarget as HTMLTextAreaElement).form
+    form?.requestSubmit()
+  }
+
   async function copyAssistant(text: string, sequence: number) {
     try {
       await navigator.clipboard.writeText(text)
@@ -774,6 +784,7 @@
             required
             rows="2"
             bind:value={draft}
+            onkeydown={onComposerKeydown}
           ></textarea>
           <div class="session-composer__toolbar">
             <span class="session-composer__model">{session.provider}:{session.model_id}</span>

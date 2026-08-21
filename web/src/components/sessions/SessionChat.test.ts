@@ -157,6 +157,26 @@ describe('SessionChat', () => {
     await waitFor(() => expect(composer).toHaveValue(''))
   })
 
+  it('Enter sends message; Shift+Enter does not submit', async () => {
+    vi.mocked(api.sendMessage).mockResolvedValue(null)
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000, uuid: () => 'enter-key' },
+    })
+    const composer = await screen.findByLabelText('Message')
+    await fireEvent.input(composer, { target: { value: 'Hello from Enter' } })
+
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true })
+    expect(api.sendMessage).not.toHaveBeenCalled()
+
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
+    await waitFor(() => {
+      expect(api.sendMessage).toHaveBeenCalledWith(
+        session.id,
+        expect.objectContaining({ content: 'Hello from Enter', request_key: 'enter-key' }),
+      )
+    })
+  })
+
   it('renders assistant as bare prose without Assistant label', async () => {
     vi.mocked(api.listMessages).mockResolvedValue([
       { sequence: 1, role: 'user', content: 'hello from me' },
