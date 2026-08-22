@@ -87,7 +87,8 @@ Task 12: complete (P0 gate empty commit, pushed)
 | 21 | PASS requesting-code-review (no-amp) | `fa80874` |
 | 22 | PASS requesting-code-review (no-amp) | `76ca6dd` |
 | 23 | PASS requesting-code-review (no-amp) | `e365cd9` |
-| 24–35 | | |
+| 24 | PASS requesting-code-review (no-amp) | `2591eac` |
+| 25–35 | | |
 
 Ledger:
 ```
@@ -99,6 +100,8 @@ Task 22: requesting-code-review PASS (no-amp, Critical none, Important none)
 Task 22: complete (commit 76ca6dd)
 Task 23: requesting-code-review PASS (no-amp, Critical none, Important none)
 Task 23: complete (commit e365cd9)
+Task 24: requesting-code-review PASS (no-amp, Critical none, Important none)
+Task 24: complete (commit 2591eac)
 ```
 
 ### P2
@@ -138,6 +141,7 @@ Task 23: complete (commit e365cd9)
 
 ## Last updated
 
+- 2026-08-23 — Task 24 complete (`2591eac`); requesting-code-review no-amp
 - 2026-08-23 — Task 23 complete (`e365cd9`); requesting-code-review no-amp
 - 2026-08-23 — Task 22 complete (`76ca6dd`); requesting-code-review no-amp
 - 2026-08-23 — Task 21 complete (`fa80874`); requesting-code-review no-amp (Amp credit gone; Pi terminal)
