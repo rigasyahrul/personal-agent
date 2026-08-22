@@ -503,7 +503,8 @@ Source drafts: `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge-draf
 | Full re-review | `T-01a02a41` | NOT safe — FS/migrator/join/scope/CAS |
 | P0 confirmation | `T-01a02a48` | **Safe to start P0** |
 | P1–P3 E2E | `T-01a02a53-4298-763a-ad6d-eb9311cf226e` | NOT safe — tool dispatch Critical + Important compound/search/UI |
-| P1–P3 fixes | this commit | Canonical+drafts patched; confirmation re-review next |
+| P1–P3 fixes | `8e17663` | Canonical+drafts patched |
+| P1–P3 confirmation | `T-01a02a59-950a-742a-bc8f-931feceadaec` | **Safe P1→P2→P3 after P0** (Minor only) |
 
 ---
 
