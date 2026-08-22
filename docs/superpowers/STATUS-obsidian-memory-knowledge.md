@@ -15,7 +15,7 @@
 | Phase | Tasks | Status | Branch (suggested) | Depends | Notes |
 |-------|-------|--------|--------------------|---------|-------|
 | **P0** Layout + prompt | 1–12 | `done` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
-| **P1** Compound | 20–35 | `ready` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
+| **P1** Compound | 20–35 | `in_progress` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
 | **P2** Obsidian links | 40–52 | `blocked` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
 | **P3** Search + tools | 60–72 | `blocked` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
 | **Ship** whole branch | — | `blocked` | merge to main | P0–P3 + whole-branch review | Final consulting-grok-review + push |
