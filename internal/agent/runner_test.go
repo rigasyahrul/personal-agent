@@ -115,7 +115,9 @@ func TestRunnerExecutesRootedToolsAndPreservesProtocol(t *testing.T) {
 		t.Fatalf("requests = %#v", provider.requests)
 	}
 	followup := provider.requests[1].Messages
-	if len(followup) != 3 || len(followup[1].ToolCalls) != 1 || followup[1].ToolCalls[0] != call || followup[2].ToolCallID != call.ID {
+	// system prompt + user + assistant(tool_calls) + tool result
+	if len(followup) != 4 || followup[0].Role != domain.MessageRoleSystem ||
+		len(followup[2].ToolCalls) != 1 || followup[2].ToolCalls[0] != call || followup[3].ToolCallID != call.ID {
 		t.Fatalf("follow-up protocol = %#v", followup)
 	}
 	history, err := messages.List(context.Background(), sessionID)
@@ -227,8 +229,12 @@ func TestRunnerStartIsSynchronousIdempotentAndUsesImmutableModel(t *testing.T) {
 		t.Fatalf("retry = %q, %v", retryID, err)
 	}
 	runner.Wait()
-	if provider.calls != 1 || provider.req.Model != "gpt-fixed" || len(provider.req.Messages) != 1 || provider.req.Messages[0].Content != "question" || len(provider.req.Tools) != 0 {
+	if provider.calls != 1 || provider.req.Model != "gpt-fixed" || len(provider.req.Tools) != 0 {
 		t.Fatalf("provider calls/request = %d, %#v", provider.calls, provider.req)
+	}
+	if len(provider.req.Messages) < 2 || provider.req.Messages[0].Role != domain.MessageRoleSystem ||
+		provider.req.Messages[len(provider.req.Messages)-1].Content != "question" {
+		t.Fatalf("provider messages = %#v", provider.req.Messages)
 	}
 	if provider.req.Parameters["temperature"] != 0.2 {
 		t.Fatalf("parameters = %#v", provider.req.Parameters)
@@ -245,6 +251,106 @@ func TestRunnerStartIsSynchronousIdempotentAndUsesImmutableModel(t *testing.T) {
 	history, err := messages.List(context.Background(), sessionID)
 	if err != nil || len(history) != 2 || history[0].Role != domain.MessageRoleUser || history[1].Content != "answer" {
 		t.Fatalf("history = %#v, %v", history, err)
+	}
+	// Injected system prompt is ephemeral — never persisted.
+	for _, m := range history {
+		if m.Role == domain.MessageRoleSystem {
+			t.Fatalf("system prompt must not be persisted: %#v", m)
+		}
+	}
+}
+
+func TestRunnerInjectsScopedPromptSystemMessage(t *testing.T) {
+	provider := &fakeProvider{}
+	db, _ := testutil.TempDB(t)
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	dataDir := t.TempDir()
+
+	// Project AGENTS.md on disk — must appear in the leading system message.
+	projectRoot := filepath.Join(dataDir, "files", "vaults", "v1", "projects", "p1")
+	if err := os.MkdirAll(projectRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	const agentsBody = "PROJECT_AGENTS_SCOPED_BODY"
+	if err := os.WriteFile(filepath.Join(projectRoot, "AGENTS.md"), []byte(agentsBody), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	ts := now.Format(time.RFC3339Nano)
+	if _, err := db.Exec(`INSERT INTO vaults(id,name,created_at,updated_at) VALUES('v1','Vault',?,?);
+		INSERT INTO projects(id,vault_id,name,created_at,updated_at) VALUES('p1','v1','Project',?,?);
+		INSERT INTO sessions
+		(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at)
+		VALUES('s-proj','project','v1','p1','active','openai','gpt-fixed','{}','{}','Chat',?,?)`,
+		ts, ts, ts, ts, ts, ts); err != nil {
+		t.Fatal(err)
+	}
+	// Stale PA_RUNTIME_V1 system message in history must be stripped (no stacking).
+	stale := "PA_RUNTIME_V1\nstale-runtime-blob-should-be-dropped"
+	if _, err := db.Exec(`INSERT INTO messages
+		(id,session_id,sequence,role,content,status,created_at)
+		VALUES('m-stale','s-proj',1,'system',?,'complete',?)`, stale, now.Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+
+	runs := &store.RunStore{DB: db, Now: func() time.Time { return now }}
+	messages := &store.MessageStore{DB: db, Now: func() time.Time { return now }}
+	runner := &Runner{
+		DB: db, DataDir: dataDir, Provider: provider, Messages: messages, Runs: runs,
+		Sessions: &store.SessionStore{DB: db},
+	}
+
+	if _, err := runner.Start(context.Background(), "s-proj", "req-prompt", "hello project"); err != nil {
+		t.Fatal(err)
+	}
+	runner.Wait()
+
+	if provider.calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", provider.calls)
+	}
+	msgs := provider.req.Messages
+	if len(msgs) < 2 {
+		t.Fatalf("want system + history messages, got %#v", msgs)
+	}
+	if msgs[0].Role != domain.MessageRoleSystem {
+		t.Fatalf("messages[0].Role = %q, want system", msgs[0].Role)
+	}
+	if !strings.HasPrefix(msgs[0].Content, "PA_RUNTIME_V1") {
+		t.Fatalf("system content must start with PA_RUNTIME_V1, got %q", msgs[0].Content[:min(60, len(msgs[0].Content))])
+	}
+	if !strings.Contains(msgs[0].Content, agentsBody) {
+		t.Fatalf("system content missing AGENTS body %q; got %q", agentsBody, msgs[0].Content)
+	}
+	// Exactly one PA_RUNTIME_V1 marker in the full request (stale history stripped).
+	joined := ""
+	for _, m := range msgs {
+		joined += m.Content + "\n"
+	}
+	if n := strings.Count(joined, "PA_RUNTIME_V1"); n != 1 {
+		t.Fatalf("PA_RUNTIME_V1 count = %d, want 1 (no stacking); messages=%#v", n, msgs)
+	}
+	// User message still present after system prefix.
+	last := msgs[len(msgs)-1]
+	if last.Role != domain.MessageRoleUser || last.Content != "hello project" {
+		t.Fatalf("last message = %#v, want user hello project", last)
+	}
+
+	// Ephemeral: store must not gain a new system message from the injection.
+	history, err := messages.List(context.Background(), "s-proj")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var systemCount int
+	for _, m := range history {
+		if m.Role == domain.MessageRoleSystem {
+			systemCount++
+			if m.Content != stale {
+				t.Fatalf("unexpected system message persisted: %q", m.Content)
+			}
+		}
+	}
+	if systemCount != 1 {
+		t.Fatalf("persisted system messages = %d, want only the pre-seeded stale one", systemCount)
 	}
 }
 

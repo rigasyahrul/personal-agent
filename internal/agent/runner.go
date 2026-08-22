@@ -117,8 +117,12 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 	for _, fixed := range []string{"model", "messages", "tools"} {
 		delete(parameters, fixed)
 	}
-	messages := make([]ChatMessage, 0, len(history))
+	messages := make([]ChatMessage, 0, len(history)+1)
 	for _, message := range history {
+		// Skip prior injected runtime prompts so they never stack across runs.
+		if message.Role == domain.MessageRoleSystem && strings.HasPrefix(message.Content, runtimeMarker) {
+			continue
+		}
 		converted := ChatMessage{Role: message.Role, Content: message.Content}
 		if message.ToolCallID != nil {
 			converted.ToolCallID = *message.ToolCallID
@@ -130,6 +134,28 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 		}
 		messages = append(messages, converted)
 	}
+	// Ephemeral scoped system prompt (not persisted to Messages store).
+	vaultID, projectID := "", ""
+	if session.VaultID != nil {
+		vaultID = *session.VaultID
+	}
+	if session.ProjectID != nil {
+		projectID = *session.ProjectID
+	}
+	sections, err := BuildSessionPrompt(BuildPromptInput{
+		DataDir:   r.DataDir,
+		Home:      session.Home,
+		VaultID:   vaultID,
+		ProjectID: projectID,
+	})
+	if err != nil {
+		return fmt.Errorf("build session prompt: %w", err)
+	}
+	systemMsg := ChatMessage{
+		Role:    domain.MessageRoleSystem,
+		Content: joinPromptSections(sections),
+	}
+	messages = append([]ChatMessage{systemMsg}, messages...)
 	if r.Provider == nil {
 		return fmt.Errorf("provider %q is unavailable", session.Provider)
 	}
@@ -215,6 +241,38 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 }
 
 func safeToolError() string { return `{"error":"workspace tool request rejected"}` }
+
+// joinPromptSections concatenates BuildSessionPrompt sections into one system message body.
+// Runtime section content already starts with PA_RUNTIME_V1; other sections get ## {Name} headers.
+func joinPromptSections(sections []PromptSection) string {
+	var b strings.Builder
+	for i, s := range sections {
+		if i > 0 {
+			b.WriteString("\n\n")
+		}
+		if s.Name == "runtime" {
+			b.WriteString(s.Content)
+			continue
+		}
+		b.WriteString("## ")
+		// Title-case common names for readability (AGENTS, SYSTEM, …).
+		switch s.Name {
+		case "agents":
+			b.WriteString("AGENTS")
+		case "system":
+			b.WriteString("SYSTEM")
+		case "soul":
+			b.WriteString("SOUL")
+		case "lessons":
+			b.WriteString("lessons")
+		default:
+			b.WriteString(s.Name)
+		}
+		b.WriteByte('\n')
+		b.WriteString(s.Content)
+	}
+	return b.String()
+}
 
 func (r *Runner) now() time.Time {
 	if r.Clock != nil {
