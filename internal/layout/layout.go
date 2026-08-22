@@ -90,3 +90,81 @@ func EnsureProjectDirs(dataDir, vaultID, projectID string) error {
 	complete = true
 	return nil
 }
+
+// defaultAgentsMemoryBlock is the Canonical AGENTS Memory section (exact markdown).
+const defaultAgentsMemoryBlock = "## Memory\n" +
+	"- Lesson index: [[memory/lessons|lessons.md]] — scan titles when stuck or before reinventing a fix.\n" +
+	"- Detail files live under `memory/YYYYMMDD-HHmm-*.md`; open only what the index suggests.\n" +
+	"- Prefer codifying durable rules here; keep evidence in memory (compound ≠ diary).\n"
+
+// lessonsScaffold is the thin index seed for memory/lessons.md.
+const lessonsScaffold = "# Lessons\n" +
+	"\n" +
+	"> Thin index only. Detail files: `memory/YYYYMMDD-HHmm-slug.md`.\n" +
+	"\n"
+
+// EnsureGlobalKnowledgeDirs seeds GlobalRoot with instructions, memory, and compounding skill.
+// Existing files are left unchanged (idempotent).
+func EnsureGlobalKnowledgeDirs(dataDir string, skillMarkdown string) error {
+	return ensureKnowledgeScope(GlobalRoot(dataDir), skillMarkdown, true)
+}
+
+// EnsureVaultKnowledgeDirs seeds VaultRoot with memory + compounding skill only.
+// Per Canonical: no vault SOUL/SYSTEM/AGENTS.
+func EnsureVaultKnowledgeDirs(dataDir, vaultID string, skillMarkdown string) error {
+	return ensureKnowledgeScope(VaultRoot(dataDir, vaultID), skillMarkdown, false)
+}
+
+// EnsureProjectKnowledge seeds ProjectRoot with instructions, memory, and compounding skill.
+// Call after EnsureProjectDirs. Existing files are left unchanged (idempotent).
+func EnsureProjectKnowledge(dataDir, vaultID, projectID string, skillMarkdown string) error {
+	return ensureKnowledgeScope(ProjectRoot(dataDir, vaultID, projectID), skillMarkdown, true)
+}
+
+// ensureKnowledgeScope creates memory/ and .agents/skills/compounding/, seeds
+// skill + lessons when missing, and optionally seeds SOUL/SYSTEM/AGENTS.
+func ensureKnowledgeScope(scopeRoot string, skillMarkdown string, withInstructions bool) error {
+	if err := os.MkdirAll(MemoryDir(scopeRoot), 0700); err != nil {
+		return fmt.Errorf("create memory dir: %w", err)
+	}
+	skillDir := filepath.Join(AgentsSkillsDir(scopeRoot), "compounding")
+	if err := os.MkdirAll(skillDir, 0700); err != nil {
+		return fmt.Errorf("create compounding skill dir: %w", err)
+	}
+
+	if err := writeFileIfMissing(CompoundingSkillPath(scopeRoot), []byte(skillMarkdown), 0600); err != nil {
+		return fmt.Errorf("seed skill: %w", err)
+	}
+	if err := writeFileIfMissing(LessonsPath(scopeRoot), []byte(lessonsScaffold), 0600); err != nil {
+		return fmt.Errorf("seed lessons: %w", err)
+	}
+
+	if withInstructions {
+		if err := writeFileIfMissing(InstructionPath(scopeRoot, "SOUL.md"), []byte("\n"), 0600); err != nil {
+			return fmt.Errorf("seed SOUL.md: %w", err)
+		}
+		if err := writeFileIfMissing(InstructionPath(scopeRoot, "SYSTEM.md"), []byte("\n"), 0600); err != nil {
+			return fmt.Errorf("seed SYSTEM.md: %w", err)
+		}
+		if err := writeFileIfMissing(InstructionPath(scopeRoot, "AGENTS.md"), []byte(defaultAgentsMemoryBlock), 0600); err != nil {
+			return fmt.Errorf("seed AGENTS.md: %w", err)
+		}
+	}
+	return nil
+}
+
+// writeFileIfMissing creates path with content only when the file does not exist.
+func writeFileIfMissing(path string, content []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer f.Close()
+	if _, err := f.Write(content); err != nil {
+		return err
+	}
+	return nil
+}
