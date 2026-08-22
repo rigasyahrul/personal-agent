@@ -130,3 +130,25 @@ func TestDefaultStaticDirectoryIsViteDist(t *testing.T) {
 		t.Fatal("default static directory must be web/dist")
 	}
 }
+
+func TestNewWithDependenciesSeedsGlobalKnowledge(t *testing.T) {
+	dataDir := t.TempDir()
+	application, err := NewWithDependencies(context.Background(), config.Config{DataDir: dataDir}, Dependencies{
+		DisableBackgroundWorkers: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Close()
+
+	root := layout.GlobalRoot(dataDir)
+	if _, err := os.Stat(filepath.Join(root, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(layout.CompoundingSkillPath(root)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(layout.LessonsPath(root)); err != nil {
+		t.Fatal(err)
+	}
+}

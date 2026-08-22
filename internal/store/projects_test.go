@@ -20,7 +20,7 @@ func TestVaultAndProjectCRUD(t *testing.T) {
 	c := &clock.FakeClock{T: time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC)}
 	ctx := context.Background()
 
-	vs := store.NewVaultStore(database, c)
+	vs := store.NewVaultStore(database, dataDir, c)
 	v, err := vs.Create(ctx, " Learning ")
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +33,18 @@ func TestVaultAndProjectCRUD(t *testing.T) {
 		t.Fatalf("vaults = %+v, err = %v", vaults, err)
 	}
 
+	// Vault create seeds memory + compounding skill only (no AGENTS.md at vault root).
+	vaultRoot := layout.VaultRoot(dataDir, v.ID)
+	if _, err := os.Stat(layout.LessonsPath(vaultRoot)); err != nil {
+		t.Fatalf("vault lessons seed: %v", err)
+	}
+	if _, err := os.Stat(layout.CompoundingSkillPath(vaultRoot)); err != nil {
+		t.Fatalf("vault skill seed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(vaultRoot, "AGENTS.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("vault root AGENTS.md = %v, want not exist", err)
+	}
+
 	ps := store.NewProjectStore(database, dataDir, c)
 	p, err := ps.Create(ctx, " Go ", v.ID)
 	if err != nil {
@@ -41,10 +53,18 @@ func TestVaultAndProjectCRUD(t *testing.T) {
 	if p.VaultID != v.ID || p.Name != "Go" {
 		t.Fatalf("project = %+v", p)
 	}
+	root := layout.ProjectRoot(dataDir, v.ID, p.ID)
 	for _, dir := range []string{"source", "memory", "soul"} {
-		if info, err := os.Stat(filepath.Join(layout.ProjectRoot(dataDir, v.ID, p.ID), dir)); err != nil || !info.IsDir() {
+		if info, err := os.Stat(filepath.Join(root, dir)); err != nil || !info.IsDir() {
 			t.Fatalf("project directory %q: %v", dir, err)
 		}
+	}
+	// Project create seeds AGENTS.md + compounding skill.
+	if _, err := os.Stat(filepath.Join(root, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(layout.CompoundingSkillPath(root)); err != nil {
+		t.Fatal(err)
 	}
 	got, err := ps.Get(ctx, p.ID)
 	if err != nil || got != p {
@@ -59,12 +79,31 @@ func TestVaultAndProjectCRUD(t *testing.T) {
 	}
 }
 
+func TestProjectCreateSeedsKnowledgeWithoutVault(t *testing.T) {
+	database, dataDir := testutil.TempDB(t)
+	c := &clock.FakeClock{T: time.Now()}
+	p, err := store.NewProjectStore(database, dataDir, c).Create(context.Background(), "Global", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := layout.ProjectRoot(dataDir, "", p.ID)
+	if _, err := os.Stat(filepath.Join(root, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(layout.CompoundingSkillPath(root)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(layout.LessonsPath(root)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStoresRejectBlankNamesAndUnknownVault(t *testing.T) {
 	database, dataDir := testutil.TempDB(t)
 	c := &clock.FakeClock{T: time.Now()}
 	ctx := context.Background()
 
-	if _, err := store.NewVaultStore(database, c).Create(ctx, " \t"); !errors.Is(err, store.ErrValidation) {
+	if _, err := store.NewVaultStore(database, dataDir, c).Create(ctx, " \t"); !errors.Is(err, store.ErrValidation) {
 		t.Fatalf("blank vault error = %v", err)
 	}
 	ps := store.NewProjectStore(database, dataDir, c)

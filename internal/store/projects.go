@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rigasyahrul/personal-agent/internal/agent/skills"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/ids"
@@ -79,6 +80,10 @@ func (s *ProjectStore) create(ctx context.Context, name, vaultID string) (domain
 		return domain.Project{}, err
 	}
 	if err = layout.EnsureProjectDirs(s.dataDir, vaultID, p.ID); err != nil {
+		return domain.Project{}, err
+	}
+	if err = layout.EnsureProjectKnowledge(s.dataDir, vaultID, p.ID, skills.DefaultCompoundingSkillMarkdown()); err != nil {
+		_ = os.RemoveAll(layout.ProjectRoot(s.dataDir, vaultID, p.ID))
 		return domain.Project{}, err
 	}
 	commit := s.commit

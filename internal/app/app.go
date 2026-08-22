@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/rigasyahrul/personal-agent/internal/agent"
+	"github.com/rigasyahrul/personal-agent/internal/agent/skills"
 	"github.com/rigasyahrul/personal-agent/internal/backup"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	database "github.com/rigasyahrul/personal-agent/internal/db"
 	"github.com/rigasyahrul/personal-agent/internal/httpapi"
+	"github.com/rigasyahrul/personal-agent/internal/layout"
 	"github.com/rigasyahrul/personal-agent/internal/publish"
 	"github.com/rigasyahrul/personal-agent/internal/review"
 	"github.com/rigasyahrul/personal-agent/internal/store"
@@ -83,6 +85,10 @@ func NewWithDependencies(ctx context.Context, cfg config.Config, deps Dependenci
 	db, err := database.Open(ctx, filepath.Join(cfg.DataDir, "db", "personal-agent.sqlite"))
 	if err != nil {
 		return nil, err
+	}
+	if err := layout.EnsureGlobalKnowledgeDirs(cfg.DataDir, skills.DefaultCompoundingSkillMarkdown()); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("seed global knowledge: %w", err)
 	}
 	barrier := &backup.Barrier{}
 	sessionLocks := store.NewSessionLocks()

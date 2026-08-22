@@ -32,7 +32,7 @@ func ProjectRoutes(mux *http.ServeMux, db *sql.DB, dataDir string, c clock.Clock
 	projects := store.NewProjectStore(db, dataDir, c)
 	projects.Barrier = barrier
 	h := projectHandlers{
-		vaults:   store.NewVaultStore(db, c),
+		vaults:   store.NewVaultStore(db, dataDir, c),
 		projects: projects,
 		clock:    c,
 	}

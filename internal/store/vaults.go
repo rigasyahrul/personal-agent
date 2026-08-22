@@ -6,18 +6,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rigasyahrul/personal-agent/internal/agent/skills"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/ids"
+	"github.com/rigasyahrul/personal-agent/internal/layout"
 )
 
 type VaultStore struct {
-	db    *sql.DB
-	clock clock.Clock
+	db      *sql.DB
+	dataDir string
+	clock   clock.Clock
 }
 
-func NewVaultStore(db *sql.DB, c clock.Clock) *VaultStore {
-	return &VaultStore{db: db, clock: c}
+func NewVaultStore(db *sql.DB, dataDir string, c clock.Clock) *VaultStore {
+	return &VaultStore{db: db, dataDir: dataDir, clock: c}
 }
 
 func (s *VaultStore) Create(ctx context.Context, name string) (domain.Vault, error) {
@@ -28,7 +31,15 @@ func (s *VaultStore) Create(ctx context.Context, name string) (domain.Vault, err
 	now := s.clock.Now().UTC()
 	v := domain.Vault{ID: ids.NewID(), Name: name, CreatedAt: now, UpdatedAt: now}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO vaults(id,name,created_at,updated_at) VALUES(?,?,?,?)`, v.ID, v.Name, formatTime(v.CreatedAt), formatTime(v.UpdatedAt))
-	return v, err
+	if err != nil {
+		return domain.Vault{}, err
+	}
+	if err := layout.EnsureVaultKnowledgeDirs(s.dataDir, v.ID, skills.DefaultCompoundingSkillMarkdown()); err != nil {
+		// Roll back vault row so create is atomic with disk seed.
+		_, _ = s.db.ExecContext(ctx, `DELETE FROM vaults WHERE id=?`, v.ID)
+		return domain.Vault{}, err
+	}
+	return v, nil
 }
 
 func (s *VaultStore) List(ctx context.Context) ([]domain.Vault, error) {
