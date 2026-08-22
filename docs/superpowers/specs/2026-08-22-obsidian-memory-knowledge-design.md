@@ -1,6 +1,6 @@
 # Obsidian-like Knowledge + Compounding Memory — Design Spec
 
-**Status:** Approved (2026-08-22) — ready for `writing-plans`  
+**Status:** Approved (2026-08-22) — plan at `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge.md`  
 **Date:** 2026-08-22  
 **Repo:** `personal-agent`  
 **Priority order:** **B → C → A** (compounding memory → Obsidian shape → scoped search)  
