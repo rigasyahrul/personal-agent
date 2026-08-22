@@ -37,7 +37,7 @@ Task N: complete (commit …, pushed)
 
 | Task | Review | Complete |
 |------|--------|----------|
-| 1 | | |
+| 1 | PASS `T-01a02a68-dcb1-769c-bb8b-232b199b96d4` | `81c941b` pushed |
 | 2 | | |
 | 3 | | |
 | 4 | | |
@@ -49,6 +49,13 @@ Task N: complete (commit …, pushed)
 | 10 | | |
 | 11 | | |
 | 12 | | |
+
+Ledger:
+```
+Task 1: consulting-grok-review PASS (thread T-01a02a68-dcb1-769c-bb8b-232b199b96d4)
+Task 1: complete (commit 81c941b, pushed)
+```
+
 
 ### P1
 
@@ -93,7 +100,9 @@ Task N: complete (commit …, pushed)
 
 ## Last updated
 
-- 2026-08-22 — Master thread started; P0 → `in_progress`; Task 1 dispatch pending  
+- 2026-08-22 — Task 1 complete+pushed (`81c941b`); review T-01a02a68  
+- 2026-08-22 — Master thread started; P0 → `in_progress`  
+
 - Board created: 2026-08-22  
 - Package HEAD at board create: `7c4d2b8`  
 
