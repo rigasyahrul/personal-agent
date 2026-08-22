@@ -424,7 +424,8 @@ Source drafts: `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge-draf
 | Design+plan lock | `T-01a02a38` | NOT safe — path dualism, dual IDs, compound revalidation, validators, /api/v1, uniques |
 | Post-fix | `T-01a02a3d` | Safe P0 (Minor .md join) |
 | Full re-review HEAD be3431d | `T-01a02a41-e75d-71bc-9286-285b02461b59` | NOT safe — fsroot/memory, migrator 002, Task 41 strip .md, session scope bind, CAS/atomicity |
-| Fixes for T-01a02a41 | this commit | Canonical + drafts patched; confirmation re-review next |
+| Fixes for T-01a02a41 | `8044741` | Canonical + drafts patched |
+| Confirmation re-review | `T-01a02a48-5368-73ed-8fed-118495c27804` | **Safe to start P0** (Minor only) |
 
 ---
 
