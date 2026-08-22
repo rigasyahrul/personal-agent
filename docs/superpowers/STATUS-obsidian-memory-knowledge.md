@@ -84,12 +84,15 @@ Task 12: complete (P0 gate empty commit, pushed)
 | Task | Review | Complete |
 |------|--------|----------|
 | 20 | PASS `T-01a02aa3-830d-71ba-b9f0-c23e5aabe006` | `224f18d` pushed |
-| 21–35 | | |
+| 21 | PASS requesting-code-review (no-amp) | `fa80874` |
+| 22–35 | | |
 
 Ledger:
 ```
 Task 20: consulting-grok-review PASS (thread T-01a02aa3-830d-71ba-b9f0-c23e5aabe006)
 Task 20: complete (commit 224f18d, pushed)
+Task 21: requesting-code-review PASS (no-amp, Critical none, Important none)
+Task 21: complete (commit fa80874)
 ```
 
 ### P2
@@ -129,6 +132,8 @@ Task 20: complete (commit 224f18d, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Task 21 complete (`fa80874`); requesting-code-review no-amp (Amp credit gone; Pi terminal)
+- 2026-08-22 — Task 20 complete+pushed (`224f18d`); review T-01a02aa3
 - 2026-08-22 — Task 11 complete+pushed (`aea7709`); review T-01a02a9d-efbb-7519-a9a3-b63b7e067fc5
 - 2026-08-22 — Task 10 complete+pushed (`68bad2c`); review T-01a02a99-999d-765c-9c2c-39dcee91f019
 - 2026-08-22 — Task 9 complete+pushed (); review T-01a02a93-b215-774a-9249-0bb487797b41
