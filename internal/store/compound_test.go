@@ -303,3 +303,250 @@ func TestValidateCompoundItems_SizeAndCountCaps(t *testing.T) {
 		t.Fatalf("oversized: %v", err)
 	}
 }
+
+func mustCreatePending(t *testing.T, s *store.CompoundStore, sessionID, key, body string) domain.CompoundProposal {
+	t.Helper()
+	got, err := s.CreatePending(context.Background(), store.CreateProposalInput{
+		SessionID:  sessionID,
+		RequestKey: key,
+		Scope:      domain.CompoundScopeProject,
+		ProjectID:  "p1",
+		VaultID:    "v1",
+		Items:      []store.CompoundItem{compoundItem("agents_patch", "AGENTS.md", "update", body)},
+		Now:        time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreatePending: %v", err)
+	}
+	return got
+}
+
+func TestDecide_RejectSetsBothTimestamps(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	pending := mustCreatePending(t, s, sessionID, "rk-reject", "# pending\n")
+	decided := time.Date(2026, 8, 22, 13, 0, 0, 0, time.UTC)
+
+	got, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "reject",
+		Now:        decided,
+	})
+	if err != nil {
+		t.Fatalf("Decide reject: %v", err)
+	}
+	if got.Status != domain.CompoundStatusRejected {
+		t.Fatalf("status = %q", got.Status)
+	}
+	if got.DecidedAt == nil || !got.DecidedAt.Equal(decided) {
+		t.Fatalf("decided_at = %v want %v", got.DecidedAt, decided)
+	}
+	if got.FinishedAt == nil || !got.FinishedAt.Equal(decided) {
+		t.Fatalf("finished_at = %v want %v", got.FinishedAt, decided)
+	}
+}
+
+func TestDecide_ApproveSetsDecidedAtOnly(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	pending := mustCreatePending(t, s, sessionID, "rk-approve", "# pending\n")
+	decided := time.Date(2026, 8, 22, 13, 30, 0, 0, time.UTC)
+
+	got, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "approve",
+		Now:        decided,
+	})
+	if err != nil {
+		t.Fatalf("Decide approve: %v", err)
+	}
+	if got.Status != domain.CompoundStatusApproved {
+		t.Fatalf("status = %q", got.Status)
+	}
+	if got.DecidedAt == nil || !got.DecidedAt.Equal(decided) {
+		t.Fatalf("decided_at = %v want %v", got.DecidedAt, decided)
+	}
+	if got.FinishedAt != nil {
+		t.Fatalf("finished_at should be nil until publish, got %v", got.FinishedAt)
+	}
+}
+
+func TestMarkFinished_SetsFinishedAt(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	pending := mustCreatePending(t, s, sessionID, "rk-finish", "# pending\n")
+	decided := time.Date(2026, 8, 22, 14, 0, 0, 0, time.UTC)
+	approved, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "approve",
+		Now:        decided,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished := decided.Add(time.Minute)
+	if err := s.MarkFinished(context.Background(), approved.ID, string(domain.CompoundStatusApproved), "", finished); err != nil {
+		t.Fatalf("MarkFinished approved: %v", err)
+	}
+	got, err := s.Get(context.Background(), approved.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.CompoundStatusApproved {
+		t.Fatalf("status = %q want approved", got.Status)
+	}
+	if got.FinishedAt == nil || !got.FinishedAt.Equal(finished) {
+		t.Fatalf("finished_at = %v want %v", got.FinishedAt, finished)
+	}
+	if got.Error != "" {
+		t.Fatalf("error = %q", got.Error)
+	}
+
+	// Failed path: second proposal.
+	pending2 := mustCreatePending(t, s, sessionID, "rk-fail", "# other\n")
+	approved2, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending2.ID,
+		Decision:   "approve",
+		Now:        decided,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkFinished(context.Background(), approved2.ID, string(domain.CompoundStatusFailed), "publish boom", finished); err != nil {
+		t.Fatalf("MarkFinished failed: %v", err)
+	}
+	failed, err := s.Get(context.Background(), approved2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.Status != domain.CompoundStatusFailed {
+		t.Fatalf("status = %q want failed", failed.Status)
+	}
+	if failed.Error != "publish boom" {
+		t.Fatalf("error = %q", failed.Error)
+	}
+	if failed.FinishedAt == nil || !failed.FinishedAt.Equal(finished) {
+		t.Fatalf("failed finished_at = %v", failed.FinishedAt)
+	}
+}
+
+func TestDecide_ApproveRecomputesSHA256(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	pending := mustCreatePending(t, s, sessionID, "rk-sha", "# old\n")
+	edited := store.CompoundItem{
+		Kind:          "agents_patch",
+		Path:          "AGENTS.md",
+		Action:        "update",
+		Content:       "# edited body\n",
+		ContentSHA256: "deadbeef", // advisory; server must overwrite
+	}
+	got, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "approve",
+		Items:      []store.CompoundItem{edited},
+		Now:        time.Date(2026, 8, 22, 15, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+	var decoded []store.CompoundItem
+	if err := json.Unmarshal([]byte(got.ItemsJSON), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded) != 1 || decoded[0].Content != "# edited body\n" {
+		t.Fatalf("items: %+v", decoded)
+	}
+	if decoded[0].ContentSHA256 != shaHex("# edited body\n") {
+		t.Fatalf("sha = %q want recomputed", decoded[0].ContentSHA256)
+	}
+}
+
+func TestDecide_ApproveValidatesFinalItems(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	pending := mustCreatePending(t, s, sessionID, "rk-bad-edit", "# ok\n")
+	_, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "approve",
+		Items: []store.CompoundItem{
+			compoundItem("memory_detail", "source/owned.md", "create", "# no\n"),
+		},
+		Now: time.Now().UTC(),
+	})
+	if !errors.Is(err, store.ErrValidation) {
+		t.Fatalf("err = %v, want ErrValidation", err)
+	}
+	got, err := s.Get(context.Background(), pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.CompoundStatusPending {
+		t.Fatalf("status should stay pending after failed decide, got %q", got.Status)
+	}
+}
+
+func TestDecide_IdempotentSameDecision(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	pending := mustCreatePending(t, s, sessionID, "rk-idemp", "# a\n")
+	now := time.Date(2026, 8, 22, 16, 0, 0, 0, time.UTC)
+	first, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "reject",
+		Now:        now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "reject",
+		Now:        now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("idempotent reject: %v", err)
+	}
+	if first.ID != second.ID || second.Status != domain.CompoundStatusRejected {
+		t.Fatalf("second = %+v", second)
+	}
+	if second.DecidedAt == nil || !second.DecidedAt.Equal(now) {
+		t.Fatalf("idempotent must not change decided_at: %v", second.DecidedAt)
+	}
+}
+
+func TestDecide_ConflictingDecision(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	pending := mustCreatePending(t, s, sessionID, "rk-conflict-dec", "# a\n")
+	if _, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "reject",
+		Now:        time.Date(2026, 8, 22, 17, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "approve",
+		Now:        time.Date(2026, 8, 22, 17, 5, 0, 0, time.UTC),
+	})
+	if !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("err = %v, want ErrConflict", err)
+	}
+}
+
+func TestGet_AndGetBySessionRequest(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	pending := mustCreatePending(t, s, sessionID, "rk-get", "# get\n")
+	byID, err := s.Get(context.Background(), pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byID.ID != pending.ID || byID.RequestKey != "rk-get" {
+		t.Fatalf("Get: %+v", byID)
+	}
+	byKey, err := s.GetBySessionRequest(context.Background(), sessionID, "rk-get")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byKey.ID != pending.ID {
+		t.Fatalf("GetBySessionRequest: %+v", byKey)
+	}
+	if _, err := s.Get(context.Background(), "missing"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("missing Get: %v", err)
+	}
+}

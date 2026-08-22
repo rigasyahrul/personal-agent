@@ -64,6 +64,16 @@ type CreateProposalInput struct {
 	Now        time.Time
 }
 
+// DecideInput records a human approve/reject on a pending proposal.
+// RequestKey is unused for uniqueness (Canonical: idempotent by proposal status).
+type DecideInput struct {
+	ProposalID string
+	RequestKey string
+	Decision   string // approve|reject
+	Items      []CompoundItem // optional edits replacing items_json when approve
+	Now        time.Time
+}
+
 // CompoundStore persists compound proposals.
 type CompoundStore struct {
 	DB      *sql.DB
@@ -262,6 +272,209 @@ func (s *CompoundStore) getBySessionRequestKey(ctx context.Context, sessionID, r
 		FROM compound_proposals
 		WHERE session_id=? AND request_key=?`, sessionID, requestKey)
 	return scanCompoundProposal(row)
+}
+
+func (s *CompoundStore) getByID(ctx context.Context, id string) (domain.CompoundProposal, error) {
+	row := s.DB.QueryRowContext(ctx, `
+		SELECT id, session_id, scope, coalesce(project_id,''), coalesce(vault_id,''), status,
+		       request_key, items_json, coalesce(error,''), created_at, decided_at, finished_at
+		FROM compound_proposals
+		WHERE id=?`, id)
+	return scanCompoundProposal(row)
+}
+
+// Get loads a proposal by id.
+func (s *CompoundStore) Get(ctx context.Context, id string) (domain.CompoundProposal, error) {
+	return s.getByID(ctx, id)
+}
+
+// GetBySessionRequest loads a proposal by session_id + request_key.
+func (s *CompoundStore) GetBySessionRequest(ctx context.Context, sessionID, requestKey string) (domain.CompoundProposal, error) {
+	return s.getBySessionRequestKey(ctx, sessionID, requestKey)
+}
+
+// Decide CAS-transitions a pending proposal to approved or rejected.
+// Approve leaves finished_at null until MarkFinished / publish.
+// Reject sets decided_at and finished_at. Terminal same-decision is idempotent.
+func (s *CompoundStore) Decide(ctx context.Context, in DecideInput) (domain.CompoundProposal, error) {
+	var out domain.CompoundProposal
+	err := s.withBarrier(func() error {
+		var e error
+		out, e = s.decide(ctx, in)
+		return e
+	})
+	return out, err
+}
+
+func (s *CompoundStore) decide(ctx context.Context, in DecideInput) (domain.CompoundProposal, error) {
+	if strings.TrimSpace(in.ProposalID) == "" {
+		return domain.CompoundProposal{}, fmt.Errorf("%w: proposal_id required", ErrValidation)
+	}
+	switch in.Decision {
+	case "approve", "reject":
+	default:
+		return domain.CompoundProposal{}, fmt.Errorf("%w: decision must be approve or reject", ErrValidation)
+	}
+
+	cur, err := s.getByID(ctx, in.ProposalID)
+	if err != nil {
+		return domain.CompoundProposal{}, err
+	}
+	if cur.Status != domain.CompoundStatusPending {
+		return decideIdempotentOrConflict(cur, in.Decision)
+	}
+
+	now := in.Now
+	if now.IsZero() && s.Clock != nil {
+		now = s.Clock.Now()
+	}
+	now = now.UTC()
+
+	var itemsJSON string
+	var finished any
+	var nextStatus domain.CompoundStatus
+	switch in.Decision {
+	case "reject":
+		nextStatus = domain.CompoundStatusRejected
+		itemsJSON = cur.ItemsJSON
+		finished = formatTime(now)
+	case "approve":
+		items, err := finalApproveItems(cur, in.Items)
+		if err != nil {
+			return domain.CompoundProposal{}, err
+		}
+		recomputeCompoundItemSHAs(items)
+		if err := ValidateCompoundItems(cur.Scope, items); err != nil {
+			return domain.CompoundProposal{}, err
+		}
+		itemsJSON, err = marshalCompoundItems(items)
+		if err != nil {
+			return domain.CompoundProposal{}, err
+		}
+		nextStatus = domain.CompoundStatusApproved
+		finished = nil
+	}
+
+	res, err := s.DB.ExecContext(ctx, `
+		UPDATE compound_proposals
+		SET status=?, decided_at=?, finished_at=?, items_json=?
+		WHERE id=? AND status='pending'`,
+		string(nextStatus), formatTime(now), finished, itemsJSON, in.ProposalID,
+	)
+	if err != nil {
+		return domain.CompoundProposal{}, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return domain.CompoundProposal{}, err
+	}
+	if n == 0 {
+		cur, err = s.getByID(ctx, in.ProposalID)
+		if err != nil {
+			return domain.CompoundProposal{}, err
+		}
+		return decideIdempotentOrConflict(cur, in.Decision)
+	}
+	return s.getByID(ctx, in.ProposalID)
+}
+
+func decideIdempotentOrConflict(cur domain.CompoundProposal, decision string) (domain.CompoundProposal, error) {
+	switch decision {
+	case "reject":
+		if cur.Status == domain.CompoundStatusRejected {
+			return cur, nil
+		}
+	case "approve":
+		if cur.Status == domain.CompoundStatusApproved || cur.Status == domain.CompoundStatusFailed {
+			return cur, nil
+		}
+	}
+	return domain.CompoundProposal{}, ErrConflict
+}
+
+func finalApproveItems(cur domain.CompoundProposal, edits []CompoundItem) ([]CompoundItem, error) {
+	if len(edits) > 0 {
+		out := make([]CompoundItem, len(edits))
+		copy(out, edits)
+		return out, nil
+	}
+	var items []CompoundItem
+	if err := json.Unmarshal([]byte(cur.ItemsJSON), &items); err != nil {
+		return nil, fmt.Errorf("%w: items_json: %v", ErrValidation, err)
+	}
+	return items, nil
+}
+
+func recomputeCompoundItemSHAs(items []CompoundItem) {
+	for i := range items {
+		sum := sha256.Sum256([]byte(items[i].Content))
+		items[i].ContentSHA256 = hex.EncodeToString(sum[:])
+	}
+}
+
+// MarkFinished records publish completion. approved stays approved; failed writes error.
+func (s *CompoundStore) MarkFinished(ctx context.Context, id, status, errMsg string, now time.Time) error {
+	return s.withBarrier(func() error {
+		return s.markFinished(ctx, id, status, errMsg, now)
+	})
+}
+
+func (s *CompoundStore) markFinished(ctx context.Context, id, status, errMsg string, now time.Time) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("%w: id required", ErrValidation)
+	}
+	switch status {
+	case string(domain.CompoundStatusApproved), string(domain.CompoundStatusFailed):
+	default:
+		return fmt.Errorf("%w: mark finished status must be approved or failed", ErrValidation)
+	}
+	cur, err := s.getByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if cur.FinishedAt != nil {
+		if string(cur.Status) == status {
+			return nil
+		}
+		return ErrConflict
+	}
+	if cur.Status != domain.CompoundStatusApproved {
+		return fmt.Errorf("%w: can only mark finished from approved", ErrValidation)
+	}
+	if now.IsZero() && s.Clock != nil {
+		now = s.Clock.Now()
+	}
+	now = now.UTC()
+	var nextErr any
+	if status == string(domain.CompoundStatusFailed) {
+		nextErr = errMsg
+	} else {
+		nextErr = nil
+	}
+	res, err := s.DB.ExecContext(ctx, `
+		UPDATE compound_proposals
+		SET status=?, finished_at=?, error=?
+		WHERE id=? AND status='approved' AND finished_at IS NULL`,
+		status, formatTime(now), nextErr, id,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		cur, err = s.getByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if cur.FinishedAt != nil && string(cur.Status) == status {
+			return nil
+		}
+		return ErrConflict
+	}
+	return nil
 }
 
 func scanCompoundProposal(row interface{ Scan(dest ...any) error }) (domain.CompoundProposal, error) {
