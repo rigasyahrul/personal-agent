@@ -83,6 +83,12 @@ func New(deps ServerDeps) http.Handler {
 	mux.Handle("DELETE /api/v1/sessions/{id}", mutation(http.HandlerFunc(sh.session)))
 	mux.Handle("GET /api/v1/sessions/{id}/messages", auth(http.HandlerFunc(ch.messagesRoute)))
 	mux.Handle("POST /api/v1/sessions/{id}/messages", mutation(http.HandlerFunc(ch.messagesRoute)))
+	co := &compoundHandlers{
+		sessions: sessions,
+		compound: &store.CompoundStore{DB: deps.DB, Clock: deps.Clock, Barrier: deps.Barrier},
+		clock:    deps.Clock,
+	}
+	mux.Handle("POST /api/v1/sessions/{id}/compound", mutation(http.HandlerFunc(co.create)))
 	mux.Handle("GET /api/v1/sessions/{id}/runs/current", auth(http.HandlerFunc(ch.currentRun)))
 	mux.Handle("GET /api/v1/sessions/{id}/workspace/tree", auth(http.HandlerFunc(ch.workspaceTree)))
 	mux.Handle("GET /api/v1/sessions/{id}/workspace/file", auth(http.HandlerFunc(ch.workspaceFile)))
