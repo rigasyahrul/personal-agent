@@ -198,11 +198,13 @@ func ValidateCompoundItems(scope CompoundScope, items []CompoundItem) error
 ### Wikilink regex / normalize
 
 - Match: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
-- Trim target; strip optional trailing `.md`; reject targets with `..`, absolute, empty.
-- Store edge raw target + **scope-root-relative** normalized path (e.g. `source/intro`, `memory/a`, `AGENTS`).
+- Trim target; reject targets with `..`, absolute, empty.
+- **Join key LOCKED:** `note_links.to_path` and resolve lookups use the **same** scope-root form as `knowledge_notes.relative_path`, **including `.md`** (e.g. `source/intro.md`, `memory/a.md`, `AGENTS.md`).
+- When parsing a link, if the target has no `.md` suffix and is not a bare instruction stem that maps to `AGENTS.md`|`SOUL.md`|`SYSTEM.md`, append `.md` before store/resolve.
+- Bare `AGENTS` / `SOUL` / `SYSTEM` → `AGENTS.md` / `SOUL.md` / `SYSTEM.md`.
+- Display alias (`|title`) never affects the join key.
 - Resolution root = knowledge note’s scope root.
 - Source library links in markdown MUST use `source/…` prefix (not v1 notes-relative bare paths).
-
 ### note_links
 
 ```sql
@@ -357,13 +359,14 @@ See lock. Drafts must not invent parallel doc trees.
 
 ## Phase drafts (assembled)
 
-Source drafts: `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge-drafts/`. Canonical contracts above win on conflict.
+Source drafts: `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge-drafts/`. **Canonical contracts above win on conflict.**
 
-### Review gate
+### Review ledger
 
-- consulting-grok-review (design/plan lock): thread `T-01a02a38-9315-7176-b621-d3c7d122fea7` — **NOT safe as-is** (Important path dualism, dual IDs, compound revalidation, validators, `/api/v1`, partial uniques).
-- Fixes applied into Canonical contracts + drafts + spec §§10–11 (this revision).
-- Scoped re-review of fixes: see follow-up thread if present.
+| Gate | Thread | Result |
+|------|--------|--------|
+| Design+plan lock | `T-01a02a38-9315-7176-b621-d3c7d122fea7` | NOT safe — Important path/ID/compound/API/uniques |
+| Post-fix re-review | `T-01a02a3d-5bee-71d1-8d4c-7af5e68c6903` | **Safe to start P0** (Minor only; wikilink .md join key locked in follow-up) |
 
 ---
 
@@ -603,6 +606,7 @@ type KnowledgeNote struct {
   Kind KnowledgeKind
   ProjectID, VaultID string // empty if unused
   IsGlobal bool
+  SourceNoteID string // optional; set when kind=source mirror of v1 notes.id
   ContentSHA256 string
   ByteSize int64
   FrontmatterJSON string
@@ -1524,25 +1528,3 @@ git commit --allow-empty -m "test: slice1 obsidian memory knowledge verification
 **Out of scope confirmation (do not implement):** graph canvas, vault/global FTS grants UI, auto-compound, title-only wikilinks.
 
 DRAFT_D_COMPLETE
-
----
-
-## Plan self-review (master)
-
-| Spec requirement | Tasks |
-|------------------|-------|
-| Layout seed SOUL/SYSTEM/AGENTS/memory/skill | 1–4 |
-| Prompt load isolation + runner wire | 9–11, 10 |
-| Compound explicit + skill + proposal + finished_at | 20–26, 23, 31 |
-| ValidateCompoundItems on create+decide+publish | 20–22 Canonical |
-| Path namespaces notes vs knowledge | Canonical + 5, 43, 69 |
-| In-session review card | 28–29 |
-| Real memory rail | 32 |
-| Frontmatter + path wikilinks + backlinks | 40–48 |
-| Source publish reindex with source/ prefix | 43 |
-| Project FTS + API + UI + agent tools | 60–67, 64–65 |
-| Instruction editors | 8, 70 |
-| /api/v1 routes | Canonical HTTP |
-| Deferred vault/global search | 68 only |
-
-**Execution:** Implementation workers: `amp -m grok45 --no-archive-after-execute -x` + consulting-grok-review per task. Never Task/OpenAI/`-ox`.

@@ -447,9 +447,12 @@ v1 non-goal “full-text search across the library” is **narrowed**: project F
 
 ## 18. Open implementation choices (plan may fix)
 
-- Single `knowledge_notes` table vs extend `notes` with `kind` + nullable project/vault/global scope.
-- FTS5 vs external indexer (prefer FTS5 in-process).
-- Whether instruction PUT reuses publish machine or a thinner atomic write helper sharing reindex hooks.
-- Exact compound item JSON schema and chat-intent detector vs UI-only trigger for v1 of P1.
+**Already locked in plan Canonical contracts (do not reopen):** dual table (`knowledge_notes` + v1 `notes`); path namespaces + `source/` mirror; `/api/v1`; compound validate on create+decide+publish; FTS5 in-process.
 
-Spec wins on product behavior; plan locks engineering choices in **Canonical contracts**.
+Still free within those locks:
+
+- Whether instruction PUT reuses publish machine or a thinner atomic write helper sharing reindex hooks.
+- Chat-intent detector vs UI-only Compound trigger for P1 (items-POST path required either way).
+- Exact numeric prompt byte caps (defaults in plan).
+
+Spec wins on product behavior; plan Canonical contracts win on engineering locks.

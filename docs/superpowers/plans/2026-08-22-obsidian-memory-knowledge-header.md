@@ -198,11 +198,13 @@ func ValidateCompoundItems(scope CompoundScope, items []CompoundItem) error
 ### Wikilink regex / normalize
 
 - Match: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
-- Trim target; strip optional trailing `.md`; reject targets with `..`, absolute, empty.
-- Store edge raw target + **scope-root-relative** normalized path (e.g. `source/intro`, `memory/a`, `AGENTS`).
+- Trim target; reject targets with `..`, absolute, empty.
+- **Join key LOCKED:** `note_links.to_path` and resolve lookups use the **same** scope-root form as `knowledge_notes.relative_path`, **including `.md`** (e.g. `source/intro.md`, `memory/a.md`, `AGENTS.md`).
+- When parsing a link, if the target has no `.md` suffix and is not a bare instruction stem that maps to `AGENTS.md`|`SOUL.md`|`SYSTEM.md`, append `.md` before store/resolve.
+- Bare `AGENTS` / `SOUL` / `SYSTEM` → `AGENTS.md` / `SOUL.md` / `SYSTEM.md`.
+- Display alias (`|title`) never affects the join key.
 - Resolution root = knowledge note’s scope root.
 - Source library links in markdown MUST use `source/…` prefix (not v1 notes-relative bare paths).
-
 ### note_links
 
 ```sql

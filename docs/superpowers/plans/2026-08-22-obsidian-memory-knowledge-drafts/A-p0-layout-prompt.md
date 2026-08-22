@@ -234,6 +234,7 @@ type KnowledgeNote struct {
   Kind KnowledgeKind
   ProjectID, VaultID string // empty if unused
   IsGlobal bool
+  SourceNoteID string // optional; set when kind=source mirror of v1 notes.id
   ContentSHA256 string
   ByteSize int64
   FrontmatterJSON string
