@@ -34,6 +34,7 @@ Scan this first. Open the linked file only when you need detail.
 | amp | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | hub | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
+| knowledge | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
 | compounding | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | craft | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
 | benchmark | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
@@ -48,20 +49,20 @@ Scan this first. Open the linked file only when you need detail.
 | git | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | gitignore | [2026-08-19 — Default `make` is help; build binary is gitignored](20260819-2000-default-make-is-help-build-binary-is-gitignored.md) |
 | go | [2026-08-13 — Verify escaped literals at the byte level](20260813-2300-verify-escaped-literals-at-the-byte-level.md) |
-| grok | [2026-08-19 — consulting-grok-review via Grok thread, not Task/OpenAI](20260819-1700-consulting-grok-review-via-grok-thread-not-task-openai.md) |
-| grok45 | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
+| grok | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
+| grok45 | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
 | handoff | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | make | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
-| master | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
+| master | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
 | memory | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | merge | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | multi-agent | [2026-08-19 — Big plans: lock + parallel drafts, don't solo-stall](20260819-2300-big-plans-lock-parallel-drafts-don-t-solo-stall.md) |
 | node | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | orb | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | orb-execute | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
-| plans | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
+| plans | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
 | restore | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
-| review | [2026-08-20 — Every worker task must pass consulting-grok-review](20260820-1505-every-worker-must-pass-consulting-grok-review.md) |
+| review | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
 | rail | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
 | sdd | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
 | session | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
@@ -74,7 +75,7 @@ Scan this first. Open the linked file only when you need detail.
 | spawn | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
 | ui | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
 | web | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
-| writing-plans | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
+| writing-plans | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
 
 ## Where Superpowers artifacts go
 
@@ -93,6 +94,7 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) — consulting-grok-review gates + Canonical traps
 - **2026-08-20** — [Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md)  
   Tags: hub, session, rail, review, sdd, frontend, jsdom, grok45
 - **2026-08-21** — [Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md)  
