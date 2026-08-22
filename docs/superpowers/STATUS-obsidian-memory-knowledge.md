@@ -83,7 +83,14 @@ Task 12: complete (P0 gate empty commit, pushed)
 
 | Task | Review | Complete |
 |------|--------|----------|
-| 20–35 | | (expand rows as workers run) |
+| 20 | PASS `T-01a02aa3-830d-71ba-b9f0-c23e5aabe006` | `224f18d` pushed |
+| 21–35 | | |
+
+Ledger:
+```
+Task 20: consulting-grok-review PASS (thread T-01a02aa3-830d-71ba-b9f0-c23e5aabe006)
+Task 20: complete (commit 224f18d, pushed)
+```
 
 ### P2
 
