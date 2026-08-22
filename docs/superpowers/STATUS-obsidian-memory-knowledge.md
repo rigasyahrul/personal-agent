@@ -14,7 +14,7 @@
 
 | Phase | Tasks | Status | Branch (suggested) | Depends | Notes |
 |-------|-------|--------|--------------------|---------|-------|
-| **P0** Layout + prompt | 1–12 | `ready` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
+| **P0** Layout + prompt | 1–12 | `in_progress` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
 | **P1** Compound | 20–35 | `blocked` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
 | **P2** Obsidian links | 40–52 | `blocked` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
 | **P3** Search + tools | 60–72 | `blocked` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
@@ -93,5 +93,7 @@ Task N: complete (commit …, pushed)
 
 ## Last updated
 
+- 2026-08-22 — Master thread started; P0 → `in_progress`; Task 1 dispatch pending  
 - Board created: 2026-08-22  
-- Package HEAD at board create: see `git log -1 --oneline` on main after ship docs  
+- Package HEAD at board create: `7c4d2b8`  
+
