@@ -93,3 +93,30 @@ func TestSessionWorkspaceAllHomes(t *testing.T) {
 		}
 	}
 }
+
+func TestKnowledgePaths(t *testing.T) {
+	g := GlobalRoot("/data")
+	if g != filepath.Join("/data", "files", "global") {
+		t.Fatalf("global: %s", g)
+	}
+	v := VaultRoot("/data", "v1")
+	if v != filepath.Join("/data", "files", "vaults", "v1") {
+		t.Fatalf("vault: %s", v)
+	}
+	p := ProjectRoot("/data", "v1", "p1")
+	if InstructionPath(p, "AGENTS.md") != filepath.Join(p, "AGENTS.md") {
+		t.Fatal("agents path")
+	}
+	if LessonsPath(p) != filepath.Join(p, "memory", "lessons.md") {
+		t.Fatal("lessons")
+	}
+	if CompoundingSkillPath(g) != filepath.Join(g, ".agents", "skills", "compounding", "SKILL.md") {
+		t.Fatal("skill")
+	}
+	if MemoryDir(p) != filepath.Join(p, "memory") {
+		t.Fatal("memory dir")
+	}
+	if AgentsSkillsDir(g) != filepath.Join(g, ".agents", "skills") {
+		t.Fatal("agents skills dir")
+	}
+}
