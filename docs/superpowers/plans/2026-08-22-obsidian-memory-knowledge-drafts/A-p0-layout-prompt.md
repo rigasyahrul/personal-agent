@@ -297,9 +297,9 @@ func (s *InstructionStore) Put(ctx context.Context, meta ScopeMeta, name Instruc
 Routes per header:
 - `GET/PUT /api/v1/projects/{id}/instructions/{name}`
 - `GET/PUT /api/v1/global/instructions/{name}`
+- **PUT via `mutation` / `securedMutation` (auth + RequireCSRF)** — same as POST messages (Canonical HTTP CSRF).
 
-- [ ] Tests via existing httptest server helper: PUT agents, GET matches; 400 bad name.
-
+- [ ] Tests via existing httptest server helper: PUT agents, GET matches; 400 bad name; CSRF required on PUT.
 - [ ] Commit: `feat(api): project and global instruction endpoints`
 
 ---

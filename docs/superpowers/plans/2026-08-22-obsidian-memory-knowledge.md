@@ -498,13 +498,13 @@ Source drafts: `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge-draf
 
 | Gate | Thread | Result |
 |------|--------|--------|
-| Design+plan lock | `T-01a02a38` | NOT safe — path/ID/API/uniques |
+| Design+plan lock | `T-01a02a38` | NOT safe → fixed |
 | Post-fix | `T-01a02a3d` | Safe P0 (Minor) |
-| Full re-review | `T-01a02a41` | NOT safe — FS/migrator/join/scope/CAS |
+| Full re-review | `T-01a02a41` | NOT safe → fixed |
 | P0 confirmation | `T-01a02a48` | **Safe to start P0** |
-| P1–P3 E2E | `T-01a02a53-4298-763a-ad6d-eb9311cf226e` | NOT safe — tool dispatch Critical + Important compound/search/UI |
-| P1–P3 fixes | `8e17663` | Canonical+drafts patched |
-| P1–P3 confirmation | `T-01a02a59-950a-742a-bc8f-931feceadaec` | **Safe P1→P2→P3 after P0** (Minor only) |
+| P1–P3 E2E | `T-01a02a53` | NOT safe → fixed |
+| P1–P3 confirmation | `T-01a02a59` | **Safe P1→P2→P3 after P0** |
+| **FINAL GATE** | `T-01a02a5c-54f9-729a-bf44-45894db73c66` | **Safe with Minor only — lock package; implement P0→P3** |
 
 ---
 
@@ -807,9 +807,9 @@ func (s *InstructionStore) Put(ctx context.Context, meta ScopeMeta, name Instruc
 Routes per header:
 - `GET/PUT /api/v1/projects/{id}/instructions/{name}`
 - `GET/PUT /api/v1/global/instructions/{name}`
+- **PUT via `mutation` / `securedMutation` (auth + RequireCSRF)** — same as POST messages (Canonical HTTP CSRF).
 
-- [ ] Tests via existing httptest server helper: PUT agents, GET matches; 400 bad name.
-
+- [ ] Tests via existing httptest server helper: PUT agents, GET matches; 400 bad name; CSRF required on PUT.
 - [ ] Commit: `feat(api): project and global instruction endpoints`
 
 ---
@@ -1066,10 +1066,10 @@ func ParseCompoundItemsFromAssistant(content string) ([]store.CompoundItem, erro
 // extract first ```json ... ``` or raw JSON array
 ```
 
+- [ ] After parse, **server sets** `content_sha256 = sha256(content)` on each item before CreatePending (do not rely on model-supplied hashes).
 - [ ] Test with fake provider returning fixed JSON → proposal rows created.
 - [ ] Test: active chat run → compound generate returns 409.
-- [ ] Test: compound run does not register workspace/knowledge tools.
-- [ ] Commit: `feat(agent): generate compound proposal items from model`
+- [ ] Test: compound run does not register workspace/knowledge tools.- [ ] Commit: `feat(agent): generate compound proposal items from model`
 
 ---
 
@@ -1085,10 +1085,10 @@ POST /api/v1/sessions/{id}/compound/{proposal_id}/decide
 ```
 
 Decide approve → Publisher.PublishApproved → MarkFinished.  
-All under auth+CSRF.
+All under auth+CSRF (`mutation`/`securedMutation`).
 
-- [ ] Tests: reject; approve writes AGENTS on disk; wrong session 404.
-
+- [ ] GET proposal: if `status=approved && finished_at == null` → re-drive PublishApproved once or MarkFinished failed (Canonical recovery).
+- [ ] Tests: reject; approve writes AGENTS on disk; wrong session 404; recovery re-drive path.
 - [ ] Commit: `feat(api): get and decide compound proposals`
 
 ---

@@ -174,10 +174,10 @@ func ParseCompoundItemsFromAssistant(content string) ([]store.CompoundItem, erro
 // extract first ```json ... ``` or raw JSON array
 ```
 
+- [ ] After parse, **server sets** `content_sha256 = sha256(content)` on each item before CreatePending (do not rely on model-supplied hashes).
 - [ ] Test with fake provider returning fixed JSON → proposal rows created.
 - [ ] Test: active chat run → compound generate returns 409.
-- [ ] Test: compound run does not register workspace/knowledge tools.
-- [ ] Commit: `feat(agent): generate compound proposal items from model`
+- [ ] Test: compound run does not register workspace/knowledge tools.- [ ] Commit: `feat(agent): generate compound proposal items from model`
 
 ---
 
@@ -193,10 +193,10 @@ POST /api/v1/sessions/{id}/compound/{proposal_id}/decide
 ```
 
 Decide approve → Publisher.PublishApproved → MarkFinished.  
-All under auth+CSRF.
+All under auth+CSRF (`mutation`/`securedMutation`).
 
-- [ ] Tests: reject; approve writes AGENTS on disk; wrong session 404.
-
+- [ ] GET proposal: if `status=approved && finished_at == null` → re-drive PublishApproved once or MarkFinished failed (Canonical recovery).
+- [ ] Tests: reject; approve writes AGENTS on disk; wrong session 404; recovery re-drive path.
 - [ ] Commit: `feat(api): get and decide compound proposals`
 
 ---
