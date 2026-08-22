@@ -63,6 +63,7 @@ func New(deps ServerDeps) http.Handler {
 	ch := &chatHandlers{sessions: sessions, messages: messages, runs: runs, runner: runner, dataDir: deps.DataDir}
 	auth := func(next http.Handler) http.Handler { return requireAuthAt(deps.DB, now, next) }
 	mutation := func(next http.Handler) http.Handler { return securedMutation(deps.DB, now, next) }
+	InstructionRoutes(mux, deps.DB, deps.DataDir, deps.Clock, deps.Barrier, auth, mutation)
 	rh := reviewHandlers{db: deps.DB, queue: review.Queue{DB: deps.DB, Clock: deps.Clock}, store: store.ReviewStore{DB: deps.DB, Clock: deps.Clock}}
 	ph := promoteHandlers{db: deps.DB, machine: deps.Publish, sessions: sessions}
 	bh := backupHandlers{service: deps.Backup}
