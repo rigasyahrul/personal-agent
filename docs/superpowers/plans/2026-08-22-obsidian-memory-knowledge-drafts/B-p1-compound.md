@@ -177,7 +177,9 @@ func ParseCompoundItemsFromAssistant(content string) ([]store.CompoundItem, erro
 - [ ] After parse, **server sets** `content_sha256 = sha256(content)` on each item before CreatePending (do not rely on model-supplied hashes).
 - [ ] Test with fake provider returning fixed JSON → proposal rows created.
 - [ ] Test: active chat run → compound generate returns 409.
-- [ ] Test: compound run does not register workspace/knowledge tools.- [ ] Commit: `feat(agent): generate compound proposal items from model`
+- [ ] Test: compound run does not register workspace/knowledge tools.
+
+- [ ] Commit: `feat(agent): generate compound proposal items from model`
 
 ---
 
