@@ -5,8 +5,13 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"sort"
+	"strings"
+	"unicode"
 
 	_ "modernc.org/sqlite"
 )
@@ -41,21 +46,53 @@ func Open(ctx context.Context, file string) (*sql.DB, error) {
 		return closeWithError(err)
 	}
 
-	var applied int
-	if err = d.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE version='001'`).Scan(&applied); err != nil {
+	if err = applyPendingMigrations(ctx, d); err != nil {
 		return closeWithError(err)
 	}
-	if applied == 0 {
-		migration, readErr := migrations.ReadFile("migrations/001_init.sql")
-		if readErr != nil {
-			return closeWithError(readErr)
+
+	return d, nil
+}
+
+// applyPendingMigrations applies every embedded migrations/*.sql whose leading
+// version digits are not yet recorded in schema_migrations, in sorted filename order.
+func applyPendingMigrations(ctx context.Context, d *sql.DB) error {
+	entries, err := fs.ReadDir(migrations, "migrations")
+	if err != nil {
+		return err
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
 		}
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		version, ok := migrationVersion(name)
+		if !ok {
+			return fmt.Errorf("migration %s: missing leading version digits", name)
+		}
+		var applied int
+		if err := d.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE version=?`, version).Scan(&applied); err != nil {
+			return err
+		}
+		if applied > 0 {
+			continue
+		}
+
+		body, readErr := migrations.ReadFile(path.Join("migrations", name))
+		if readErr != nil {
+			return readErr
+		}
+
 		tx, migrationErr := d.BeginTx(ctx, nil)
 		if migrationErr == nil {
-			_, migrationErr = tx.ExecContext(ctx, string(migration))
+			_, migrationErr = tx.ExecContext(ctx, string(body))
 		}
 		if migrationErr == nil {
-			_, migrationErr = tx.ExecContext(ctx, `INSERT INTO schema_migrations VALUES('001',strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
+			_, migrationErr = tx.ExecContext(ctx, `INSERT INTO schema_migrations VALUES(?,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`, version)
 		}
 		if migrationErr == nil {
 			migrationErr = tx.Commit()
@@ -63,9 +100,21 @@ func Open(ctx context.Context, file string) (*sql.DB, error) {
 			_ = tx.Rollback()
 		}
 		if migrationErr != nil {
-			return closeWithError(fmt.Errorf("migration 001: %w", migrationErr))
+			return fmt.Errorf("migration %s: %w", version, migrationErr)
 		}
 	}
+	return nil
+}
 
-	return d, nil
+// migrationVersion returns the leading digit run of a migration filename (e.g. "001_init.sql" → "001").
+func migrationVersion(filename string) (string, bool) {
+	base := path.Base(filename)
+	i := 0
+	for i < len(base) && unicode.IsDigit(rune(base[i])) {
+		i++
+	}
+	if i == 0 {
+		return "", false
+	}
+	return base[:i], true
 }
