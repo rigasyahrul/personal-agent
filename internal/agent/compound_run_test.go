@@ -86,6 +86,49 @@ func TestCompoundRunCreatesPendingFromProviderJSON(t *testing.T) {
 	}
 }
 
+type cancelOnChatProvider struct {
+	cancel  context.CancelFunc
+	content string
+}
+
+func (p *cancelOnChatProvider) Chat(context.Context, ChatRequest) (ChatResponse, error) {
+	p.cancel()
+	return ChatResponse{Content: p.content}, nil
+}
+
+func TestStartCompoundCanceledContextStillTerminatesRun(t *testing.T) {
+	payload, err := json.Marshal([]store.CompoundItem{{
+		Kind:          store.CompoundKindAgentsPatch,
+		Path:          "AGENTS.md",
+		Action:        store.CompoundActionUpdate,
+		Content:       compoundAgentsBody,
+		ContentSHA256: compoundSHA(compoundAgentsBody),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	provider := &cancelOnChatProvider{cancel: cancel, content: string(payload)}
+	runner, sessionID, runs, _ := compoundRunner(t, provider, false)
+
+	runID, err := runner.StartCompound(ctx, sessionID, "rk-cancel", "compound")
+	if runID == "" {
+		t.Fatalf("StartCompound runID empty, err=%v", err)
+	}
+	run, lookupErr := runs.ByID(context.Background(), runID)
+	if lookupErr != nil {
+		t.Fatal(lookupErr)
+	}
+	if run.Status != domain.AgentRunStatusCompleted && run.Status != domain.AgentRunStatusFailed {
+		t.Fatalf("run status = %q, want terminal completed|failed (canceled request must not leave the run active)", run.Status)
+	}
+
+	if _, err := runner.StartCompound(context.Background(), sessionID, "rk-next", "again"); err != nil {
+		t.Fatalf("second StartCompound: %v (canceled generate must not pin session_busy)", err)
+	}
+}
+
 func TestCompoundRunDoesNotRegisterToolsWithWorkspaceGrant(t *testing.T) {
 	payload, err := json.Marshal([]store.CompoundItem{{
 		Kind:          store.CompoundKindAgentsPatch,

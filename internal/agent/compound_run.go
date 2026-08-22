@@ -39,7 +39,9 @@ func (r *Runner) StartCompound(ctx context.Context, sessionID, requestKey, userM
 	if admission.Existing {
 		return admission.RunID, nil
 	}
-	r.finishRun(ctx, admission.RunID, r.executeCompound)
+	// Detach from the HTTP request context so cancel cannot skip MarkDone
+	// (same as chat Start). Generate stays synchronous for the caller.
+	r.finishRun(context.Background(), admission.RunID, r.executeCompound)
 	return admission.RunID, nil
 }
 
