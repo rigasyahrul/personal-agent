@@ -96,12 +96,12 @@ func TestInstructionStorePutGetProject(t *testing.T) {
 		t.Fatalf("mode = %v err=%v", info.Mode(), err)
 	}
 
-	content, got, err := s.Get(ctx, root, store.InstructionName("agents"))
+	content, got, err := s.Get(ctx, meta, store.InstructionName("agents"))
 	if err != nil || content != body {
 		t.Fatalf("Get content = %q err=%v", content, err)
 	}
-	if got.RelativePath != "AGENTS.md" || got.Kind != domain.KnowledgeKindAgents {
-		t.Fatalf("Get note = %+v", got)
+	if got.RelativePath != "AGENTS.md" || got.Kind != domain.KnowledgeKindAgents || got.ID != note.ID || got.ProjectID != "p1" {
+		t.Fatalf("Get note = %+v want id=%s project p1", got, note.ID)
 	}
 
 	// knowledge_notes row
@@ -135,7 +135,7 @@ func TestInstructionStorePutEmptyContent(t *testing.T) {
 	if note.ByteSize != 0 || note.ContentSHA256 != fmt.Sprintf("%x", sha256.Sum256(nil)) {
 		t.Fatalf("empty note = %+v", note)
 	}
-	content, _, err := s.Get(ctx, root, "soul")
+	content, _, err := s.Get(ctx, meta, "soul")
 	if err != nil || content != "" {
 		t.Fatalf("Get empty = %q err=%v", content, err)
 	}
@@ -190,9 +190,12 @@ func TestInstructionStorePutGlobal(t *testing.T) {
 	if err != nil || isGlobal != 1 || projectID.Valid || vaultID.Valid {
 		t.Fatalf("row global=%d pid=%v vid=%v err=%v", isGlobal, projectID, vaultID, err)
 	}
-	content, _, err := s.Get(ctx, root, "system")
+	content, got, err := s.Get(ctx, meta, "system")
 	if err != nil || content != body {
 		t.Fatalf("Get = %q err=%v", content, err)
+	}
+	if got.ID != note.ID || !got.IsGlobal {
+		t.Fatalf("Get note = %+v want id=%s global", got, note.ID)
 	}
 }
 
@@ -237,13 +240,62 @@ func TestInstructionStorePutOverwritesExisting(t *testing.T) {
 
 func TestInstructionStoreGetMissing(t *testing.T) {
 	db, dataDir := testutil.TempDB(t)
+	if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('missing','P','x','x')`); err != nil {
+		t.Fatal(err)
+	}
 	root := layout.ProjectRoot(dataDir, "", "missing")
 	if err := os.MkdirAll(root, 0700); err != nil {
 		t.Fatal(err)
 	}
 	s := &store.InstructionStore{DB: db, Clock: clock.RealClock{}}
-	_, _, err := s.Get(context.Background(), root, "agents")
+	meta := store.ScopeMeta{DataDir: dataDir, Scope: domain.CompoundScopeProject, ProjectID: "missing"}
+	_, _, err := s.Get(context.Background(), meta, "agents")
 	if !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Get missing = %v, want ErrNotFound", err)
+	}
+}
+
+func TestInstructionStoreGetScopedAcrossProjects(t *testing.T) {
+	// Same AGENTS body in two projects must not cross-attach knowledge_notes ids.
+	db, dataDir := testutil.TempDB(t)
+	clk := &clock.FakeClock{T: time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)}
+	ctx := context.Background()
+	for _, id := range []string{"p1", "p2"} {
+		if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES(?,'P','x','x')`, id); err != nil {
+			t.Fatal(err)
+		}
+		root := layout.ProjectRoot(dataDir, "", id)
+		if err := os.MkdirAll(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := &store.InstructionStore{DB: db, Clock: clk}
+	body := "## Memory\n- shared default body\n"
+	meta1 := store.ScopeMeta{DataDir: dataDir, Scope: domain.CompoundScopeProject, ProjectID: "p1"}
+	meta2 := store.ScopeMeta{DataDir: dataDir, Scope: domain.CompoundScopeProject, ProjectID: "p2"}
+	n1, err := s.Put(ctx, meta1, "agents", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n2, err := s.Put(ctx, meta2, "agents", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n1.ID == n2.ID {
+		t.Fatalf("expected distinct note ids, both %s", n1.ID)
+	}
+	_, g1, err := s.Get(ctx, meta1, "agents")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, g2, err := s.Get(ctx, meta2, "agents")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g1.ID != n1.ID || g1.ProjectID != "p1" {
+		t.Fatalf("Get p1 = %+v want id=%s project p1", g1, n1.ID)
+	}
+	if g2.ID != n2.ID || g2.ProjectID != "p2" {
+		t.Fatalf("Get p2 = %+v want id=%s project p2", g2, n2.ID)
 	}
 }

@@ -66,16 +66,21 @@ func (s *InstructionStore) withBarrier(fn func() error) error {
 	return s.Barrier.Mutate(fn)
 }
 
-// Get reads an instruction file from scopeRoot. Missing file → ErrNotFound.
+// Get reads an instruction file for the given scope. Missing file → ErrNotFound.
 // If the file exists but knowledge_notes has no row yet, content is still returned
-// with a partial note (empty ID).
-func (s *InstructionStore) Get(ctx context.Context, scopeRoot string, name InstructionName) (content string, note domain.KnowledgeNote, err error) {
+// with a partial note (empty ID). Index lookup is always scope-keyed (never path+hash alone).
+func (s *InstructionStore) Get(ctx context.Context, meta ScopeMeta, name InstructionName) (content string, note domain.KnowledgeNote, err error) {
 	fileName, kind, err := NormalizeInstructionFile(string(name))
 	if err != nil {
 		return "", domain.KnowledgeNote{}, err
 	}
 	if err := paths.ValidateKnowledgeRelPath(fileName); err != nil {
 		return "", domain.KnowledgeNote{}, fmt.Errorf("%w: %v", ErrValidation, err)
+	}
+
+	scopeRoot, projectID, vaultID, isGlobal, err := resolveInstructionScope(meta)
+	if err != nil {
+		return "", domain.KnowledgeNote{}, err
 	}
 
 	root, err := fsroot.Open(scopeRoot)
@@ -95,19 +100,27 @@ func (s *InstructionStore) Get(ctx context.Context, scopeRoot string, name Instr
 		return "", domain.KnowledgeNote{}, err
 	}
 
+	sum := fmt.Sprintf("%x", sha256.Sum256(body))
 	note = domain.KnowledgeNote{
 		RelativePath:  fileName,
 		Kind:          kind,
-		ContentSHA256: fmt.Sprintf("%x", sha256.Sum256(body)),
+		ProjectID:     projectID,
+		VaultID:       vaultID,
+		IsGlobal:      isGlobal,
+		ContentSHA256: sum,
 		ByteSize:      int64(len(body)),
 		Status:        "ready",
 	}
-	// Optional index lookup — best effort by relative_path alone is ambiguous across scopes;
-	// callers that need full row use Put return value. Get fills from file; try exact match
-	// if DB available (optional lazy fields).
 	if s.DB != nil {
-		if indexed, ierr := s.lookupByPath(ctx, fileName, body); ierr == nil {
-			note = indexed
+		if id, ierr := s.findInstructionNoteID(ctx, projectID, vaultID, isGlobal, fileName); ierr == nil && id != "" {
+			if indexed, ierr := s.loadKnowledgeNote(ctx, id); ierr == nil {
+				// Prefer on-disk content hash/size; keep indexed identity/timestamps.
+				indexed.ContentSHA256 = sum
+				indexed.ByteSize = int64(len(body))
+				indexed.Kind = kind
+				indexed.RelativePath = fileName
+				note = indexed
+			}
 		}
 	}
 	return string(body), note, nil
@@ -124,15 +137,12 @@ func isNotExist(err error) bool {
 	return strings.Contains(err.Error(), "no such file") || strings.Contains(strings.ToLower(err.Error()), "not found")
 }
 
-func (s *InstructionStore) lookupByPath(ctx context.Context, fileName string, body []byte) (domain.KnowledgeNote, error) {
-	sum := fmt.Sprintf("%x", sha256.Sum256(body))
+func (s *InstructionStore) loadKnowledgeNote(ctx context.Context, id string) (domain.KnowledgeNote, error) {
 	row := s.DB.QueryRowContext(ctx, `
 		SELECT id, relative_path, coalesce(title,''), kind, coalesce(project_id,''), coalesce(vault_id,''),
 		       is_global, coalesce(source_note_id,''), coalesce(content_sha256,''), coalesce(byte_size,0),
 		       coalesce(frontmatter_json,''), status, created_at, updated_at
-		FROM knowledge_notes
-		WHERE relative_path=? AND content_sha256=?
-		LIMIT 1`, fileName, sum)
+		FROM knowledge_notes WHERE id=?`, id)
 	return scanKnowledgeNote(row)
 }
 
