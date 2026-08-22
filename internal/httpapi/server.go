@@ -58,7 +58,8 @@ func New(deps ServerDeps) http.Handler {
 	sessions := &store.SessionStore{DB: deps.DB, DataDir: deps.DataDir, Now: now, Models: deps.Models, Barrier: deps.Barrier, Locks: sessionLocks}
 	messages := &store.MessageStore{DB: deps.DB, Now: now}
 	runs := &store.RunStore{DB: deps.DB, Now: now}
-	runner := &agent.Runner{DB: deps.DB, DataDir: deps.DataDir, Provider: deps.Provider, Messages: messages, Runs: runs, Sessions: sessions, Clock: deps.Clock, Barrier: deps.Barrier}
+	compounds := &store.CompoundStore{DB: deps.DB, Clock: deps.Clock, Barrier: deps.Barrier}
+	runner := &agent.Runner{DB: deps.DB, DataDir: deps.DataDir, Provider: deps.Provider, Messages: messages, Runs: runs, Sessions: sessions, Compound: compounds, Clock: deps.Clock, Barrier: deps.Barrier}
 	sh := &sessionHandlers{sessions: sessions, models: deps.Models}
 	ch := &chatHandlers{sessions: sessions, messages: messages, runs: runs, runner: runner, dataDir: deps.DataDir}
 	auth := func(next http.Handler) http.Handler { return requireAuthAt(deps.DB, now, next) }
@@ -85,7 +86,8 @@ func New(deps ServerDeps) http.Handler {
 	mux.Handle("POST /api/v1/sessions/{id}/messages", mutation(http.HandlerFunc(ch.messagesRoute)))
 	co := &compoundHandlers{
 		sessions: sessions,
-		compound: &store.CompoundStore{DB: deps.DB, Clock: deps.Clock, Barrier: deps.Barrier},
+		compound: compounds,
+		runner:   runner,
 		clock:    deps.Clock,
 	}
 	mux.Handle("POST /api/v1/sessions/{id}/compound", mutation(http.HandlerFunc(co.create)))

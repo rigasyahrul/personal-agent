@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rigasyahrul/personal-agent/internal/agent"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/layout"
@@ -16,6 +17,7 @@ import (
 type compoundHandlers struct {
 	sessions *store.SessionStore
 	compound *store.CompoundStore
+	runner   *agent.Runner
 	clock    clock.Clock
 }
 
@@ -52,7 +54,7 @@ func (h *compoundHandlers) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(in.Items) == 0 {
-		apiError(w, http.StatusNotImplemented, "compound_generate_not_implemented")
+		h.generate(w, r, sess, in)
 		return
 	}
 
@@ -80,6 +82,49 @@ func (h *compoundHandlers) create(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, store.ErrConflict) {
 		apiError(w, http.StatusConflict, "conflict")
+		return
+	}
+	if err != nil {
+		internalError(w)
+		return
+	}
+	dto, err := proposalDTO(got)
+	if err != nil {
+		internalError(w)
+		return
+	}
+	jsonResponse(w, http.StatusOK, dto)
+}
+
+func (h *compoundHandlers) generate(w http.ResponseWriter, r *http.Request, sess domain.Session, in compoundCreateRequest) {
+	if h.runner == nil {
+		internalError(w)
+		return
+	}
+	userMsg := strings.TrimSpace(in.UserContext)
+	if userMsg == "" {
+		userMsg = "Generate compound proposal items."
+	}
+	_, err := h.runner.StartCompound(r.Context(), sess.ID, strings.TrimSpace(in.RequestKey), userMsg)
+	if errors.Is(err, agent.ErrSessionBusy) || errors.Is(err, store.ErrSessionBusy) {
+		apiError(w, http.StatusConflict, "session_busy")
+		return
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		apiError(w, http.StatusNotFound, "session_not_found")
+		return
+	}
+	if errors.Is(err, store.ErrSessionTerminal) {
+		apiError(w, http.StatusForbidden, "session_terminal")
+		return
+	}
+	if err != nil {
+		internalError(w)
+		return
+	}
+	got, err := h.compound.GetBySessionRequest(r.Context(), sess.ID, strings.TrimSpace(in.RequestKey))
+	if errors.Is(err, store.ErrNotFound) {
+		apiError(w, http.StatusBadRequest, "compound_generate_failed")
 		return
 	}
 	if err != nil {

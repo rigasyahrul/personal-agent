@@ -46,11 +46,17 @@ type Runner struct {
 	Messages MessageStore
 	Runs     RunAdmissions
 	Sessions SessionReader
+	Compound CompoundCreator
 	Clock    clock.Clock
 	Barrier  mutBarrier
 
 	// bg tracks in-flight execute goroutines so tests can wait for completion.
 	bg sync.WaitGroup
+}
+
+// CompoundCreator is the store surface used after a compound generation run.
+type CompoundCreator interface {
+	CreatePending(ctx context.Context, in store.CreateProposalInput) (domain.CompoundProposal, error)
 }
 
 func (r *Runner) Start(ctx context.Context, sessionID, requestKey, userMessage string) (string, error) {
@@ -67,7 +73,7 @@ func (r *Runner) Start(ctx context.Context, sessionID, requestKey, userMessage s
 	r.bg.Add(1)
 	go func(runID string) {
 		defer r.bg.Done()
-		r.executeRun(context.Background(), runID)
+		r.finishRun(context.Background(), runID, r.execute)
 	}(admission.RunID)
 	return admission.RunID, nil
 }
@@ -75,7 +81,7 @@ func (r *Runner) Start(ctx context.Context, sessionID, requestKey, userMessage s
 // Wait blocks until all background execute goroutines finish. Tests only.
 func (r *Runner) Wait() { r.bg.Wait() }
 
-func (r *Runner) executeRun(ctx context.Context, runID string) {
+func (r *Runner) finishRun(ctx context.Context, runID string, exec func(context.Context, string, domain.Session) error) {
 	fail := func(cause error) {
 		_ = r.Runs.MarkDone(ctx, runID, domain.AgentRunStatusFailed, cause.Error())
 	}
@@ -93,7 +99,7 @@ func (r *Runner) executeRun(ctx context.Context, runID string) {
 		fail(err)
 		return
 	}
-	if err := r.execute(ctx, runID, session); err != nil {
+	if err := exec(ctx, runID, session); err != nil {
 		fail(err)
 		return
 	}
@@ -119,8 +125,8 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 	}
 	messages := make([]ChatMessage, 0, len(history)+1)
 	for _, message := range history {
-		// Skip prior injected runtime prompts so they never stack across runs.
-		if message.Role == domain.MessageRoleSystem && strings.HasPrefix(message.Content, runtimeMarker) {
+		// Skip prior injected runtime/compound prompts so they never stack across runs.
+		if message.Role == domain.MessageRoleSystem && isEphemeralSystem(message.Content) {
 			continue
 		}
 		converted := ChatMessage{Role: message.Role, Content: message.Content}
