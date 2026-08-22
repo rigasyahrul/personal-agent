@@ -14,8 +14,8 @@
 
 | Phase | Tasks | Status | Branch (suggested) | Depends | Notes |
 |-------|-------|--------|--------------------|---------|-------|
-| **P0** Layout + prompt | 1–12 | `in_progress` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
-| **P1** Compound | 20–35 | `blocked` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
+| **P0** Layout + prompt | 1–12 | `done` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
+| **P1** Compound | 20–35 | `ready` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
 | **P2** Obsidian links | 40–52 | `blocked` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
 | **P3** Search + tools | 60–72 | `blocked` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
 | **Ship** whole branch | — | `blocked` | merge to main | P0–P3 + whole-branch review | Final consulting-grok-review + push |
@@ -48,7 +48,7 @@ Task N: complete (commit …, pushed)
 | 9 | PASS `T-01a02a93-b215-774a-9249-0bb487797b41` | `3955d00` pushed |
 | 10 | PASS `T-01a02a99-999d-765c-9c2c-39dcee91f019` | `68bad2c` pushed |
 | 11 | PASS `T-01a02a9d-efbb-7519-a9a3-b63b7e067fc5` | `aea7709` pushed |
-| 12 | | |
+| 12 | PASS (master gate) | empty `test: P0…` pushed |
 
 Ledger:
 ```
@@ -74,6 +74,8 @@ Task 10: consulting-grok-review PASS (thread T-01a02a99-999d-765c-9c2c-39dcee91f
 Task 10: complete (commit 68bad2c, pushed)
 Task 11: consulting-grok-review PASS (thread T-01a02a9d-efbb-7519-a9a3-b63b7e067fc5)
 Task 11: complete (commit aea7709, pushed)
+Task 12: consulting-grok-review PASS (master P0 verification gate; package tests green)
+Task 12: complete (P0 gate empty commit, pushed)
 ```
 
 
