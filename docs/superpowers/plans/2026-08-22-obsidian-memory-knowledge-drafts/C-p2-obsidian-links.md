@@ -87,7 +87,9 @@ func (s *KnowledgeStore) DeleteLinksFrom(ctx, fromID string) error
 
 **Files:**
 - Modify: `internal/publish/machine.go` finalize path
-- Test: promote/direct completes → knowledge_notes row kind=source
+- Test: promote/direct completes → knowledge_notes row kind=source with
+  `relative_path = "source/" + notes.relative_path` and `source_note_id = notes.id`
+  (v1 `notes.relative_path` stays source-relative; never prefix notes with `source/`)
 
 - [ ] Commit: `feat(publish): upsert knowledge_notes on source publish`
 
@@ -134,11 +136,12 @@ func (s *KnowledgeStore) Backlinks(ctx context.Context, noteID string) ([]Backli
 - Modify: `server.go`
 
 ```
-GET /api/projects/{id}/notes/{note_id}/backlinks
-GET /api/projects/{id}/knowledge/read?path=
-GET /api/projects/{id}/knowledge/tree   // merge source tree + memory files; exclude .agents
+GET /api/v1/projects/{id}/knowledge/backlinks?path=|knowledge_id=
+GET /api/v1/projects/{id}/notes/{note_id}/backlinks  // resolve via source/ + notes.rel
+GET /api/v1/projects/{id}/knowledge/read?path=       // scope-root-relative
+GET /api/v1/projects/{id}/knowledge/tree             // source + memory; exclude .agents
 ```
-
+note_links IDs are knowledge_notes.id only; never assume notes.id == knowledge id.
 - [ ] Tests: read memory path; backlinks JSON.
 
 - [ ] Commit: `feat(api): knowledge read tree and backlinks`

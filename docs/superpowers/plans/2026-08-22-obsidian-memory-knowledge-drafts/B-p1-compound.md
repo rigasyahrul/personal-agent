@@ -35,14 +35,15 @@ func (s *CompoundStore) CreatePending(ctx context.Context, in CreateProposalInpu
 // Different fingerprint → ErrConflict
 ```
 
-Validation inside CreatePending (or `ValidateCompoundItems`):
+Validation via shared `ValidateCompoundItems` (Canonical LOCKED):
+- Run on **CreatePending**, on **Decide(approve) final items** (including human edits), and again in **PublishApproved** before any write
 - kind/path/action allowed for scope (vault cannot agents_patch)
-- memory_detail path `memory/YYYYMMDD-HHmm-slug.md` (regex `^memory/[0-9]{8}-[0-9]{4}-[a-z0-9-]+\\.md$`)
-- if any memory_detail → require lessons_index_row targeting `memory/lessons.md`
-- path no `..`, no `source/`, no `.agents/`
-- content sha256 must match sha256(content)
-- max content bytes per item (e.g. 256KiB), max items 20
-
+- path allowlist ONLY `AGENTS.md` or `memory/**` — NEVER `source/**`, `.agents/**`, SOUL/SYSTEM
+- memory_detail path regex `^memory/[0-9]{8}-[0-9]{4}-[a-z0-9-]+\.md$`
+- if any memory_detail → require lessons_index_row path `memory/lessons.md`
+- `ValidateKnowledgeRelPath` on every path (not promote `ValidateRelPath`)
+- content sha256 must match sha256(content); max 256KiB/item; max 20 items
+- Decide when already terminal → idempotent return; do not re-publish
 - [ ] **Step 1: Failing tests** — happy path; vault rejects agents_patch; detail without index row rejects; path escape rejects.
 
 - [ ] **Step 2–4:** implement, pass, commit `feat(store): compound proposal create pending`
@@ -138,7 +139,7 @@ func LoadCompoundingSkill(dataDir string, home layout.SessionHome, vaultID, proj
 - Tests
 
 ```
-POST /api/sessions/{id}/compound
+POST /api/v1/sessions/{id}/compound
 { "request_key": "...", "user_context": "optional", "items": [ ... optional prebuilt ...] }
 ```
 
@@ -175,8 +176,8 @@ func ParseCompoundItemsFromAssistant(content string) ([]store.CompoundItem, erro
 - Modify: `compound_handlers.go`
 
 ```
-GET  /api/sessions/{id}/compound/{proposal_id}
-POST /api/sessions/{id}/compound/{proposal_id}/decide
+GET  /api/v1/sessions/{id}/compound/{proposal_id}
+POST /api/v1/sessions/{id}/compound/{proposal_id}/decide
 { "request_key": "...", "decision": "approve"|"reject", "items": [optional edits] }
 ```
 

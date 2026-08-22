@@ -78,7 +78,7 @@ Scope root selection:
 - Prefer codifying durable rules here; keep evidence in memory (compound ≠ diary).
 ```
 
-### Knowledge note identity
+### Knowledge note identity (LOCKED — consulting-grok-review T-01a02a38)
 
 ```go
 // domain
@@ -91,18 +91,53 @@ const (
   KnowledgeKindSoul         KnowledgeKind = "soul"
   KnowledgeKindSystem       KnowledgeKind = "system"
 )
+```
 
-// Scope: exactly one of project_id, vault_id (memory-only vault rows), or global flag.
-// Prefer columns: project_id NULL, vault_id NULL, is_global INTEGER NOT NULL DEFAULT 0
-// CHECK exactly one scope owner.
-// relative_path: POSIX under scope root, e.g. "source/a.md", "memory/lessons.md", "AGENTS.md"
-// notes table: EXTEND existing `notes` OR new `knowledge_notes` — ** Canonical choice: new table
-// `knowledge_notes` ** and keep v1 `notes` for source promote/review compatibility;
-// source files appear in BOTH (knowledge_notes mirrors ready source notes) OR
-// knowledge_notes is supersource and notes.knowledge_note_id FK — **pick in Task 1 migration:
-// Decision LOCKED: extend `notes` with kind + scope columns is riskier for review FKs.
-// LOCKED: create `knowledge_notes` for all indexed md; keep `notes` as today for source review;
-// on source publish, upsert matching knowledge_notes row (same relative path under project).
+**Two path namespaces (do not conflate):**
+
+| Store | `relative_path` meaning | Example |
+|-------|-------------------------|---------|
+| v1 `notes` | **Source-relative only** (under `source/`). **Never** change this contract. | `articles/intro.md` |
+| `knowledge_notes` | **Scope-root-relative** (project/vault/global root) | `source/articles/intro.md`, `memory/lessons.md`, `AGENTS.md` |
+
+**Source mirror rule (mandatory):** on source publish / backfill:
+
+```text
+knowledge_notes.relative_path = "source/" + notes.relative_path   // POSIX join; reject if notes.rel has ".."
+```
+
+- Keep v1 `notes` table **as today** for promote/direct/review FKs. Do **not** prefix `notes.relative_path` with `source/`.
+- New table `knowledge_notes` for all indexed markdown (source mirror + memory + instructions).
+- `knowledge_notes.id` = **independent** UUIDs. **Never** assume `notes.id == knowledge_notes.id`.
+- Optional column: `source_note_id TEXT NULL REFERENCES notes(id)` set on source mirror upsert (nullable for memory/instructions).
+- Upsert key for source rows: `(project_id, relative_path)` where path is scope-root form `source/…`.
+
+**Scope exclusivity + SQLite-safe uniques:**
+
+```sql
+-- CHECK exactly one scope owner:
+--   (is_global=1 AND project_id IS NULL AND vault_id IS NULL)
+--   OR (is_global=0 AND project_id IS NOT NULL AND vault_id IS NULL)  -- project (vault_id on project row is separate; knowledge uses project_id only for project corpus)
+--   OR (is_global=0 AND project_id IS NULL AND vault_id IS NOT NULL)  -- vault memory/instructions-N/A
+CREATE UNIQUE INDEX knowledge_notes_project_path ON knowledge_notes(project_id, relative_path)
+  WHERE project_id IS NOT NULL;
+CREATE UNIQUE INDEX knowledge_notes_vault_path ON knowledge_notes(vault_id, relative_path)
+  WHERE vault_id IS NOT NULL AND is_global=0;
+CREATE UNIQUE INDEX knowledge_notes_global_path ON knowledge_notes(relative_path)
+  WHERE is_global=1;
+```
+
+**Path validators (do not reuse promote validator for knowledge):**
+
+```go
+// internal/paths or internal/knowledge
+// Promote/direct keep existing ValidateRelPath (rejects memory/soul components under source/).
+func ValidateKnowledgeRelPath(rel string) error
+// Allow only:
+//   AGENTS.md | SOUL.md | SYSTEM.md
+//   memory/**  (no .., no absolute, .md files / lessons.md)
+//   source/**  (for index/read of library only — compound MUST NOT write these)
+// Reject: empty, .., absolute, .agents/**, sessions/**, soul/** directory targets
 ```
 
 ### compound_proposals
@@ -139,14 +174,34 @@ Item JSON element:
 }
 ```
 
-Statuses: `pending` → (`approved`|`rejected`) → if approved publish → set `finished_at` on success or `failed`+`finished_at` on publish error. Reject sets `decided_at`+`finished_at` (no publish).
+Statuses: `pending` → (`approved`|`rejected`) → if approved publish → set `finished_at` on success or `failed`+`finished_at` on publish error.  
+Reject sets `decided_at`+`finished_at` (no publish). Terminal success keeps `status=approved` with `finished_at` set (no separate `completed` status).
+
+**Compound validation (LOCKED):**
+
+```go
+func ValidateCompoundItems(scope CompoundScope, items []CompoundItem) error
+// Enforce on CreatePending AND on Decide(approve) with the FINAL items
+// (including human edits) AND again inside PublishApproved before any write.
+// Rules:
+// - kind ∈ {agents_patch, memory_detail, lessons_index_row}
+// - vault scope: agents_patch forbidden
+// - path allowlist ONLY: AGENTS.md (project|global) OR memory/**
+// - NEVER source/**, NEVER .agents/**, NEVER SOUL.md/SYSTEM.md via compound
+// - ValidateKnowledgeRelPath on every path
+// - memory_detail path regex: ^memory/[0-9]{8}-[0-9]{4}-[a-z0-9-]+\.md$
+// - if any memory_detail → require lessons_index_row with path memory/lessons.md
+// - content_sha256 == sha256(content); size/item caps
+// Decide when already terminal → return existing (idempotent); do not re-publish
+```
 
 ### Wikilink regex / normalize
 
 - Match: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
 - Trim target; strip optional trailing `.md`; reject targets with `..`, absolute, empty.
-- Store edge raw target + normalized relative path string.
+- Store edge raw target + **scope-root-relative** normalized path (e.g. `source/intro`, `memory/a`, `AGENTS`).
 - Resolution root = knowledge note’s scope root.
+- Source library links in markdown MUST use `source/…` prefix (not v1 notes-relative bare paths).
 
 ### note_links
 
@@ -164,6 +219,24 @@ CREATE INDEX note_links_to_path ON note_links(to_path);
 CREATE INDEX note_links_from ON note_links(from_note_id);
 ```
 
+`from_note_id` / `to_note_id` are always **`knowledge_notes.id`**, never v1 `notes.id`.
+
+### Backlinks / ID resolve (LOCKED)
+
+```
+# Preferred (unambiguous):
+GET /api/v1/projects/{id}/knowledge/backlinks?path={scope-root-rel}
+GET /api/v1/projects/{id}/knowledge/backlinks?knowledge_id={knowledge_notes.id}
+
+# Optional convenience for source library UI that only has v1 notes.id:
+GET /api/v1/projects/{id}/notes/{note_id}/backlinks
+  → server resolves knowledge row by
+     project_id = id AND relative_path = 'source/' || notes.relative_path
+  → 404 if no knowledge mirror row
+```
+
+Search hits and knowledge tools return **`knowledge_id`** + `path` (scope-root). UI must not pass `knowledge_id` to v1 note body endpoints without resolve.
+
 ### FTS
 
 ```sql
@@ -176,7 +249,8 @@ CREATE VIRTUAL TABLE knowledge_fts USING fts5(
 );
 ```
 
-Project search SQL filters `knowledge_notes` to `project_id = ?` and kinds in scope corpus; join fts. Never search other projects.
+`note_id` in FTS = `knowledge_notes.id`.  
+Project search SQL filters `knowledge_notes` to `project_id = ?` and kinds in corpus; join fts. Never search other projects. Always join `knowledge_notes` for scope (do not trust FTS alone).
 
 ### Prompt assembly API
 
@@ -203,24 +277,27 @@ func BuildSessionPrompt(in BuildPromptInput) ([]PromptSection, error)
 // Reads files from disk; skips missing/empty; applies caps AGENTS>SYSTEM>SOUL>lessons
 ```
 
-### HTTP routes (mount under existing auth)
+### HTTP routes (mount under existing auth — **`/api/v1` prefix LOCKED**)
+
+Match live `internal/httpapi/server.go` (`/api/v1/...`). Never mount bare `/api/...` for these.
 
 ```
-GET  /api/projects/{id}/instructions/{name}     name=soul|system|agents
-PUT  /api/projects/{id}/instructions/{name}
-GET  /api/global/instructions/{name}
-PUT  /api/global/instructions/{name}
+GET  /api/v1/projects/{id}/instructions/{name}     name=soul|system|agents
+PUT  /api/v1/projects/{id}/instructions/{name}
+GET  /api/v1/global/instructions/{name}
+PUT  /api/v1/global/instructions/{name}
 
-POST /api/sessions/{id}/compound                body: {request_key, user_context?}
-GET  /api/sessions/{id}/compound/{proposal_id}
-POST /api/sessions/{id}/compound/{proposal_id}/decide
+POST /api/v1/sessions/{id}/compound                body: {request_key, user_context?, items?}
+GET  /api/v1/sessions/{id}/compound/{proposal_id}
+POST /api/v1/sessions/{id}/compound/{proposal_id}/decide
      body: {request_key, decision: approve|reject, items?: edited items}
 
-GET  /api/projects/{id}/notes/{note_id}/backlinks
-GET  /api/projects/{id}/search?q=&limit=
+GET  /api/v1/projects/{id}/knowledge/backlinks?path=|knowledge_id=
+GET  /api/v1/projects/{id}/notes/{note_id}/backlinks   # convenience resolve — see Backlinks section
+GET  /api/v1/projects/{id}/search?q=&limit=
 
-GET  /api/projects/{id}/knowledge/tree          # optional if reuse notes tree + memory
-GET  /api/projects/{id}/knowledge/read?path=
+GET  /api/v1/projects/{id}/knowledge/tree
+GET  /api/v1/projects/{id}/knowledge/read?path=       # path = scope-root-relative
 ```
 
 Errors: 400 validation, 404 missing, 409 idempotency conflict, 403 wrong session scope.

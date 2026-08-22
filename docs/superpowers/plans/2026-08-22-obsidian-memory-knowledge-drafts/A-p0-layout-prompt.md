@@ -202,12 +202,12 @@ git commit -m "feat: seed knowledge files on project vault and global ensure"
 - Create: `internal/db/migrations/002_knowledge.sql`
 - Ensure migrator picks numeric order (existing pattern)
 
-**DDL (must match header contracts):**
-- `knowledge_notes` (id, kind, project_id, vault_id, is_global, relative_path, title, content_sha256, byte_size, frontmatter_json, status, created_at, updated_at) + CHECKs for scope exclusivity + UNIQUE scope+path
-- `compound_proposals` as header
-- `note_links` as header
-- `knowledge_fts` FTS5 as header
-
+**DDL (must match header contracts after consulting-grok-review):**
+- `knowledge_notes` (id, kind, project_id, vault_id, is_global, relative_path, title, content_sha256, byte_size, frontmatter_json, status, source_note_id NULL REFERENCES notes(id), created_at, updated_at)
+- Scope CHECK + **partial unique indexes** (project/vault/global) — not a single UNIQUE that breaks on NULL
+- `relative_path` is **scope-root-relative** (`source/…`, `memory/…`, `AGENTS.md`)
+- `compound_proposals`, `note_links`, `knowledge_fts` as header
+- Include `ValidateKnowledgeRelPath` unit tests in Task 7, not promote `ValidateRelPath`
 - [ ] **Step 1:** Test migration applies on empty DB (use existing db test helper).
 
 - [ ] **Step 2–4:** add SQL, pass migrate test, commit
@@ -294,8 +294,8 @@ func (s *InstructionStore) Put(ctx context.Context, meta ScopeMeta, name Instruc
 - Modify: `internal/httpapi/server.go` routes
 
 Routes per header:
-- `GET/PUT /api/projects/{id}/instructions/{name}`
-- `GET/PUT /api/global/instructions/{name}`
+- `GET/PUT /api/v1/projects/{id}/instructions/{name}`
+- `GET/PUT /api/v1/global/instructions/{name}`
 
 - [ ] Tests via existing httptest server helper: PUT agents, GET matches; 400 bad name.
 

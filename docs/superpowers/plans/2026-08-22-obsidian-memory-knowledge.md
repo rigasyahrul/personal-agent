@@ -78,7 +78,7 @@ Scope root selection:
 - Prefer codifying durable rules here; keep evidence in memory (compound ≠ diary).
 ```
 
-### Knowledge note identity
+### Knowledge note identity (LOCKED — consulting-grok-review T-01a02a38)
 
 ```go
 // domain
@@ -91,18 +91,53 @@ const (
   KnowledgeKindSoul         KnowledgeKind = "soul"
   KnowledgeKindSystem       KnowledgeKind = "system"
 )
+```
 
-// Scope: exactly one of project_id, vault_id (memory-only vault rows), or global flag.
-// Prefer columns: project_id NULL, vault_id NULL, is_global INTEGER NOT NULL DEFAULT 0
-// CHECK exactly one scope owner.
-// relative_path: POSIX under scope root, e.g. "source/a.md", "memory/lessons.md", "AGENTS.md"
-// notes table: EXTEND existing `notes` OR new `knowledge_notes` — ** Canonical choice: new table
-// `knowledge_notes` ** and keep v1 `notes` for source promote/review compatibility;
-// source files appear in BOTH (knowledge_notes mirrors ready source notes) OR
-// knowledge_notes is supersource and notes.knowledge_note_id FK — **pick in Task 1 migration:
-// Decision LOCKED: extend `notes` with kind + scope columns is riskier for review FKs.
-// LOCKED: create `knowledge_notes` for all indexed md; keep `notes` as today for source review;
-// on source publish, upsert matching knowledge_notes row (same relative path under project).
+**Two path namespaces (do not conflate):**
+
+| Store | `relative_path` meaning | Example |
+|-------|-------------------------|---------|
+| v1 `notes` | **Source-relative only** (under `source/`). **Never** change this contract. | `articles/intro.md` |
+| `knowledge_notes` | **Scope-root-relative** (project/vault/global root) | `source/articles/intro.md`, `memory/lessons.md`, `AGENTS.md` |
+
+**Source mirror rule (mandatory):** on source publish / backfill:
+
+```text
+knowledge_notes.relative_path = "source/" + notes.relative_path   // POSIX join; reject if notes.rel has ".."
+```
+
+- Keep v1 `notes` table **as today** for promote/direct/review FKs. Do **not** prefix `notes.relative_path` with `source/`.
+- New table `knowledge_notes` for all indexed markdown (source mirror + memory + instructions).
+- `knowledge_notes.id` = **independent** UUIDs. **Never** assume `notes.id == knowledge_notes.id`.
+- Optional column: `source_note_id TEXT NULL REFERENCES notes(id)` set on source mirror upsert (nullable for memory/instructions).
+- Upsert key for source rows: `(project_id, relative_path)` where path is scope-root form `source/…`.
+
+**Scope exclusivity + SQLite-safe uniques:**
+
+```sql
+-- CHECK exactly one scope owner:
+--   (is_global=1 AND project_id IS NULL AND vault_id IS NULL)
+--   OR (is_global=0 AND project_id IS NOT NULL AND vault_id IS NULL)  -- project (vault_id on project row is separate; knowledge uses project_id only for project corpus)
+--   OR (is_global=0 AND project_id IS NULL AND vault_id IS NOT NULL)  -- vault memory/instructions-N/A
+CREATE UNIQUE INDEX knowledge_notes_project_path ON knowledge_notes(project_id, relative_path)
+  WHERE project_id IS NOT NULL;
+CREATE UNIQUE INDEX knowledge_notes_vault_path ON knowledge_notes(vault_id, relative_path)
+  WHERE vault_id IS NOT NULL AND is_global=0;
+CREATE UNIQUE INDEX knowledge_notes_global_path ON knowledge_notes(relative_path)
+  WHERE is_global=1;
+```
+
+**Path validators (do not reuse promote validator for knowledge):**
+
+```go
+// internal/paths or internal/knowledge
+// Promote/direct keep existing ValidateRelPath (rejects memory/soul components under source/).
+func ValidateKnowledgeRelPath(rel string) error
+// Allow only:
+//   AGENTS.md | SOUL.md | SYSTEM.md
+//   memory/**  (no .., no absolute, .md files / lessons.md)
+//   source/**  (for index/read of library only — compound MUST NOT write these)
+// Reject: empty, .., absolute, .agents/**, sessions/**, soul/** directory targets
 ```
 
 ### compound_proposals
@@ -139,14 +174,34 @@ Item JSON element:
 }
 ```
 
-Statuses: `pending` → (`approved`|`rejected`) → if approved publish → set `finished_at` on success or `failed`+`finished_at` on publish error. Reject sets `decided_at`+`finished_at` (no publish).
+Statuses: `pending` → (`approved`|`rejected`) → if approved publish → set `finished_at` on success or `failed`+`finished_at` on publish error.  
+Reject sets `decided_at`+`finished_at` (no publish). Terminal success keeps `status=approved` with `finished_at` set (no separate `completed` status).
+
+**Compound validation (LOCKED):**
+
+```go
+func ValidateCompoundItems(scope CompoundScope, items []CompoundItem) error
+// Enforce on CreatePending AND on Decide(approve) with the FINAL items
+// (including human edits) AND again inside PublishApproved before any write.
+// Rules:
+// - kind ∈ {agents_patch, memory_detail, lessons_index_row}
+// - vault scope: agents_patch forbidden
+// - path allowlist ONLY: AGENTS.md (project|global) OR memory/**
+// - NEVER source/**, NEVER .agents/**, NEVER SOUL.md/SYSTEM.md via compound
+// - ValidateKnowledgeRelPath on every path
+// - memory_detail path regex: ^memory/[0-9]{8}-[0-9]{4}-[a-z0-9-]+\.md$
+// - if any memory_detail → require lessons_index_row with path memory/lessons.md
+// - content_sha256 == sha256(content); size/item caps
+// Decide when already terminal → return existing (idempotent); do not re-publish
+```
 
 ### Wikilink regex / normalize
 
 - Match: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
 - Trim target; strip optional trailing `.md`; reject targets with `..`, absolute, empty.
-- Store edge raw target + normalized relative path string.
+- Store edge raw target + **scope-root-relative** normalized path (e.g. `source/intro`, `memory/a`, `AGENTS`).
 - Resolution root = knowledge note’s scope root.
+- Source library links in markdown MUST use `source/…` prefix (not v1 notes-relative bare paths).
 
 ### note_links
 
@@ -164,6 +219,24 @@ CREATE INDEX note_links_to_path ON note_links(to_path);
 CREATE INDEX note_links_from ON note_links(from_note_id);
 ```
 
+`from_note_id` / `to_note_id` are always **`knowledge_notes.id`**, never v1 `notes.id`.
+
+### Backlinks / ID resolve (LOCKED)
+
+```
+# Preferred (unambiguous):
+GET /api/v1/projects/{id}/knowledge/backlinks?path={scope-root-rel}
+GET /api/v1/projects/{id}/knowledge/backlinks?knowledge_id={knowledge_notes.id}
+
+# Optional convenience for source library UI that only has v1 notes.id:
+GET /api/v1/projects/{id}/notes/{note_id}/backlinks
+  → server resolves knowledge row by
+     project_id = id AND relative_path = 'source/' || notes.relative_path
+  → 404 if no knowledge mirror row
+```
+
+Search hits and knowledge tools return **`knowledge_id`** + `path` (scope-root). UI must not pass `knowledge_id` to v1 note body endpoints without resolve.
+
 ### FTS
 
 ```sql
@@ -176,7 +249,8 @@ CREATE VIRTUAL TABLE knowledge_fts USING fts5(
 );
 ```
 
-Project search SQL filters `knowledge_notes` to `project_id = ?` and kinds in scope corpus; join fts. Never search other projects.
+`note_id` in FTS = `knowledge_notes.id`.  
+Project search SQL filters `knowledge_notes` to `project_id = ?` and kinds in corpus; join fts. Never search other projects. Always join `knowledge_notes` for scope (do not trust FTS alone).
 
 ### Prompt assembly API
 
@@ -203,24 +277,27 @@ func BuildSessionPrompt(in BuildPromptInput) ([]PromptSection, error)
 // Reads files from disk; skips missing/empty; applies caps AGENTS>SYSTEM>SOUL>lessons
 ```
 
-### HTTP routes (mount under existing auth)
+### HTTP routes (mount under existing auth — **`/api/v1` prefix LOCKED**)
+
+Match live `internal/httpapi/server.go` (`/api/v1/...`). Never mount bare `/api/...` for these.
 
 ```
-GET  /api/projects/{id}/instructions/{name}     name=soul|system|agents
-PUT  /api/projects/{id}/instructions/{name}
-GET  /api/global/instructions/{name}
-PUT  /api/global/instructions/{name}
+GET  /api/v1/projects/{id}/instructions/{name}     name=soul|system|agents
+PUT  /api/v1/projects/{id}/instructions/{name}
+GET  /api/v1/global/instructions/{name}
+PUT  /api/v1/global/instructions/{name}
 
-POST /api/sessions/{id}/compound                body: {request_key, user_context?}
-GET  /api/sessions/{id}/compound/{proposal_id}
-POST /api/sessions/{id}/compound/{proposal_id}/decide
+POST /api/v1/sessions/{id}/compound                body: {request_key, user_context?, items?}
+GET  /api/v1/sessions/{id}/compound/{proposal_id}
+POST /api/v1/sessions/{id}/compound/{proposal_id}/decide
      body: {request_key, decision: approve|reject, items?: edited items}
 
-GET  /api/projects/{id}/notes/{note_id}/backlinks
-GET  /api/projects/{id}/search?q=&limit=
+GET  /api/v1/projects/{id}/knowledge/backlinks?path=|knowledge_id=
+GET  /api/v1/projects/{id}/notes/{note_id}/backlinks   # convenience resolve — see Backlinks section
+GET  /api/v1/projects/{id}/search?q=&limit=
 
-GET  /api/projects/{id}/knowledge/tree          # optional if reuse notes tree + memory
-GET  /api/projects/{id}/knowledge/read?path=
+GET  /api/v1/projects/{id}/knowledge/tree
+GET  /api/v1/projects/{id}/knowledge/read?path=       # path = scope-root-relative
 ```
 
 Errors: 400 validation, 404 missing, 409 idempotency conflict, 403 wrong session scope.
@@ -281,6 +358,12 @@ See lock. Drafts must not invent parallel doc trees.
 ## Phase drafts (assembled)
 
 Source drafts: `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge-drafts/`. Canonical contracts above win on conflict.
+
+### Review gate
+
+- consulting-grok-review (design/plan lock): thread `T-01a02a38-9315-7176-b621-d3c7d122fea7` — **NOT safe as-is** (Important path dualism, dual IDs, compound revalidation, validators, `/api/v1`, partial uniques).
+- Fixes applied into Canonical contracts + drafts + spec §§10–11 (this revision).
+- Scoped re-review of fixes: see follow-up thread if present.
 
 ---
 
@@ -488,12 +571,12 @@ git commit -m "feat: seed knowledge files on project vault and global ensure"
 - Create: `internal/db/migrations/002_knowledge.sql`
 - Ensure migrator picks numeric order (existing pattern)
 
-**DDL (must match header contracts):**
-- `knowledge_notes` (id, kind, project_id, vault_id, is_global, relative_path, title, content_sha256, byte_size, frontmatter_json, status, created_at, updated_at) + CHECKs for scope exclusivity + UNIQUE scope+path
-- `compound_proposals` as header
-- `note_links` as header
-- `knowledge_fts` FTS5 as header
-
+**DDL (must match header contracts after consulting-grok-review):**
+- `knowledge_notes` (id, kind, project_id, vault_id, is_global, relative_path, title, content_sha256, byte_size, frontmatter_json, status, source_note_id NULL REFERENCES notes(id), created_at, updated_at)
+- Scope CHECK + **partial unique indexes** (project/vault/global) — not a single UNIQUE that breaks on NULL
+- `relative_path` is **scope-root-relative** (`source/…`, `memory/…`, `AGENTS.md`)
+- `compound_proposals`, `note_links`, `knowledge_fts` as header
+- Include `ValidateKnowledgeRelPath` unit tests in Task 7, not promote `ValidateRelPath`
 - [ ] **Step 1:** Test migration applies on empty DB (use existing db test helper).
 
 - [ ] **Step 2–4:** add SQL, pass migrate test, commit
@@ -580,8 +663,8 @@ func (s *InstructionStore) Put(ctx context.Context, meta ScopeMeta, name Instruc
 - Modify: `internal/httpapi/server.go` routes
 
 Routes per header:
-- `GET/PUT /api/projects/{id}/instructions/{name}`
-- `GET/PUT /api/global/instructions/{name}`
+- `GET/PUT /api/v1/projects/{id}/instructions/{name}`
+- `GET/PUT /api/v1/global/instructions/{name}`
 
 - [ ] Tests via existing httptest server helper: PUT agents, GET matches; 400 bad name.
 
@@ -702,14 +785,15 @@ func (s *CompoundStore) CreatePending(ctx context.Context, in CreateProposalInpu
 // Different fingerprint → ErrConflict
 ```
 
-Validation inside CreatePending (or `ValidateCompoundItems`):
+Validation via shared `ValidateCompoundItems` (Canonical LOCKED):
+- Run on **CreatePending**, on **Decide(approve) final items** (including human edits), and again in **PublishApproved** before any write
 - kind/path/action allowed for scope (vault cannot agents_patch)
-- memory_detail path `memory/YYYYMMDD-HHmm-slug.md` (regex `^memory/[0-9]{8}-[0-9]{4}-[a-z0-9-]+\\.md$`)
-- if any memory_detail → require lessons_index_row targeting `memory/lessons.md`
-- path no `..`, no `source/`, no `.agents/`
-- content sha256 must match sha256(content)
-- max content bytes per item (e.g. 256KiB), max items 20
-
+- path allowlist ONLY `AGENTS.md` or `memory/**` — NEVER `source/**`, `.agents/**`, SOUL/SYSTEM
+- memory_detail path regex `^memory/[0-9]{8}-[0-9]{4}-[a-z0-9-]+\.md$`
+- if any memory_detail → require lessons_index_row path `memory/lessons.md`
+- `ValidateKnowledgeRelPath` on every path (not promote `ValidateRelPath`)
+- content sha256 must match sha256(content); max 256KiB/item; max 20 items
+- Decide when already terminal → idempotent return; do not re-publish
 - [ ] **Step 1: Failing tests** — happy path; vault rejects agents_patch; detail without index row rejects; path escape rejects.
 
 - [ ] **Step 2–4:** implement, pass, commit `feat(store): compound proposal create pending`
@@ -805,7 +889,7 @@ func LoadCompoundingSkill(dataDir string, home layout.SessionHome, vaultID, proj
 - Tests
 
 ```
-POST /api/sessions/{id}/compound
+POST /api/v1/sessions/{id}/compound
 { "request_key": "...", "user_context": "optional", "items": [ ... optional prebuilt ...] }
 ```
 
@@ -842,8 +926,8 @@ func ParseCompoundItemsFromAssistant(content string) ([]store.CompoundItem, erro
 - Modify: `compound_handlers.go`
 
 ```
-GET  /api/sessions/{id}/compound/{proposal_id}
-POST /api/sessions/{id}/compound/{proposal_id}/decide
+GET  /api/v1/sessions/{id}/compound/{proposal_id}
+POST /api/v1/sessions/{id}/compound/{proposal_id}/decide
 { "request_key": "...", "decision": "approve"|"reject", "items": [optional edits] }
 ```
 
@@ -1084,7 +1168,9 @@ func (s *KnowledgeStore) DeleteLinksFrom(ctx, fromID string) error
 
 **Files:**
 - Modify: `internal/publish/machine.go` finalize path
-- Test: promote/direct completes → knowledge_notes row kind=source
+- Test: promote/direct completes → knowledge_notes row kind=source with
+  `relative_path = "source/" + notes.relative_path` and `source_note_id = notes.id`
+  (v1 `notes.relative_path` stays source-relative; never prefix notes with `source/`)
 
 - [ ] Commit: `feat(publish): upsert knowledge_notes on source publish`
 
@@ -1131,11 +1217,12 @@ func (s *KnowledgeStore) Backlinks(ctx context.Context, noteID string) ([]Backli
 - Modify: `server.go`
 
 ```
-GET /api/projects/{id}/notes/{note_id}/backlinks
-GET /api/projects/{id}/knowledge/read?path=
-GET /api/projects/{id}/knowledge/tree   // merge source tree + memory files; exclude .agents
+GET /api/v1/projects/{id}/knowledge/backlinks?path=|knowledge_id=
+GET /api/v1/projects/{id}/notes/{note_id}/backlinks  // resolve via source/ + notes.rel
+GET /api/v1/projects/{id}/knowledge/read?path=       // scope-root-relative
+GET /api/v1/projects/{id}/knowledge/tree             // source + memory; exclude .agents
 ```
-
+note_links IDs are knowledge_notes.id only; never assume notes.id == knowledge id.
 - [ ] Tests: read memory path; backlinks JSON.
 
 - [ ] Commit: `feat(api): knowledge read tree and backlinks`
@@ -1276,8 +1363,8 @@ Snippet: simple substring window around first match in body (or FTS snippet if a
 - Modify: `internal/httpapi/knowledge_handlers.go`
 
 ```
-GET /api/projects/{id}/search?q=&limit=
-→ { "hits": [ SearchHit... ] }
+GET /api/v1/projects/{id}/search?q=&limit=
+→ { "hits": [ SearchHit... ] }  // note_id field = knowledge_notes.id; include path scope-root
 ```
 
 - [ ] Test: index two notes, search returns one.
@@ -1447,15 +1534,15 @@ DRAFT_D_COMPLETE
 | Layout seed SOUL/SYSTEM/AGENTS/memory/skill | 1–4 |
 | Prompt load isolation + runner wire | 9–11, 10 |
 | Compound explicit + skill + proposal + finished_at | 20–26, 23, 31 |
+| ValidateCompoundItems on create+decide+publish | 20–22 Canonical |
+| Path namespaces notes vs knowledge | Canonical + 5, 43, 69 |
 | In-session review card | 28–29 |
 | Real memory rail | 32 |
 | Frontmatter + path wikilinks + backlinks | 40–48 |
-| Source publish reindex | 43 |
+| Source publish reindex with source/ prefix | 43 |
 | Project FTS + API + UI + agent tools | 60–67, 64–65 |
 | Instruction editors | 8, 70 |
+| /api/v1 routes | Canonical HTTP |
 | Deferred vault/global search | 68 only |
-| No graph / no auto-compound / no title-only links | non-goals confirmed Task 72 |
 
-Placeholder scan: drafts avoid TBD; engineering choices locked in Canonical contracts.
-
-**Execution note:** Grok draft worker A stream-timed-out with no file; per AGENTS standing rule, master wrote A–D drafts (no triple-retry). Implementation workers must still use `amp -m grok45 --no-archive-after-execute -x` + consulting-grok-review per task.
+**Execution:** Implementation workers: `amp -m grok45 --no-archive-after-execute -x` + consulting-grok-review per task. Never Task/OpenAI/`-ox`.

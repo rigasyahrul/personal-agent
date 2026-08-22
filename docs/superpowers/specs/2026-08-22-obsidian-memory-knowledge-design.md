@@ -338,31 +338,39 @@ Session-start optional grants for vault-wide / global search — default **off**
 
 ## 10. Data model additions (conceptual)
 
-Extend beyond v1 `notes` (source-only) to a **knowledge note** index that can represent source, memory, and instruction files (stable `id`, scope ids, `kind`, `relative_path`, hash, frontmatter JSON, status).
+Extend beyond v1 `notes` (source-only) with a separate **`knowledge_notes`** index (stable independent ids) for source mirrors, memory, and instruction files.
+
+**Path namespaces (locked after review):**
+
+| Store | Path meaning | Example |
+|-------|--------------|---------|
+| v1 `notes.relative_path` | Source-relative (unchanged) | `articles/intro.md` |
+| `knowledge_notes.relative_path` | Scope-root-relative | `source/articles/intro.md` |
+
+Source mirror: `knowledge.relative_path = "source/" + notes.relative_path`. Optional `source_note_id` FK. Never assume `notes.id == knowledge_notes.id`.
 
 New:
 
-- `compound_proposals` + `compound_proposal_items` (or equivalent JSON items blob with clear status machine)
-- `note_links` (from_id, to_path, to_id nullable, raw target)
-- FTS virtual table bound to knowledge notes
+- `compound_proposals` (items JSON + status machine; validate on create **and** decide **and** publish)
+- `note_links` (from/to **knowledge** ids only)
+- FTS virtual table on `knowledge_notes.id`
+- Partial unique indexes for project/vault/global paths (SQLite NULL-safe)
 
-Exact DDL and migration numbers: implementation plan. Preserve existing promote/direct/review contracts for `source/` notes.
-
+Exact DDL: implementation plan Canonical contracts. Preserve promote/direct/review contracts for v1 `notes`.
 ---
 
 ## 11. API surface (conceptual)
 
-| Area | Endpoints (names indicative) |
-|------|------------------------------|
+| Area | Endpoints (all under **`/api/v1`**) |
+|------|-------------------------------------|
 | Instructions | GET/PUT project + global SOUL/SYSTEM/AGENTS |
-| Memory read | GET tree/read under scope memory (and reuse note read by id) |
-| Compound | POST start proposal; GET proposal; POST decide (approve/reject/edit items) |
-| Backlinks | GET backlinks?note_id= |
-| Search | GET project search?q= |
+| Knowledge | GET tree/read by **scope-root** path |
+| Compound | POST start; GET proposal; POST decide (revalidate final items) |
+| Backlinks | GET `knowledge/backlinks?path=` or `knowledge_id=`; optional notes.id convenience resolve |
+| Search | GET project search?q= (returns knowledge_id + path) |
 | Existing | promote/direct/notes/sessions unchanged in spirit |
 
-Auth: owner session + CSRF on mutations (existing).
-
+Auth: owner session + CSRF on mutations (existing). Knowledge path validation is separate from promote `ValidateRelPath`.
 ---
 
 ## 12. UI surface (slice 1)

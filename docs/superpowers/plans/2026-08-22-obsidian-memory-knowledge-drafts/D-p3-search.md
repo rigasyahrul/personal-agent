@@ -58,8 +58,8 @@ Snippet: simple substring window around first match in body (or FTS snippet if a
 - Modify: `internal/httpapi/knowledge_handlers.go`
 
 ```
-GET /api/projects/{id}/search?q=&limit=
-→ { "hits": [ SearchHit... ] }
+GET /api/v1/projects/{id}/search?q=&limit=
+→ { "hits": [ SearchHit... ] }  // note_id field = knowledge_notes.id; include path scope-root
 ```
 
 - [ ] Test: index two notes, search returns one.
