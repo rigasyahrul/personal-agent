@@ -371,6 +371,9 @@ Exact DDL: implementation plan Canonical contracts. Preserve promote/direct/revi
 | Existing | promote/direct/notes/sessions unchanged in spirit |
 
 Auth: owner session + CSRF on mutations (existing). Knowledge path validation is separate from promote `ValidateRelPath`.
+
+**Knowledge FS:** do not open `memory/**` through stock `fsroot`+`ValidateRelPath` (reserved components). Use MemoryDir/SourceDir sub-roots or a knowledge opener; never loosen promote reserved `memory`/`soul`. Compound scope/ids come only from the session row. Migrator must apply `002` (not hard-code `001` only).
+
 ---
 
 ## 12. UI surface (slice 1)

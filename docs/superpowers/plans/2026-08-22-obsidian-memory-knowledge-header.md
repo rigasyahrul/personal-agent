@@ -140,6 +140,22 @@ func ValidateKnowledgeRelPath(rel string) error
 // Reject: empty, .., absolute, .agents/**, sessions/**, soul/** directory targets
 ```
 
+**Knowledge FS access (LOCKED — consulting-grok-review T-01a02a41):**
+
+Live `fsroot.Open` + `paths.ValidateRelPath` **rejects** any path component `memory` or `soul` (`internal/paths/paths.go`, `internal/fsroot/root.go`). That is **correct for promote/source** and must **not** be loosened.
+
+Knowledge/compound I/O must **not** call `ValidateRelPath` on scope-root paths like `memory/lessons.md`.
+
+**Required approach (pick implementation detail, both OK):**
+
+1. **Sub-root open (preferred):**  
+   - Library: `fsroot.Open(SourceDir(projectRoot))` + **source-relative** path (same as v1 notes).  
+   - Memory: `fsroot.Open(MemoryDir(scopeRoot))` + path relative to `memory/` only (e.g. `lessons.md`, `YYYYMMDD-HHmm-slug.md`).  
+   - Instructions: write/read single files under `scopeRoot` via rooted open of `scopeRoot` with **single-segment** names `AGENTS.md`|`SOUL.md`|`SYSTEM.md` only (still never pass `memory/...` through ValidateRelPath as multi-component under project root if that hits reserved check — use direct `InstructionPath` + atomic write helper that validates with `ValidateKnowledgeRelPath` / name allowlist, not promote validator).
+
+2. **Or** extend fsroot with an explicit `OpenAllowing(validateFn)` / `knowledge.OpenScopeFile(scopeRoot, rel)` that uses **only** `ValidateKnowledgeRelPath`.
+
+**Explicit forbid:** removing `memory`/`soul` from promote `ValidateRelPath` to “make compound work.”
 ### compound_proposals
 
 ```sql
@@ -195,6 +211,36 @@ func ValidateCompoundItems(scope CompoundScope, items []CompoundItem) error
 // Decide when already terminal → return existing (idempotent); do not re-publish
 ```
 
+**Compound scope binding (LOCKED):**
+
+```go
+// HTTP body may only carry: request_key, user_context?, items?
+// Handler MUST derive scope + project_id + vault_id ONLY from sessions row:
+//   home=project → scope=project, project_id=session.project_id, vault_id=session.vault_id
+//   home=vault   → scope=vault, vault_id=session.vault_id, project_id=""
+//   home=global  → scope=global, both ids empty
+// Ignore/forbid any client-supplied scope or target ids (do not put them on the wire).
+// 403 if session missing/terminal/wrong owner.
+```
+
+**Decide CAS + publish atomicity (LOCKED):**
+
+```sql
+-- Decide transition must be compare-and-swap:
+UPDATE compound_proposals SET status=?, decided_at=?, items_json=?
+ WHERE id=? AND status='pending'
+-- 0 rows → return current row (idempotent) or 409 if conflicting decision; never double-publish
+```
+
+```go
+// PublishApproved:
+// 1. Re-ValidateCompoundItems on final items
+// 2. Stage all file bytes (temp on same volume)
+// 3. Apply all disk renames + knowledge upserts in one barrier/txn plan
+// 4. On any item failure: MarkFinished failed, finished_at set; do NOT leave status=approved
+//    with only a subset applied (compensate staged files / document rollback of partial renames)
+// Prefer all-or-nothing; partial success is a bug.
+```
 ### Wikilink regex / normalize
 
 - Match: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
@@ -253,6 +299,16 @@ CREATE VIRTUAL TABLE knowledge_fts USING fts5(
 
 `note_id` in FTS = `knowledge_notes.id`.  
 Project search SQL filters `knowledge_notes` to `project_id = ?` and kinds in corpus; join fts. Never search other projects. Always join `knowledge_notes` for scope (do not trust FTS alone).
+
+### Migrations (LOCKED)
+
+```go
+// internal/db/db.go today hard-codes version '001' only.
+// Task 5 MUST change Open/migrate to apply embedded migrations/002_knowledge.sql
+// (loop migrations/*.sql by sorted version OR explicit 002 after 001).
+// Test: after db.Open on empty dir, knowledge_notes / compound_proposals / note_links exist.
+// Never ship 002 SQL file without migrator change.
+```
 
 ### Prompt assembly API
 

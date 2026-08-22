@@ -140,6 +140,22 @@ func ValidateKnowledgeRelPath(rel string) error
 // Reject: empty, .., absolute, .agents/**, sessions/**, soul/** directory targets
 ```
 
+**Knowledge FS access (LOCKED — consulting-grok-review T-01a02a41):**
+
+Live `fsroot.Open` + `paths.ValidateRelPath` **rejects** any path component `memory` or `soul` (`internal/paths/paths.go`, `internal/fsroot/root.go`). That is **correct for promote/source** and must **not** be loosened.
+
+Knowledge/compound I/O must **not** call `ValidateRelPath` on scope-root paths like `memory/lessons.md`.
+
+**Required approach (pick implementation detail, both OK):**
+
+1. **Sub-root open (preferred):**  
+   - Library: `fsroot.Open(SourceDir(projectRoot))` + **source-relative** path (same as v1 notes).  
+   - Memory: `fsroot.Open(MemoryDir(scopeRoot))` + path relative to `memory/` only (e.g. `lessons.md`, `YYYYMMDD-HHmm-slug.md`).  
+   - Instructions: write/read single files under `scopeRoot` via rooted open of `scopeRoot` with **single-segment** names `AGENTS.md`|`SOUL.md`|`SYSTEM.md` only (still never pass `memory/...` through ValidateRelPath as multi-component under project root if that hits reserved check — use direct `InstructionPath` + atomic write helper that validates with `ValidateKnowledgeRelPath` / name allowlist, not promote validator).
+
+2. **Or** extend fsroot with an explicit `OpenAllowing(validateFn)` / `knowledge.OpenScopeFile(scopeRoot, rel)` that uses **only** `ValidateKnowledgeRelPath`.
+
+**Explicit forbid:** removing `memory`/`soul` from promote `ValidateRelPath` to “make compound work.”
 ### compound_proposals
 
 ```sql
@@ -195,6 +211,36 @@ func ValidateCompoundItems(scope CompoundScope, items []CompoundItem) error
 // Decide when already terminal → return existing (idempotent); do not re-publish
 ```
 
+**Compound scope binding (LOCKED):**
+
+```go
+// HTTP body may only carry: request_key, user_context?, items?
+// Handler MUST derive scope + project_id + vault_id ONLY from sessions row:
+//   home=project → scope=project, project_id=session.project_id, vault_id=session.vault_id
+//   home=vault   → scope=vault, vault_id=session.vault_id, project_id=""
+//   home=global  → scope=global, both ids empty
+// Ignore/forbid any client-supplied scope or target ids (do not put them on the wire).
+// 403 if session missing/terminal/wrong owner.
+```
+
+**Decide CAS + publish atomicity (LOCKED):**
+
+```sql
+-- Decide transition must be compare-and-swap:
+UPDATE compound_proposals SET status=?, decided_at=?, items_json=?
+ WHERE id=? AND status='pending'
+-- 0 rows → return current row (idempotent) or 409 if conflicting decision; never double-publish
+```
+
+```go
+// PublishApproved:
+// 1. Re-ValidateCompoundItems on final items
+// 2. Stage all file bytes (temp on same volume)
+// 3. Apply all disk renames + knowledge upserts in one barrier/txn plan
+// 4. On any item failure: MarkFinished failed, finished_at set; do NOT leave status=approved
+//    with only a subset applied (compensate staged files / document rollback of partial renames)
+// Prefer all-or-nothing; partial success is a bug.
+```
 ### Wikilink regex / normalize
 
 - Match: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
@@ -253,6 +299,16 @@ CREATE VIRTUAL TABLE knowledge_fts USING fts5(
 
 `note_id` in FTS = `knowledge_notes.id`.  
 Project search SQL filters `knowledge_notes` to `project_id = ?` and kinds in corpus; join fts. Never search other projects. Always join `knowledge_notes` for scope (do not trust FTS alone).
+
+### Migrations (LOCKED)
+
+```go
+// internal/db/db.go today hard-codes version '001' only.
+// Task 5 MUST change Open/migrate to apply embedded migrations/002_knowledge.sql
+// (loop migrations/*.sql by sorted version OR explicit 002 after 001).
+// Test: after db.Open on empty dir, knowledge_notes / compound_proposals / note_links exist.
+// Never ship 002 SQL file without migrator change.
+```
 
 ### Prompt assembly API
 
@@ -365,8 +421,10 @@ Source drafts: `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge-draf
 
 | Gate | Thread | Result |
 |------|--------|--------|
-| Design+plan lock | `T-01a02a38-9315-7176-b621-d3c7d122fea7` | NOT safe — Important path/ID/compound/API/uniques |
-| Post-fix re-review | `T-01a02a3d-5bee-71d1-8d4c-7af5e68c6903` | **Safe to start P0** (Minor only; wikilink .md join key locked in follow-up) |
+| Design+plan lock | `T-01a02a38` | NOT safe — path dualism, dual IDs, compound revalidation, validators, /api/v1, uniques |
+| Post-fix | `T-01a02a3d` | Safe P0 (Minor .md join) |
+| Full re-review HEAD be3431d | `T-01a02a41-e75d-71bc-9286-285b02461b59` | NOT safe — fsroot/memory, migrator 002, Task 41 strip .md, session scope bind, CAS/atomicity |
+| Fixes for T-01a02a41 | this commit | Canonical + drafts patched; confirmation re-review next |
 
 ---
 
@@ -572,8 +630,8 @@ git commit -m "feat: seed knowledge files on project vault and global ensure"
 
 **Files:**
 - Create: `internal/db/migrations/002_knowledge.sql`
-- Ensure migrator picks numeric order (existing pattern)
-
+- Modify: `internal/db/db.go` — **must** apply `002` (today only hard-codes `001`; change to loop or explicit 002)
+- Test: empty `Open` → `knowledge_notes` table exists
 **DDL (must match header contracts after consulting-grok-review):**
 - `knowledge_notes` (id, kind, project_id, vault_id, is_global, relative_path, title, content_sha256, byte_size, frontmatter_json, status, source_note_id NULL REFERENCES notes(id), created_at, updated_at)
 - Scope CHECK + **partial unique indexes** (project/vault/global) — not a single UNIQUE that breaks on NULL
@@ -778,6 +836,7 @@ type CompoundItem struct {
 type CreateProposalInput struct {
   SessionID string
   RequestKey string
+  // Scope, ProjectID, VaultID MUST be filled by handler from session row only — never from client body
   Scope domain.CompoundScope
   ProjectID, VaultID string
   Items []CompoundItem
@@ -857,8 +916,11 @@ func (p *Publisher) PublishApproved(ctx context.Context, proposal domain.Compoun
 // On full success caller MarkFinished approved; on error MarkFinished failed
 ```
 
-Use `fsroot` / temp+rename same volume patterns from `internal/publish`.
-
+Use temp+rename same volume patterns from `internal/publish`, but **knowledge FS strategy from Canonical**:
+- Memory writes: open `MemoryDir(scopeRoot)` sub-root (or knowledge opener) — **never** `ValidateRelPath` on `memory/...` under project root via stock fsroot.
+- AGENTS: instruction atomic write under scope root.
+- **Forbid** loosening promote `ValidateRelPath` reserved memory/soul.
+- All-or-nothing multi-item publish; Decide CAS `WHERE status='pending'`.
 - [ ] Tests: approve agents_patch writes file; strips Memory block → error; memory detail + lessons row both land.
 
 - [ ] Commit: `feat(compound): publish approved proposal items to disk`
@@ -1123,20 +1185,22 @@ func TitleOrStem(fm Frontmatter, relativePath string) string
 type Wikilink struct {
   RawTarget string
   Alias string
-  NormalizedPath string // no leading ./ ; strip .md
+  // NormalizedPath: scope-root form WITH .md — same as knowledge_notes.relative_path
+  NormalizedPath string
 }
 
 func ParseWikilinks(body string) []Wikilink
 func NormalizeWikilinkTarget(target string) (string, error)
 // reject .., absolute, empty, NUL
+// append .md if missing; bare AGENTS|SOUL|SYSTEM → AGENTS.md|SOUL.md|SYSTEM.md
+// do NOT strip .md (Canonical join key)
 ```
 
 Regex from header: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
 
-- [ ] Tests: `[[memory/a|Title]]`, `[[source/x.md]]`, reject `[[../x]]`.
+- [ ] Tests: `[[memory/a|Title]]` → `memory/a.md`; `[[source/x.md]]` → `source/x.md`; `[[AGENTS]]` → `AGENTS.md`; reject `[[../x]]`.
 
 - [ ] Commit: `feat(knowledge): path wikilink parse and normalize`
-
 ---
 
 ### Task 42: KnowledgeStore upsert + reindex links
@@ -1407,8 +1471,7 @@ Workspace tools unchanged. Grant: always on for project sessions in slice 1 (no 
 // list_knowledge {path?} — list directory entries, no .agents, no sessions
 ```
 
-Security: rooted open via fsroot; reject escape.
-
+Security: rooted open via **knowledge FS strategy** (Canonical) — SourceDir sub-root for `source/**`, MemoryDir for `memory/**`, instruction allowlist for root files. **Not** stock `fsroot.Open(projectRoot)` + `memory/...` (ValidateRelPath rejects). Reject escape / `.agents` / `sessions`.
 - [ ] Tests: read AGENTS.md; reject `../`.
 
 - [ ] Commit: `feat(agent): read_knowledge and list_knowledge tools`

@@ -98,8 +98,7 @@ Workspace tools unchanged. Grant: always on for project sessions in slice 1 (no 
 // list_knowledge {path?} — list directory entries, no .agents, no sessions
 ```
 
-Security: rooted open via fsroot; reject escape.
-
+Security: rooted open via **knowledge FS strategy** (Canonical) — SourceDir sub-root for `source/**`, MemoryDir for `memory/**`, instruction allowlist for root files. **Not** stock `fsroot.Open(projectRoot)` + `memory/...` (ValidateRelPath rejects). Reject escape / `.agents` / `sessions`.
 - [ ] Tests: read AGENTS.md; reject `../`.
 
 - [ ] Commit: `feat(agent): read_knowledge and list_knowledge tools`

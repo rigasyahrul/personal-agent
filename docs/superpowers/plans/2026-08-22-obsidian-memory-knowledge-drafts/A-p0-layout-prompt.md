@@ -200,8 +200,8 @@ git commit -m "feat: seed knowledge files on project vault and global ensure"
 
 **Files:**
 - Create: `internal/db/migrations/002_knowledge.sql`
-- Ensure migrator picks numeric order (existing pattern)
-
+- Modify: `internal/db/db.go` — **must** apply `002` (today only hard-codes `001`; change to loop or explicit 002)
+- Test: empty `Open` → `knowledge_notes` table exists
 **DDL (must match header contracts after consulting-grok-review):**
 - `knowledge_notes` (id, kind, project_id, vault_id, is_global, relative_path, title, content_sha256, byte_size, frontmatter_json, status, source_note_id NULL REFERENCES notes(id), created_at, updated_at)
 - Scope CHECK + **partial unique indexes** (project/vault/global) — not a single UNIQUE that breaks on NULL

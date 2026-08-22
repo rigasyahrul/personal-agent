@@ -24,6 +24,7 @@ type CompoundItem struct {
 type CreateProposalInput struct {
   SessionID string
   RequestKey string
+  // Scope, ProjectID, VaultID MUST be filled by handler from session row only — never from client body
   Scope domain.CompoundScope
   ProjectID, VaultID string
   Items []CompoundItem
@@ -103,8 +104,11 @@ func (p *Publisher) PublishApproved(ctx context.Context, proposal domain.Compoun
 // On full success caller MarkFinished approved; on error MarkFinished failed
 ```
 
-Use `fsroot` / temp+rename same volume patterns from `internal/publish`.
-
+Use temp+rename same volume patterns from `internal/publish`, but **knowledge FS strategy from Canonical**:
+- Memory writes: open `MemoryDir(scopeRoot)` sub-root (or knowledge opener) — **never** `ValidateRelPath` on `memory/...` under project root via stock fsroot.
+- AGENTS: instruction atomic write under scope root.
+- **Forbid** loosening promote `ValidateRelPath` reserved memory/soul.
+- All-or-nothing multi-item publish; Decide CAS `WHERE status='pending'`.
 - [ ] Tests: approve agents_patch writes file; strips Memory block → error; memory detail + lessons row both land.
 
 - [ ] Commit: `feat(compound): publish approved proposal items to disk`

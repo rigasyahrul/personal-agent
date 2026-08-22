@@ -38,20 +38,22 @@ func TitleOrStem(fm Frontmatter, relativePath string) string
 type Wikilink struct {
   RawTarget string
   Alias string
-  NormalizedPath string // no leading ./ ; strip .md
+  // NormalizedPath: scope-root form WITH .md — same as knowledge_notes.relative_path
+  NormalizedPath string
 }
 
 func ParseWikilinks(body string) []Wikilink
 func NormalizeWikilinkTarget(target string) (string, error)
 // reject .., absolute, empty, NUL
+// append .md if missing; bare AGENTS|SOUL|SYSTEM → AGENTS.md|SOUL.md|SYSTEM.md
+// do NOT strip .md (Canonical join key)
 ```
 
 Regex from header: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
 
-- [ ] Tests: `[[memory/a|Title]]`, `[[source/x.md]]`, reject `[[../x]]`.
+- [ ] Tests: `[[memory/a|Title]]` → `memory/a.md`; `[[source/x.md]]` → `source/x.md`; `[[AGENTS]]` → `AGENTS.md`; reject `[[../x]]`.
 
 - [ ] Commit: `feat(knowledge): path wikilink parse and normalize`
-
 ---
 
 ### Task 42: KnowledgeStore upsert + reindex links
