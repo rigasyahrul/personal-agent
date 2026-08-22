@@ -19,11 +19,11 @@ type Frontmatter struct {
 
 func SplitFrontmatter(md string) (fm Frontmatter, body string, err error)
 // --- yaml --- body; missing fm → empty, full body
+// Cap frontmatter block at 64KiB (Canonical); oversize → error or empty fm per Canonical
 func TitleOrStem(fm Frontmatter, relativePath string) string
 ```
 
-- [ ] Tests: with/without fm; title fallback stem `memory/x.md` → `x`.
-
+- [ ] Tests: with/without fm; title fallback stem `memory/x.md` → `x`; oversize fm rejected/skipped.
 - [ ] Commit: `feat(knowledge): yaml frontmatter split`
 
 ---
@@ -157,10 +157,10 @@ note_links IDs are knowledge_notes.id only; never assume notes.id == knowledge i
 - Create: `web/src/components/notes/BacklinksPanel.test.ts`
 - CSS tokens `.backlinks`, `.backlinks__item`
 
-**Props:** `items: { title: string; path: string; noteId: string }[]; onopen: (noteId: string) => void`
+**Props:** `items: { title: string; path: string; knowledgeId: string; kind?: string; sourceNoteId?: string }[]; onopen: (item) => void`  
+`onopen` follows Canonical UI open contract (source → v1 notes id; else knowledge/read by path).
 
 - [ ] Empty state “No backlinks yet.”
-
 - [ ] Commit: `feat(web): BacklinksPanel`
 
 ---
@@ -183,10 +183,10 @@ note_links IDs are knowledge_notes.id only; never assume notes.id == knowledge i
 - Modify: `web/src/lib/markdown/render.ts` and/or `MarkdownView.svelte`
 - Test: `[[path|Title]]` becomes link with text Title and data-path
 
-**LOCKED:** click handling may be app-level; render `<a class="wikilink" data-path="...">` without navigating externally.
+**LOCKED:** click handling may be app-level; render `<a class="wikilink" data-path="...">` without navigating externally.  
+DOMPurify must **allowlist** `data-path` (and `class`) — extend live `ADD_ATTR` beyond `target`. Test attr survives sanitize; no raw HTML injection.
 
 - [ ] Commit: `feat(web): render path wikilinks with title mask`
-
 ---
 
 ### Task 50: Seed memory detail example parser fixtures

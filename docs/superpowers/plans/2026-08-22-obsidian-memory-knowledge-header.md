@@ -240,7 +240,52 @@ UPDATE compound_proposals SET status=?, decided_at=?, items_json=?
 // 4. On any item failure: MarkFinished failed, finished_at set; do NOT leave status=approved
 //    with only a subset applied (compensate staged files / document rollback of partial renames)
 // Prefer all-or-nothing; partial success is a bug.
+//
+// Recovery: on app boot or GET proposal, if status=approved AND finished_at IS NULL,
+// re-drive PublishApproved once (idempotent file writes) or MarkFinished failed.
+// Never leave approved+null-finished without a recovery path.
 ```
+
+**Compound generation run (LOCKED — Task 25):**
+
+```go
+// When items omitted on POST compound:
+// - Use same session Admit as chat (one-active-run): if busy → 409 session_busy
+// - Tools DISABLED for compound generation runs (model must emit JSON items only)
+// - Skill + compound instructions injected as ephemeral system (PA_COMPOUND_V1 prefix);
+//   strip from provider history like PA_RUNTIME_V1 — do not pollute durable chat semantics
+// - Parse JSON items → CreatePending; do not write AGENTS/memory until human decide
+// Items-POST path: no agent run.
+// UI: disable Compound button while session has queued|running run.
+```
+
+**lessons_index_row semantics (LOCKED):**
+
+```go
+// Prefer server-side MERGE for lessons_index_row:
+// - Parse existing memory/lessons.md bullets
+// - Upsert/prepend the proposed row(s) by target path; do not delete unrelated rows
+// - If client sends full content, server still merges by path key rather than blind overwrite
+// OR if full-replace kept: ValidateCompoundItems MUST require every memory_detail path
+// appear as a wikilink/target in the lessons content, AND tests prove multi-row index
+// survives a second compound that only adds one lesson (implementer must read-merge).
+// LOCKED choice: **server merge/prepend by detail path**; never blind truncate index.
+```
+
+**content_sha256 on decide (LOCKED):**
+
+```go
+// On Decide(approve), server recomputes sha256 from final item content and overwrites
+// content_sha256 (client hash advisory only). Human edits in UI need not recompute.
+```
+
+**HTTP CSRF (LOCKED):**
+
+```go
+// All compound POST/decide and instruction PUT routes use the same mutation middleware
+// + RequireCSRF as POST /api/v1/sessions/{id}/messages (see server.go).
+```
+
 ### Wikilink regex / normalize
 
 - Match: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
@@ -283,8 +328,20 @@ GET /api/v1/projects/{id}/notes/{note_id}/backlinks
   → 404 if no knowledge mirror row
 ```
 
-Search hits and knowledge tools return **`knowledge_id`** + `path` (scope-root). UI must not pass `knowledge_id` to v1 note body endpoints without resolve.
+Search hits and knowledge tools return **`knowledge_id`** + `path` (scope-root) + `kind`.  
+JSON field name **`knowledge_id`** (not ambiguous `note_id`).
 
+**UI open contract (LOCKED):**
+
+```
+onOpen(hit):
+  if hit.kind == source && hit.source_note_id:
+    navigate v1 notes UI with source_note_id  // existing #/projects/.../notes/{notes.id}
+  else:
+    open via GET /api/v1/projects/{id}/knowledge/read?path={hit.path}
+// Never pass knowledge_id to GET /api/v1/notes/{id} body routes.
+BacklinksPanel onopen uses knowledge_id or path → knowledge/read; source convenience optional.
+```
 ### FTS
 
 ```sql
@@ -297,9 +354,12 @@ CREATE VIRTUAL TABLE knowledge_fts USING fts5(
 );
 ```
 
-`note_id` in FTS = `knowledge_notes.id`.  
+`note_id` column in FTS table = `knowledge_notes.id` (internal). API responses use **`knowledge_id`**.  
 Project search SQL filters `knowledge_notes` to `project_id = ?` and kinds in corpus; join fts. Never search other projects. Always join `knowledge_notes` for scope (do not trust FTS alone).
 
+**FTS query safety (LOCKED):** bind/escape user query for FTS5 (strip or quote `"` `*` Boolean ops as needed); invalid query → empty hits or 400, never panic/500 SQL error leak.
+
+**Frontmatter caps (LOCKED):** max frontmatter block 64KiB; fail closed on parse bomb / oversize (skip fm fields, still index body, or reject write — prefer reject compound/instruction put; for promote source prefer skip fm + log).
 ### Migrations (LOCKED)
 
 ```go
@@ -360,17 +420,34 @@ GET  /api/v1/projects/{id}/knowledge/read?path=       # path = scope-root-relati
 
 Errors: 400 validation, 404 missing, 409 idempotency conflict, 403 wrong session scope.
 
-### Agent tools (project session)
+### Agent tools (project session) — LOCKED T-01a02a53
 
 ```go
 // names locked
 const (
-  ToolReadKnowledge  = "read_knowledge"   // {path}
+  ToolReadKnowledge  = "read_knowledge"   // {path} scope-root-relative
   ToolListKnowledge  = "list_knowledge"   // {path?}
   ToolSearchProject  = "search_project"   // {query, limit?}
 )
-// Workspace tools unchanged. No write_knowledge tool in slice 1.
+// No write_knowledge tool in slice 1.
 ```
+
+**Runner dispatch (Critical lock):**
+
+```go
+// Live runner today only workspace.Execute — MUST change in Task 65:
+// 1. Build tool definitions for project home ALWAYS including the three knowledge tools
+//    independent of session.tool_grants.workspace_files.
+// 2. On tool call:
+//    - workspace tool names → existing Workspace path (requires workspace_files grant + root)
+//    - knowledge tool names → KnowledgeToolHandler (no workspace grant required)
+//    - unknown → reject
+// 3. Tests MUST pass with workspace_files=false: search_project + read_knowledge succeed.
+// 4. Vault/global sessions: do NOT register knowledge tools in slice 1.
+// 5. Forbid routing knowledge paths through Workspace/ValidateRelPath.
+```
+
+**Tool result caps:** knowledge read max body (e.g. 256KiB same order as workspace markdown); search max hits 50; snippet max ~400 runes; truncate with clear marker.
 
 ### UI components (tokens in app.css)
 

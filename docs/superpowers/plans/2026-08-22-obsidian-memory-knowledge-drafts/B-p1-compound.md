@@ -69,6 +69,8 @@ type DecideInput struct {
 func (s *CompoundStore) Decide(ctx context.Context, in DecideInput) (domain.CompoundProposal, error)
 // reject: status=rejected, decided_at=now, finished_at=now
 // approve: status=approved, decided_at=now, finished_at still null until publish completes
+// CAS: UPDATE ... WHERE status='pending' (Canonical)
+// On approve: server recomputes content_sha256 from each item content
 func (s *CompoundStore) MarkFinished(ctx context.Context, id string, status string, errMsg string, now time.Time) error
 // status approved→ stays approved with finished_at; or failed with error+finished_at
 func (s *CompoundStore) Get(ctx, id string) (domain.CompoundProposal, error)
@@ -109,7 +111,10 @@ Use temp+rename same volume patterns from `internal/publish`, but **knowledge FS
 - AGENTS: instruction atomic write under scope root.
 - **Forbid** loosening promote `ValidateRelPath` reserved memory/soul.
 - All-or-nothing multi-item publish; Decide CAS `WHERE status='pending'`.
-- [ ] Tests: approve agents_patch writes file; strips Memory block → error; memory detail + lessons row both land.
+- **lessons_index_row:** server **merge/prepend by detail path** — never blind truncate existing lessons.md.
+- Recovery: approved && finished_at NULL → re-drive publish or mark failed.
+
+- [ ] Tests: approve agents_patch writes file; strips Memory block → error; memory detail + lessons row both land; second compound merge preserves prior lessons rows.
 
 - [ ] Commit: `feat(compound): publish approved proposal items to disk`
 
@@ -149,7 +154,8 @@ POST /api/v1/sessions/{id}/compound
 
 If `items` present → validate+CreatePending (no model).  
 If `items` absent → start compound agent run (Task 25) OR return 501 until 25 done — **LOCKED:** implement items-present path first in this task; Task 25 adds generation.
-
+- CSRF: mutation middleware like messages POST.
+- Scope/ids from session only (Canonical).
 - [ ] Test: POST items → 200 proposal pending.
 
 - [ ] Commit: `feat(api): create compound proposal from items`
@@ -160,7 +166,7 @@ If `items` absent → start compound agent run (Task 25) OR return 501 until 25 
 
 **Files:**
 - Modify: `internal/agent/runner.go` or new `internal/agent/compound_run.go`
-- HTTP: when items omitted, admit a run with system= skill + instructions to emit JSON array of items only; parse; CreatePending; return proposal id.
+- HTTP: when items omitted, **same session Admit** (409 if chat run busy); **tools disabled**; skill as ephemeral `PA_COMPOUND_V1` system (strip like runtime); parse JSON → CreatePending; no disk write until decide.
 
 **Interfaces:**
 ```go
@@ -169,7 +175,8 @@ func ParseCompoundItemsFromAssistant(content string) ([]store.CompoundItem, erro
 ```
 
 - [ ] Test with fake provider returning fixed JSON → proposal rows created.
-
+- [ ] Test: active chat run → compound generate returns 409.
+- [ ] Test: compound run does not register workspace/knowledge tools.
 - [ ] Commit: `feat(agent): generate compound proposal items from model`
 
 ---
@@ -284,17 +291,19 @@ func ValidateAgentsMemoryPointer(content string) error
 
 ### Task 32: Replace ProjectRail fake memory textarea (read-only summary)
 
+**Phase order LOCKED:** implement **after** Task 46 knowledge/read **or** add thin P1 endpoint `GET /api/v1/projects/{id}/memory/lessons` backed by `ReadLessonsIndex` (disk only) until P2. Do not block P1 gate on full knowledge store.
+
 **Files:**
 - Modify: `web/src/components/ProjectRail.svelte`
 - Modify: `ProjectRail.test.ts`
-- API: GET project knowledge read `memory/lessons.md` or instructions
+- API: thin lessons endpoint **or** knowledge/read after P2
 
 - [ ] Remove non-persistent bind:value memory dump.
 - [ ] Show lessons index preview (first N lines) + link “Open memory”.
 - [ ] Empty state when no lessons.
+- [ ] Compound button disabled while session run active (with Task 29).
 
 - [ ] Commit: `fix(web): ProjectRail shows real memory index not fake textarea`
-
 ---
 
 ### Task 33: Compound timestamps metric helper (optional UI)

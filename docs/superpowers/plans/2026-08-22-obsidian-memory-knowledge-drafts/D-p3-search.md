@@ -29,11 +29,12 @@ Call from UpsertFromContent after body load.
 
 ```go
 type SearchHit struct {
-  NoteID string
-  Path string
+  KnowledgeID string // API json: knowledge_id — never v1 notes.id
+  Path string        // scope-root-relative
   Title string
   Snippet string
   Kind domain.KnowledgeKind
+  SourceNoteID string // optional; set for kind=source when mirrored
   Rank float64
 }
 
@@ -59,11 +60,11 @@ Snippet: simple substring window around first match in body (or FTS snippet if a
 
 ```
 GET /api/v1/projects/{id}/search?q=&limit=
-→ { "hits": [ SearchHit... ] }  // note_id field = knowledge_notes.id; include path scope-root
+→ { "hits": [ { knowledge_id, path, title, snippet, kind, source_note_id? } ] }
 ```
 
-- [ ] Test: index two notes, search returns one.
-
+- [ ] Test: index two notes, search returns one; JSON uses `knowledge_id` not ambiguous `note_id`.
+- [ ] Test: FTS special chars in q do not 500.
 - [ ] Commit: `feat(api): project search endpoint`
 
 ---
@@ -108,12 +109,14 @@ Security: rooted open via **knowledge FS strategy** (Canonical) — SourceDir su
 ### Task 65: Wire tools into Runner for project home
 
 **Files:**
-- Modify: `internal/agent/runner.go`
+- Modify: `internal/agent/runner.go` — **multi-handler dispatch (Canonical Critical lock)**
 
-- [ ] When building tools list, if session.Home==project include knowledge tools; vault/global may include read limited later — **slice 1:** knowledge tools **project only**.
+- [ ] Project home: always register knowledge tools **even when `workspace_files=false`**.
+- [ ] Dispatch: workspace names → Workspace (grant required); knowledge names → KnowledgeToolHandler; unknown reject.
+- [ ] Vault/global: no knowledge tools in slice 1.
+- [ ] Tests: `workspace_files=false` + `search_project` + `read_knowledge` succeed; no `write_knowledge`.
 
-- [ ] Commit: `feat(agent): enable knowledge tools on project sessions`
-
+- [ ] Commit: `feat(agent): knowledge tool dispatch independent of workspace grant`
 ---
 
 ### Task 66: `KnowledgeSearch.svelte`
@@ -123,10 +126,10 @@ Security: rooted open via **knowledge FS strategy** (Canonical) — SourceDir su
 - Create: `web/src/components/notes/KnowledgeSearch.test.ts`
 - CSS: `.knowledge-search`
 
-**Props:** `projectId: string; onopen: (hit) => void`
+**Props:** `projectId: string; onopen: (hit) => void`  
+`onopen` follows Canonical UI open contract (`knowledge_id` + `path` + `kind` + optional `source_note_id`).
 
 Debounced input → GET search → list hits (title, path, snippet).
-
 - [ ] Commit: `feat(web): KnowledgeSearch component`
 
 ---

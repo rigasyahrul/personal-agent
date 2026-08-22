@@ -240,7 +240,52 @@ UPDATE compound_proposals SET status=?, decided_at=?, items_json=?
 // 4. On any item failure: MarkFinished failed, finished_at set; do NOT leave status=approved
 //    with only a subset applied (compensate staged files / document rollback of partial renames)
 // Prefer all-or-nothing; partial success is a bug.
+//
+// Recovery: on app boot or GET proposal, if status=approved AND finished_at IS NULL,
+// re-drive PublishApproved once (idempotent file writes) or MarkFinished failed.
+// Never leave approved+null-finished without a recovery path.
 ```
+
+**Compound generation run (LOCKED — Task 25):**
+
+```go
+// When items omitted on POST compound:
+// - Use same session Admit as chat (one-active-run): if busy → 409 session_busy
+// - Tools DISABLED for compound generation runs (model must emit JSON items only)
+// - Skill + compound instructions injected as ephemeral system (PA_COMPOUND_V1 prefix);
+//   strip from provider history like PA_RUNTIME_V1 — do not pollute durable chat semantics
+// - Parse JSON items → CreatePending; do not write AGENTS/memory until human decide
+// Items-POST path: no agent run.
+// UI: disable Compound button while session has queued|running run.
+```
+
+**lessons_index_row semantics (LOCKED):**
+
+```go
+// Prefer server-side MERGE for lessons_index_row:
+// - Parse existing memory/lessons.md bullets
+// - Upsert/prepend the proposed row(s) by target path; do not delete unrelated rows
+// - If client sends full content, server still merges by path key rather than blind overwrite
+// OR if full-replace kept: ValidateCompoundItems MUST require every memory_detail path
+// appear as a wikilink/target in the lessons content, AND tests prove multi-row index
+// survives a second compound that only adds one lesson (implementer must read-merge).
+// LOCKED choice: **server merge/prepend by detail path**; never blind truncate index.
+```
+
+**content_sha256 on decide (LOCKED):**
+
+```go
+// On Decide(approve), server recomputes sha256 from final item content and overwrites
+// content_sha256 (client hash advisory only). Human edits in UI need not recompute.
+```
+
+**HTTP CSRF (LOCKED):**
+
+```go
+// All compound POST/decide and instruction PUT routes use the same mutation middleware
+// + RequireCSRF as POST /api/v1/sessions/{id}/messages (see server.go).
+```
+
 ### Wikilink regex / normalize
 
 - Match: `\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`
@@ -283,8 +328,20 @@ GET /api/v1/projects/{id}/notes/{note_id}/backlinks
   → 404 if no knowledge mirror row
 ```
 
-Search hits and knowledge tools return **`knowledge_id`** + `path` (scope-root). UI must not pass `knowledge_id` to v1 note body endpoints without resolve.
+Search hits and knowledge tools return **`knowledge_id`** + `path` (scope-root) + `kind`.  
+JSON field name **`knowledge_id`** (not ambiguous `note_id`).
 
+**UI open contract (LOCKED):**
+
+```
+onOpen(hit):
+  if hit.kind == source && hit.source_note_id:
+    navigate v1 notes UI with source_note_id  // existing #/projects/.../notes/{notes.id}
+  else:
+    open via GET /api/v1/projects/{id}/knowledge/read?path={hit.path}
+// Never pass knowledge_id to GET /api/v1/notes/{id} body routes.
+BacklinksPanel onopen uses knowledge_id or path → knowledge/read; source convenience optional.
+```
 ### FTS
 
 ```sql
@@ -297,9 +354,12 @@ CREATE VIRTUAL TABLE knowledge_fts USING fts5(
 );
 ```
 
-`note_id` in FTS = `knowledge_notes.id`.  
+`note_id` column in FTS table = `knowledge_notes.id` (internal). API responses use **`knowledge_id`**.  
 Project search SQL filters `knowledge_notes` to `project_id = ?` and kinds in corpus; join fts. Never search other projects. Always join `knowledge_notes` for scope (do not trust FTS alone).
 
+**FTS query safety (LOCKED):** bind/escape user query for FTS5 (strip or quote `"` `*` Boolean ops as needed); invalid query → empty hits or 400, never panic/500 SQL error leak.
+
+**Frontmatter caps (LOCKED):** max frontmatter block 64KiB; fail closed on parse bomb / oversize (skip fm fields, still index body, or reject write — prefer reject compound/instruction put; for promote source prefer skip fm + log).
 ### Migrations (LOCKED)
 
 ```go
@@ -360,17 +420,34 @@ GET  /api/v1/projects/{id}/knowledge/read?path=       # path = scope-root-relati
 
 Errors: 400 validation, 404 missing, 409 idempotency conflict, 403 wrong session scope.
 
-### Agent tools (project session)
+### Agent tools (project session) — LOCKED T-01a02a53
 
 ```go
 // names locked
 const (
-  ToolReadKnowledge  = "read_knowledge"   // {path}
+  ToolReadKnowledge  = "read_knowledge"   // {path} scope-root-relative
   ToolListKnowledge  = "list_knowledge"   // {path?}
   ToolSearchProject  = "search_project"   // {query, limit?}
 )
-// Workspace tools unchanged. No write_knowledge tool in slice 1.
+// No write_knowledge tool in slice 1.
 ```
+
+**Runner dispatch (Critical lock):**
+
+```go
+// Live runner today only workspace.Execute — MUST change in Task 65:
+// 1. Build tool definitions for project home ALWAYS including the three knowledge tools
+//    independent of session.tool_grants.workspace_files.
+// 2. On tool call:
+//    - workspace tool names → existing Workspace path (requires workspace_files grant + root)
+//    - knowledge tool names → KnowledgeToolHandler (no workspace grant required)
+//    - unknown → reject
+// 3. Tests MUST pass with workspace_files=false: search_project + read_knowledge succeed.
+// 4. Vault/global sessions: do NOT register knowledge tools in slice 1.
+// 5. Forbid routing knowledge paths through Workspace/ValidateRelPath.
+```
+
+**Tool result caps:** knowledge read max body (e.g. 256KiB same order as workspace markdown); search max hits 50; snippet max ~400 runes; truncate with clear marker.
 
 ### UI components (tokens in app.css)
 
@@ -421,11 +498,12 @@ Source drafts: `docs/superpowers/plans/2026-08-22-obsidian-memory-knowledge-draf
 
 | Gate | Thread | Result |
 |------|--------|--------|
-| Design+plan lock | `T-01a02a38` | NOT safe — path dualism, dual IDs, compound revalidation, validators, /api/v1, uniques |
-| Post-fix | `T-01a02a3d` | Safe P0 (Minor .md join) |
-| Full re-review HEAD be3431d | `T-01a02a41-e75d-71bc-9286-285b02461b59` | NOT safe — fsroot/memory, migrator 002, Task 41 strip .md, session scope bind, CAS/atomicity |
-| Fixes for T-01a02a41 | `8044741` | Canonical + drafts patched |
-| Confirmation re-review | `T-01a02a48-5368-73ed-8fed-118495c27804` | **Safe to start P0** (Minor only) |
+| Design+plan lock | `T-01a02a38` | NOT safe — path/ID/API/uniques |
+| Post-fix | `T-01a02a3d` | Safe P0 (Minor) |
+| Full re-review | `T-01a02a41` | NOT safe — FS/migrator/join/scope/CAS |
+| P0 confirmation | `T-01a02a48` | **Safe to start P0** |
+| P1–P3 E2E | `T-01a02a53-4298-763a-ad6d-eb9311cf226e` | NOT safe — tool dispatch Critical + Important compound/search/UI |
+| P1–P3 fixes | this commit | Canonical+drafts patched; confirmation re-review next |
 
 ---
 
@@ -882,6 +960,8 @@ type DecideInput struct {
 func (s *CompoundStore) Decide(ctx context.Context, in DecideInput) (domain.CompoundProposal, error)
 // reject: status=rejected, decided_at=now, finished_at=now
 // approve: status=approved, decided_at=now, finished_at still null until publish completes
+// CAS: UPDATE ... WHERE status='pending' (Canonical)
+// On approve: server recomputes content_sha256 from each item content
 func (s *CompoundStore) MarkFinished(ctx context.Context, id string, status string, errMsg string, now time.Time) error
 // status approved→ stays approved with finished_at; or failed with error+finished_at
 func (s *CompoundStore) Get(ctx, id string) (domain.CompoundProposal, error)
@@ -922,7 +1002,10 @@ Use temp+rename same volume patterns from `internal/publish`, but **knowledge FS
 - AGENTS: instruction atomic write under scope root.
 - **Forbid** loosening promote `ValidateRelPath` reserved memory/soul.
 - All-or-nothing multi-item publish; Decide CAS `WHERE status='pending'`.
-- [ ] Tests: approve agents_patch writes file; strips Memory block → error; memory detail + lessons row both land.
+- **lessons_index_row:** server **merge/prepend by detail path** — never blind truncate existing lessons.md.
+- Recovery: approved && finished_at NULL → re-drive publish or mark failed.
+
+- [ ] Tests: approve agents_patch writes file; strips Memory block → error; memory detail + lessons row both land; second compound merge preserves prior lessons rows.
 
 - [ ] Commit: `feat(compound): publish approved proposal items to disk`
 
@@ -962,7 +1045,8 @@ POST /api/v1/sessions/{id}/compound
 
 If `items` present → validate+CreatePending (no model).  
 If `items` absent → start compound agent run (Task 25) OR return 501 until 25 done — **LOCKED:** implement items-present path first in this task; Task 25 adds generation.
-
+- CSRF: mutation middleware like messages POST.
+- Scope/ids from session only (Canonical).
 - [ ] Test: POST items → 200 proposal pending.
 
 - [ ] Commit: `feat(api): create compound proposal from items`
@@ -973,7 +1057,7 @@ If `items` absent → start compound agent run (Task 25) OR return 501 until 25 
 
 **Files:**
 - Modify: `internal/agent/runner.go` or new `internal/agent/compound_run.go`
-- HTTP: when items omitted, admit a run with system= skill + instructions to emit JSON array of items only; parse; CreatePending; return proposal id.
+- HTTP: when items omitted, **same session Admit** (409 if chat run busy); **tools disabled**; skill as ephemeral `PA_COMPOUND_V1` system (strip like runtime); parse JSON → CreatePending; no disk write until decide.
 
 **Interfaces:**
 ```go
@@ -982,7 +1066,8 @@ func ParseCompoundItemsFromAssistant(content string) ([]store.CompoundItem, erro
 ```
 
 - [ ] Test with fake provider returning fixed JSON → proposal rows created.
-
+- [ ] Test: active chat run → compound generate returns 409.
+- [ ] Test: compound run does not register workspace/knowledge tools.
 - [ ] Commit: `feat(agent): generate compound proposal items from model`
 
 ---
@@ -1097,17 +1182,19 @@ func ValidateAgentsMemoryPointer(content string) error
 
 ### Task 32: Replace ProjectRail fake memory textarea (read-only summary)
 
+**Phase order LOCKED:** implement **after** Task 46 knowledge/read **or** add thin P1 endpoint `GET /api/v1/projects/{id}/memory/lessons` backed by `ReadLessonsIndex` (disk only) until P2. Do not block P1 gate on full knowledge store.
+
 **Files:**
 - Modify: `web/src/components/ProjectRail.svelte`
 - Modify: `ProjectRail.test.ts`
-- API: GET project knowledge read `memory/lessons.md` or instructions
+- API: thin lessons endpoint **or** knowledge/read after P2
 
 - [ ] Remove non-persistent bind:value memory dump.
 - [ ] Show lessons index preview (first N lines) + link “Open memory”.
 - [ ] Empty state when no lessons.
+- [ ] Compound button disabled while session run active (with Task 29).
 
 - [ ] Commit: `fix(web): ProjectRail shows real memory index not fake textarea`
-
 ---
 
 ### Task 33: Compound timestamps metric helper (optional UI)
@@ -1167,11 +1254,11 @@ type Frontmatter struct {
 
 func SplitFrontmatter(md string) (fm Frontmatter, body string, err error)
 // --- yaml --- body; missing fm → empty, full body
+// Cap frontmatter block at 64KiB (Canonical); oversize → error or empty fm per Canonical
 func TitleOrStem(fm Frontmatter, relativePath string) string
 ```
 
-- [ ] Tests: with/without fm; title fallback stem `memory/x.md` → `x`.
-
+- [ ] Tests: with/without fm; title fallback stem `memory/x.md` → `x`; oversize fm rejected/skipped.
 - [ ] Commit: `feat(knowledge): yaml frontmatter split`
 
 ---
@@ -1305,10 +1392,10 @@ note_links IDs are knowledge_notes.id only; never assume notes.id == knowledge i
 - Create: `web/src/components/notes/BacklinksPanel.test.ts`
 - CSS tokens `.backlinks`, `.backlinks__item`
 
-**Props:** `items: { title: string; path: string; noteId: string }[]; onopen: (noteId: string) => void`
+**Props:** `items: { title: string; path: string; knowledgeId: string; kind?: string; sourceNoteId?: string }[]; onopen: (item) => void`  
+`onopen` follows Canonical UI open contract (source → v1 notes id; else knowledge/read by path).
 
 - [ ] Empty state “No backlinks yet.”
-
 - [ ] Commit: `feat(web): BacklinksPanel`
 
 ---
@@ -1331,10 +1418,10 @@ note_links IDs are knowledge_notes.id only; never assume notes.id == knowledge i
 - Modify: `web/src/lib/markdown/render.ts` and/or `MarkdownView.svelte`
 - Test: `[[path|Title]]` becomes link with text Title and data-path
 
-**LOCKED:** click handling may be app-level; render `<a class="wikilink" data-path="...">` without navigating externally.
+**LOCKED:** click handling may be app-level; render `<a class="wikilink" data-path="...">` without navigating externally.  
+DOMPurify must **allowlist** `data-path` (and `class`) — extend live `ADD_ATTR` beyond `target`. Test attr survives sanitize; no raw HTML injection.
 
 - [ ] Commit: `feat(web): render path wikilinks with title mask`
-
 ---
 
 ### Task 50: Seed memory detail example parser fixtures
@@ -1403,11 +1490,12 @@ Call from UpsertFromContent after body load.
 
 ```go
 type SearchHit struct {
-  NoteID string
-  Path string
+  KnowledgeID string // API json: knowledge_id — never v1 notes.id
+  Path string        // scope-root-relative
   Title string
   Snippet string
   Kind domain.KnowledgeKind
+  SourceNoteID string // optional; set for kind=source when mirrored
   Rank float64
 }
 
@@ -1433,11 +1521,11 @@ Snippet: simple substring window around first match in body (or FTS snippet if a
 
 ```
 GET /api/v1/projects/{id}/search?q=&limit=
-→ { "hits": [ SearchHit... ] }  // note_id field = knowledge_notes.id; include path scope-root
+→ { "hits": [ { knowledge_id, path, title, snippet, kind, source_note_id? } ] }
 ```
 
-- [ ] Test: index two notes, search returns one.
-
+- [ ] Test: index two notes, search returns one; JSON uses `knowledge_id` not ambiguous `note_id`.
+- [ ] Test: FTS special chars in q do not 500.
 - [ ] Commit: `feat(api): project search endpoint`
 
 ---
@@ -1482,12 +1570,14 @@ Security: rooted open via **knowledge FS strategy** (Canonical) — SourceDir su
 ### Task 65: Wire tools into Runner for project home
 
 **Files:**
-- Modify: `internal/agent/runner.go`
+- Modify: `internal/agent/runner.go` — **multi-handler dispatch (Canonical Critical lock)**
 
-- [ ] When building tools list, if session.Home==project include knowledge tools; vault/global may include read limited later — **slice 1:** knowledge tools **project only**.
+- [ ] Project home: always register knowledge tools **even when `workspace_files=false`**.
+- [ ] Dispatch: workspace names → Workspace (grant required); knowledge names → KnowledgeToolHandler; unknown reject.
+- [ ] Vault/global: no knowledge tools in slice 1.
+- [ ] Tests: `workspace_files=false` + `search_project` + `read_knowledge` succeed; no `write_knowledge`.
 
-- [ ] Commit: `feat(agent): enable knowledge tools on project sessions`
-
+- [ ] Commit: `feat(agent): knowledge tool dispatch independent of workspace grant`
 ---
 
 ### Task 66: `KnowledgeSearch.svelte`
@@ -1497,10 +1587,10 @@ Security: rooted open via **knowledge FS strategy** (Canonical) — SourceDir su
 - Create: `web/src/components/notes/KnowledgeSearch.test.ts`
 - CSS: `.knowledge-search`
 
-**Props:** `projectId: string; onopen: (hit) => void`
+**Props:** `projectId: string; onopen: (hit) => void`  
+`onopen` follows Canonical UI open contract (`knowledge_id` + `path` + `kind` + optional `source_note_id`).
 
 Debounced input → GET search → list hits (title, path, snippet).
-
 - [ ] Commit: `feat(web): KnowledgeSearch component`
 
 ---
