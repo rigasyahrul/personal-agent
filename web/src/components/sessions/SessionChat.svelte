@@ -362,13 +362,24 @@
     const gen = generation
     const key = uuid()
     try {
-      await api.decideCompound(id, proposal.id, {
+      const got = await api.decideCompound(id, proposal.id, {
         request_key: key,
         decision,
         items,
       })
       if (!destroyed && gen === generation && session.id === id) {
-        compoundProposal = null
+        const finished = Boolean(got?.finished_at)
+        const ok =
+          got?.status === 'rejected' || (got?.status === 'approved' && finished)
+        if (ok) {
+          compoundProposal = null
+        } else {
+          error =
+            got?.error?.trim() ||
+            (got?.status === 'failed'
+              ? 'Compound publish failed'
+              : 'Compound is not finished yet')
+        }
       }
     } catch (cause) {
       if (!destroyed && gen === generation && session.id === id) {

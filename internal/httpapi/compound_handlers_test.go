@@ -496,6 +496,38 @@ func TestCompoundGETRecoversApprovedUnfinished(t *testing.T) {
 	}
 }
 
+func TestCompoundDecideReDrivesPublishWhenApprovedUnfinished(t *testing.T) {
+	f := newCompoundHTTPFixture(t)
+	body := "# Agents\n\nrule: decide-retry-recovery\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	pending := f.postPending(t, "rk-decide-recover", body)
+	decided := time.Unix(2000, 0).UTC().Format(time.RFC3339Nano)
+	if _, err := f.db.Exec(`UPDATE compound_proposals SET status='approved', decided_at=?, finished_at=NULL WHERE id=?`, decided, pending.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(f.agentsPath()); err == nil {
+		t.Fatal("AGENTS.md already present before decide retry")
+	}
+
+	res := apiRequest(t, f.h, "POST", "/api/v1/sessions/"+f.sess.ID+"/compound/"+pending.ID+"/decide", map[string]any{
+		"request_key": "rk-decide-recover",
+		"decision":    "approve",
+	}, f.cookies, "csrf")
+	if res.Code != http.StatusOK {
+		t.Fatalf("decide retry = %d %s", res.Code, res.Body.String())
+	}
+	got := decodeCompoundProposal(t, res.Body.Bytes())
+	if got.Status != "approved" || got.FinishedAt == nil {
+		t.Fatalf("decide retry proposal = %+v", got)
+	}
+	raw, err := os.ReadFile(f.agentsPath())
+	if err != nil {
+		t.Fatalf("AGENTS.md missing after decide retry: %v", err)
+	}
+	if string(raw) != body {
+		t.Fatalf("AGENTS.md after decide retry = %q, want %q", raw, body)
+	}
+}
+
 func TestCompoundDecideRequiresCSRFAndAuth(t *testing.T) {
 	f := newCompoundHTTPFixture(t)
 	body := "# Agents\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"

@@ -212,9 +212,9 @@ func (h *compoundHandlers) decide(w http.ResponseWriter, r *http.Request) {
 		internalError(w)
 		return
 	}
-	if in.Decision == "approve" && before.Status == domain.CompoundStatusPending &&
-		got.Status == domain.CompoundStatusApproved && got.FinishedAt == nil {
-		_ = h.publishAndFinish(r.Context(), got)
+	if in.Decision == "approve" && got.Status == domain.CompoundStatusApproved && got.FinishedAt == nil {
+		// Same recovery as GET: re-drive publish after crash between CAS and finish.
+		_ = h.publishAndFinish(context.Background(), got)
 		reloaded, loadErr := h.compound.Get(r.Context(), got.ID)
 		if loadErr != nil {
 			internalError(w)

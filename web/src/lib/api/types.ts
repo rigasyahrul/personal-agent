@@ -197,6 +197,7 @@ export interface CompoundProposal {
   created_at: string
   decided_at?: string
   finished_at?: string
+  error?: string
 }
 
 export interface CreateCompoundInput {

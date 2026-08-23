@@ -693,6 +693,7 @@ describe('SessionChat', () => {
       vi.mocked(api.decideCompound).mockResolvedValue({
         ...pendingProposal,
         status: 'approved',
+        finished_at: '2026-08-23T00:00:00.000Z',
       })
       await startPendingReview()
       await fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
@@ -741,6 +742,32 @@ describe('SessionChat', () => {
       await fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
       expect(await screen.findByRole('alert')).toHaveTextContent('decide failed')
       expect(screen.getByText('Compound review')).toBeInTheDocument()
+    })
+
+    it('keeps the card when approve returns failed', async () => {
+      vi.mocked(api.decideCompound).mockResolvedValue({
+        ...pendingProposal,
+        status: 'failed',
+        finished_at: '2026-08-23T00:00:00.000Z',
+        error: 'AGENTS.md must keep a ## Memory section',
+      })
+      await startPendingReview()
+      await fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('AGENTS.md must keep a ## Memory section')
+      expect(screen.getByText('Compound review')).toBeInTheDocument()
+    })
+
+    it('keeps the card when approve is unfinished', async () => {
+      vi.mocked(api.decideCompound).mockResolvedValue({
+        ...pendingProposal,
+        status: 'approved',
+        finished_at: undefined,
+      })
+      await startPendingReview()
+      await fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+      await waitFor(() => expect(api.decideCompound).toHaveBeenCalled())
+      expect(screen.getByText('Compound review')).toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent(/not finished|unfinished|still publishing/i)
     })
   })
 })
