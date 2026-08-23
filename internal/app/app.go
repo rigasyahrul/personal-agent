@@ -105,6 +105,10 @@ func NewWithDependencies(ctx context.Context, cfg config.Config, deps Dependenci
 		_ = db.Close()
 		return nil, fmt.Errorf("recover unfinished publications: %w", err)
 	}
+	if err := (&store.KnowledgeStore{DB: db, Clock: deps.Clock}).BackfillReadySourceNotes(ctx, cfg.DataDir); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("backfill knowledge notes: %w", err)
+	}
 	backupSvc := backup.NewService(db, cfg.DataDir, barrier, deps.Clock, deps.ObjectSink)
 	// Only load AWS/S3 when a bucket is explicitly configured; ignore ambient creds otherwise.
 	if cfg.BackupS3Bucket != "" && deps.ObjectSink == nil {
