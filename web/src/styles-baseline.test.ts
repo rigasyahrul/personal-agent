@@ -64,6 +64,21 @@ describe('visual baseline', () => {
     }
   });
 
+  it('knowledge compound search instruction surfaces use theme tokens, not one-off hex', () => {
+    expect(css).toMatch(/--fg\s*:/);
+    const blocks =
+      css.match(
+        /\.(compound-[\w-]+|backlinks[\w-]*|knowledge-search[\w-]*|instruction-editor[\w-]*)\s*\{[^}]*\}/g,
+      ) ?? [];
+    expect(blocks.length).toBeGreaterThan(10);
+    const hex = /#[0-9a-fA-F]{3,8}\b/;
+    expect(blocks.filter((block) => hex.test(block))).toEqual([]);
+    expect(css).toMatch(/\.compound-card__title\s*\{[^}]*color:\s*var\(--fg\)/s);
+    expect(css).toMatch(/\.knowledge-search__hit:hover\s*\{[^}]*background:\s*var\(/s);
+    expect(css).toMatch(/\.instruction-editor__tab--active\s*\{[^}]*color:\s*var\(--accent\)/s);
+    expect(css).toMatch(/\.backlinks__item\s*\{[^}]*color:\s*var\(--accent\)/s);
+  });
+
   it('declares session-focus layout tokens', () => {
     for (const token of [
       '.session-focus',
