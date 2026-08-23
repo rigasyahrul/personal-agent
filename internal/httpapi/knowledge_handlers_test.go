@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -291,6 +292,104 @@ func TestKnowledgeReadRejectsTraversalAndAgents(t *testing.T) {
 	}
 }
 
+// Break this would catch: search matching both notes, or JSON using note_id
+// instead of knowledge_id.
+func TestProjectSearchReturnsOneHitAndKnowledgeID(t *testing.T) {
+	h, db, _, pid, cookies, clk := knowledgeAPIServer(t)
+	ks := &store.KnowledgeStore{DB: db, Clock: clk}
+	ctx := t.Context()
+
+	match, err := ks.UpsertFromContent(ctx, store.UpsertKnowledgeInput{
+		Kind:         domain.KnowledgeKindMemoryDetail,
+		ProjectID:    pid,
+		RelativePath: "memory/match.md",
+		Content:      []byte("---\ntitle: Match Note\n---\nBody has alphaquark only here.\n"),
+		Status:       "ready",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ks.UpsertFromContent(ctx, store.UpsertKnowledgeInput{
+		Kind:         domain.KnowledgeKindMemoryDetail,
+		ProjectID:    pid,
+		RelativePath: "memory/other.md",
+		Content:      []byte("---\ntitle: Other Note\n---\nBody has betazebra instead.\n"),
+		Status:       "ready",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := apiRequest(t, h, http.MethodGet, "/api/v1/projects/"+pid+"/search?q=alphaquark&limit=20", nil, cookies, "")
+	if got.Code != http.StatusOK {
+		t.Fatalf("search = %d %s", got.Code, got.Body.String())
+	}
+	var body struct {
+		Hits []struct {
+			KnowledgeID  string `json:"knowledge_id"`
+			NoteID       string `json:"note_id"`
+			Path         string `json:"path"`
+			Title        string `json:"title"`
+			Snippet      string `json:"snippet"`
+			Kind         string `json:"kind"`
+			SourceNoteID string `json:"source_note_id"`
+		} `json:"hits"`
+	}
+	if err := json.NewDecoder(got.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Hits) != 1 {
+		t.Fatalf("hits = %#v, want 1", body.Hits)
+	}
+	hit := body.Hits[0]
+	if hit.KnowledgeID != match.ID {
+		t.Fatalf("knowledge_id = %q want %q", hit.KnowledgeID, match.ID)
+	}
+	if hit.NoteID != "" {
+		t.Fatalf("ambiguous note_id leaked: %q", hit.NoteID)
+	}
+	if hit.Path != "memory/match.md" || hit.Title != "Match Note" || hit.Kind != string(domain.KnowledgeKindMemoryDetail) {
+		t.Fatalf("hit = %+v", hit)
+	}
+	if !strings.Contains(hit.Snippet, "alphaquark") {
+		t.Fatalf("snippet %q missing alphaquark", hit.Snippet)
+	}
+}
+
+// Break this would catch: raw FTS5 syntax in q becoming a 500.
+func TestProjectSearchFTSSpecialCharsDoNot500(t *testing.T) {
+	h, db, _, pid, cookies, clk := knowledgeAPIServer(t)
+	ks := &store.KnowledgeStore{DB: db, Clock: clk}
+	if _, err := ks.UpsertFromContent(t.Context(), store.UpsertKnowledgeInput{
+		Kind:         domain.KnowledgeKindMemoryDetail,
+		ProjectID:    pid,
+		RelativePath: "memory/safe.md",
+		Content:      []byte("needleword sits in the body.\n"),
+		Status:       "ready",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, q := range []string{`"`, `*`, `AND`, `OR`, `NOT`, `"foo*bar"`, `foo AND bar`, `NEEDLEWORD*`, `"needleword"`} {
+		path := "/api/v1/projects/" + pid + "/search?q=" + url.QueryEscape(q)
+		got := apiRequest(t, h, http.MethodGet, path, nil, cookies, "")
+		if got.Code == http.StatusInternalServerError {
+			t.Fatalf("query %q = 500 %s", q, got.Body.String())
+		}
+		if got.Code != http.StatusOK {
+			t.Fatalf("query %q = %d %s, want 200", q, got.Code, got.Body.String())
+		}
+		var body struct {
+			Hits []json.RawMessage `json:"hits"`
+		}
+		if err := json.NewDecoder(got.Body).Decode(&body); err != nil {
+			t.Fatalf("query %q json: %v body=%s", q, err, got.Body.String())
+		}
+		if body.Hits == nil {
+			t.Fatalf("query %q hits is null, want array", q)
+		}
+	}
+}
+
 func TestKnowledgeRoutesRequireAuth(t *testing.T) {
 	h, _, _, pid, _, _ := knowledgeAPIServer(t)
 	for _, path := range []string{
@@ -298,6 +397,7 @@ func TestKnowledgeRoutesRequireAuth(t *testing.T) {
 		"/api/v1/projects/" + pid + "/knowledge/tree",
 		"/api/v1/projects/" + pid + "/knowledge/backlinks?path=memory/lessons.md",
 		"/api/v1/projects/" + pid + "/notes/note-src/backlinks",
+		"/api/v1/projects/" + pid + "/search?q=alphaquark",
 	} {
 		got := apiRequest(t, h, http.MethodGet, path, nil, nil, "")
 		if got.Code != http.StatusUnauthorized {

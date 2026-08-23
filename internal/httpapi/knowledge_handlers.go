@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/rigasyahrul/personal-agent/internal/clock"
+	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/fsroot"
 	"github.com/rigasyahrul/personal-agent/internal/layout"
 	"github.com/rigasyahrul/personal-agent/internal/paths"
@@ -40,6 +42,7 @@ func KnowledgeRoutes(mux *http.ServeMux, db *sql.DB, dataDir string, c clock.Clo
 	mux.Handle("GET /api/v1/projects/{id}/notes/{note_id}/backlinks", auth(http.HandlerFunc(h.noteBacklinks)))
 	mux.Handle("GET /api/v1/projects/{id}/knowledge/read", auth(http.HandlerFunc(h.read)))
 	mux.Handle("GET /api/v1/projects/{id}/knowledge/tree", auth(http.HandlerFunc(h.tree)))
+	mux.Handle("GET /api/v1/projects/{id}/search", auth(http.HandlerFunc(h.search)))
 }
 
 type knowledgeBacklinkDTO struct {
@@ -58,6 +61,15 @@ type knowledgeTreeEntry struct {
 	Path string `json:"path"`
 	Kind string `json:"kind"`
 	Size int64  `json:"size,omitempty"`
+}
+
+type knowledgeSearchHitDTO struct {
+	KnowledgeID  string               `json:"knowledge_id"`
+	Path         string               `json:"path"`
+	Title        string               `json:"title"`
+	Snippet      string               `json:"snippet"`
+	Kind         domain.KnowledgeKind `json:"kind"`
+	SourceNoteID string               `json:"source_note_id,omitempty"`
 }
 
 func (h *knowledgeHandlers) backlinks(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +191,38 @@ func (h *knowledgeHandlers) tree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{"entries": entries})
+}
+
+func (h *knowledgeHandlers) search(w http.ResponseWriter, r *http.Request) {
+	project, err := h.projects.Get(r.Context(), r.PathValue("id"))
+	if writeStoreError(w, err, true) {
+		return
+	}
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		limit = n
+	}
+	hits, err := h.knowledge.SearchProject(r.Context(), project.ID, r.URL.Query().Get("q"), limit)
+	if writeKnowledgeError(w, err) {
+		return
+	}
+	out := make([]knowledgeSearchHitDTO, 0, len(hits))
+	for _, hit := range hits {
+		out = append(out, knowledgeSearchHitDTO{
+			KnowledgeID:  hit.KnowledgeID,
+			Path:         hit.Path,
+			Title:        hit.Title,
+			Snippet:      hit.Snippet,
+			Kind:         hit.Kind,
+			SourceNoteID: hit.SourceNoteID,
+		})
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{"hits": out})
 }
 
 func writeKnowledgeError(w http.ResponseWriter, err error) bool {
