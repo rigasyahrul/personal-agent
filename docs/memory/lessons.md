@@ -30,11 +30,15 @@ Scan this first. Open the linked file only when you need detail.
 
 | Topic | Latest lesson |
 |-------|----------------|
+| pi | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
+| sqlite | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
+| compound | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
+| worktree | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | agents | [2026-08-19 — Lessons file is stable `lessons.md`](20260819-2200-lessons-file-is-stable-lessons-md.md) |
 | amp | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | hub | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
-| knowledge | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
+| knowledge | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | compounding | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | craft | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
 | benchmark | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
@@ -69,7 +73,7 @@ Scan this first. Open the linked file only when you need detail.
 | jsdom | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
 | session-focus | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | shell | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
-| ship | [2026-08-12 — Ship means push](20260812-2100-ship-means-push.md) |
+| ship | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | skills | [2026-08-20 — Frontend UI craft skill from live pass](20260820-1606-frontend-ui-craft-skill-from-live-pass.md) |
 | spa | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
 | spawn | [2026-08-21 — Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md) |
@@ -94,6 +98,8 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-23** — [Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md)  
+  Tags: pi, master, sqlite, knowledge, compound, ship, vibe-pass, worktree
 - [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) — consulting-grok-review gates + Canonical traps
 - **2026-08-20** — [Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md)  
   Tags: hub, session, rail, review, sdd, frontend, jsdom, grok45
