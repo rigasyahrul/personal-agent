@@ -683,3 +683,78 @@ func TestCompoundPOSTProjectMemoryStaysInProjectRoot(t *testing.T) {
 	mustNotExist(t, filepath.Join(layout.VaultRoot(f.dataDir, "v"), filepath.FromSlash(detailPath)))
 	mustNotExist(t, filepath.Join(layout.GlobalRoot(f.dataDir), filepath.FromSlash(detailPath)))
 }
+
+func TestCompoundApproveEndToEnd(t *testing.T) {
+	h, _, dataDir, _, cookies := chatAPIServer(t, nil)
+
+	createdProject := apiRequest(t, h, "POST", "/api/v1/projects", map[string]any{
+		"name": "e2e-compound", "vault_id": "v",
+	}, cookies, "csrf")
+	if createdProject.Code != http.StatusCreated {
+		t.Fatalf("create project = %d %s", createdProject.Code, createdProject.Body.String())
+	}
+	var project struct {
+		ID      string `json:"id"`
+		VaultID string `json:"vault_id"`
+	}
+	if err := json.Unmarshal(createdProject.Body.Bytes(), &project); err != nil {
+		t.Fatal(err)
+	}
+	if project.ID == "" || project.VaultID != "v" {
+		t.Fatalf("project = %+v", project)
+	}
+
+	created := apiRequest(t, h, "POST", "/api/v1/projects/"+project.ID+"/sessions", map[string]string{
+		"title": "e2e", "provider": "openai", "model_id": "m",
+	}, cookies, "csrf")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create session = %d %s", created.Code, created.Body.String())
+	}
+	var sess domain.Session
+	if err := json.Unmarshal(created.Body.Bytes(), &sess); err != nil {
+		t.Fatal(err)
+	}
+
+	const standingRule = "rule: e2e-task-34-standing"
+	body := "# Agents\n\n" + standingRule + "\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	posted := apiRequest(t, h, "POST", "/api/v1/sessions/"+sess.ID+"/compound", map[string]any{
+		"request_key": "rk-e2e-approve",
+		"items": []map[string]string{{
+			"kind":           "agents_patch",
+			"path":           "AGENTS.md",
+			"action":         "update",
+			"content":        body,
+			"content_sha256": shaHexTest(body),
+		}},
+	}, cookies, "csrf")
+	if posted.Code != http.StatusOK {
+		t.Fatalf("POST items = %d %s want 200", posted.Code, posted.Body.String())
+	}
+	pending := decodeCompoundProposal(t, posted.Body.Bytes())
+	if pending.ID == "" || pending.Status != "pending" || pending.Scope != "project" || pending.ProjectID != project.ID {
+		t.Fatalf("pending proposal = %+v", pending)
+	}
+
+	decided := apiRequest(t, h, "POST", "/api/v1/sessions/"+sess.ID+"/compound/"+pending.ID+"/decide", map[string]any{
+		"request_key": "rk-e2e-approve",
+		"decision":    "approve",
+	}, cookies, "csrf")
+	if decided.Code != http.StatusOK {
+		t.Fatalf("decide approve = %d %s want 200", decided.Code, decided.Body.String())
+	}
+	got := decodeCompoundProposal(t, decided.Body.Bytes())
+	if got.Status != "approved" || got.FinishedAt == nil {
+		t.Fatalf("approved proposal = %+v", got)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(layout.ProjectRoot(dataDir, project.VaultID, project.ID), "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("project AGENTS.md missing after approve: %v", err)
+	}
+	agents := string(raw)
+	for _, want := range []string{standingRule, "## Memory", "[[memory/lessons"} {
+		if !strings.Contains(agents, want) {
+			t.Fatalf("project AGENTS.md missing %q:\n%s", want, agents)
+		}
+	}
+}
