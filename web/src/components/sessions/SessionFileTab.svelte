@@ -54,6 +54,15 @@
           kind: 'file',
           content: note?.body ?? '',
         }
+      } else if (path === 'memory/lessons.md' && projectId) {
+        // Lessons index is reserved (not a workspace path). P1 disk read; P2 knowledge/read.
+        const next = await api.getProjectMemoryLessons(projectId)
+        if (token !== loadToken) return
+        file = {
+          path,
+          kind: 'file',
+          content: next?.content ?? '',
+        }
       } else {
         const next = await api.workspaceFile(sessionId, path)
         if (token !== loadToken) return

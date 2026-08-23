@@ -12,6 +12,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       ...actual.api,
       workspaceFile: vi.fn(),
       getProjectNote: vi.fn(),
+      getProjectMemoryLessons: vi.fn(),
     },
   }
 })
@@ -22,6 +23,7 @@ describe('SessionFileTab', () => {
   beforeEach(() => {
     vi.mocked(api.workspaceFile).mockReset()
     vi.mocked(api.getProjectNote).mockReset()
+    vi.mocked(api.getProjectMemoryLessons).mockReset()
   })
 
   it('loads file and shows Preview markdown for .md by default', async () => {
@@ -147,6 +149,25 @@ describe('SessionFileTab', () => {
     expect(api.workspaceFile).not.toHaveBeenCalled()
     expect(await screen.findByRole('heading', { level: 1, name: 'From note' })).toBeInTheDocument()
     // Project notes are not workspace files — no promote.
+    expect(screen.queryByRole('button', { name: 'Save to source' })).not.toBeInTheDocument()
+  })
+
+  it('loads memory/lessons.md without noteId via lessons API, not workspaceFile', async () => {
+    vi.mocked(api.getProjectMemoryLessons).mockResolvedValue({
+      content: '# Lessons\n\n- [[memory/20260822-1600-example|example]] summary\n',
+    })
+    render(SessionFileTab, {
+      props: {
+        sessionId: 's1',
+        path: 'memory/lessons.md',
+        projectId: 'p1',
+        source: 'project-note',
+      },
+    })
+    await waitFor(() => expect(api.getProjectMemoryLessons).toHaveBeenCalledWith('p1'))
+    expect(api.workspaceFile).not.toHaveBeenCalled()
+    expect(api.getProjectNote).not.toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Lessons' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save to source' })).not.toBeInTheDocument()
   })
 })
