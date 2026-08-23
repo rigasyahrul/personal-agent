@@ -50,6 +50,8 @@ describe('visual baseline', () => {
       '.name-row',
       '.name-row__title',
       '.name-row__meta',
+      '.compound-card',
+      '.compound-item',
     ]) {
       expect(css).toContain(token);
     }
