@@ -1425,6 +1425,18 @@ a.list-row:hover {
   gap: 8px;
 }
 
+.note-reader {
+  display: grid;
+  gap: 16px;
+}
+.note-reader .backlinks.panel {
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
 /* Compact inbound-links panel under a note reader */
 .backlinks {
   display: grid;

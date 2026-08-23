@@ -13,6 +13,7 @@ vi.mock('../lib/api', async (importOriginal) => {
       getProject: vi.fn(),
       listProjectNotes: vi.fn(),
       getProjectNote: vi.fn(),
+      listProjectNoteBacklinks: vi.fn(),
     },
   }
 })
@@ -43,6 +44,7 @@ describe('NotesPage', () => {
     vi.mocked(api.getProject).mockReset().mockResolvedValue(project)
     vi.mocked(api.listProjectNotes).mockReset().mockResolvedValue([note])
     vi.mocked(api.getProjectNote).mockReset().mockResolvedValue(detail)
+    vi.mocked(api.listProjectNoteBacklinks).mockReset().mockResolvedValue([])
   })
 
   it('shows tree and selected note in two panes', async () => {
@@ -69,6 +71,19 @@ describe('NotesPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('note gone')
     })
+  })
+
+  it('shows a mocked backlink title for the open note', async () => {
+    vi.mocked(api.listProjectNoteBacklinks).mockResolvedValueOnce([
+      {
+        title: 'Intro from memory',
+        path: 'memory/pointer.md',
+        knowledgeId: 'k-from',
+      },
+    ])
+    render(NotesPage, { props: { projectId: 'p1', noteId: 'n1' } })
+    expect(await screen.findByRole('button', { name: 'Intro from memory' })).toBeVisible()
+    expect(api.listProjectNoteBacklinks).toHaveBeenCalledWith('p1', 'n1')
   })
 
   it('renders plain text body when no rendered HTML is provided', async () => {

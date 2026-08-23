@@ -121,8 +121,8 @@
         <Skeleton class="h-8 w-1/2" />
         <Skeleton class="h-40" />
       </div>
-    {:else if detail}
-      <NoteReader note={detail} />
+    {:else if detail && noteId}
+      <NoteReader note={detail} {projectId} {noteId} />
     {:else if entries.length > 0}
       <p class="text-sm text-slate-600">Select a note</p>
     {:else if !treeLoading}
