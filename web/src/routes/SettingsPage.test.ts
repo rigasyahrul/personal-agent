@@ -14,6 +14,8 @@ vi.mock('../lib/api', async (importOriginal) => {
       updateSettings: vi.fn(),
       listBackups: vi.fn(),
       createBackup: vi.fn(),
+      getGlobalInstruction: vi.fn(),
+      putGlobalInstruction: vi.fn(),
     },
   }
 })
@@ -63,6 +65,8 @@ describe('SettingsPage', () => {
       status: 'succeeded',
       completed_at: '2026-08-19T10:00:00Z',
     })
+    vi.mocked(api.getGlobalInstruction).mockReset().mockResolvedValue({ content: 'Be kind.\n' })
+    vi.mocked(api.putGlobalInstruction).mockReset().mockResolvedValue({ content: 'Be kinder.\n' })
   })
 
   it('saves schedule while preserving the complete settings payload', async () => {
@@ -107,6 +111,17 @@ describe('SettingsPage', () => {
     await fireEvent.change(select, { target: { value: 'daily' } })
     expect(await screen.findByText('save failed')).toBeVisible()
     expect(screen.getByText('Asia/Jakarta')).toBeInTheDocument()
+  })
+
+  it('saves a global instruction with PUT', async () => {
+    render(SettingsPage)
+    const textarea = await screen.findByRole('textbox', { name: 'SOUL' })
+    expect(textarea).toHaveValue('Be kind.\n')
+    await fireEvent.input(textarea, { target: { value: 'Be kinder.\n' } })
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(api.putGlobalInstruction).toHaveBeenCalledWith('soul', 'Be kinder.\n')
+    })
   })
 
   it('offers retry when initial load fails', async () => {

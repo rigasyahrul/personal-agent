@@ -2,6 +2,7 @@
 <script lang="ts">
   import Breadcrumbs from '../components/Breadcrumbs.svelte'
   import ProjectRail from '../components/ProjectRail.svelte'
+  import InstructionEditor from '../components/settings/InstructionEditor.svelte'
   import Skeleton from '../components/Skeleton.svelte'
   import SessionCardRow from '../components/sessions/SessionCardRow.svelte'
   import SessionChat from '../components/sessions/SessionChat.svelte'
@@ -228,6 +229,8 @@
             </p>
           {/if}
         </section>
+
+        <InstructionEditor scope="project" {projectId} />
       {/if}
     </div>
     <aside class="project-workspace__rail">

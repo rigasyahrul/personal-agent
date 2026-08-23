@@ -1546,6 +1546,76 @@ a.list-row:hover {
   color: var(--muted);
 }
 
+/* SOUL / SYSTEM / AGENTS editor (settings + project overview) */
+.instruction-editor {
+  display: grid;
+  gap: 12px;
+}
+.instruction-editor__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.instruction-editor__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #18181b;
+}
+.instruction-editor__tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.instruction-editor__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #3f3f46;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.instruction-editor__tab:hover {
+  background: #fafafa;
+  color: #18181b;
+}
+.instruction-editor__tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--accent-soft);
+}
+.instruction-editor__field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 550;
+  color: #3f3f46;
+}
+.instruction-editor__field .field-textarea {
+  min-height: 12rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.instruction-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.instruction-editor__status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 @media (max-width: 767px) {
   .app-shell { display: block; }
   .sidebar {

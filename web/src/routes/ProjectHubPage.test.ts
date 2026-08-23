@@ -21,6 +21,8 @@ vi.mock('../lib/api', async (importOriginal) => {
       currentRun: vi.fn(),
       workspaceTree: vi.fn(),
       workspaceFile: vi.fn(),
+      getProjectInstruction: vi.fn(),
+      putProjectInstruction: vi.fn(),
     },
   }
 })
@@ -52,6 +54,8 @@ describe('ProjectHubPage', () => {
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
     vi.mocked(api.workspaceFile).mockReset()
     vi.mocked(api.getProjectNote).mockReset()
+    vi.mocked(api.getProjectInstruction).mockReset().mockResolvedValue({ content: 'Ship it.\n' })
+    vi.mocked(api.putProjectInstruction).mockReset().mockResolvedValue({ content: 'Ship sooner.\n' })
   })
 
   it('shows Claude start prompt and no metric destination grid', async () => {
@@ -275,6 +279,17 @@ describe('ProjectHubPage', () => {
     render(ProjectHubPage, { props: { projectId: 'p1' } })
     expect(await screen.findByRole('alert')).toHaveTextContent('project missing')
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+  })
+
+  it('saves a project instruction with PUT', async () => {
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+    const textarea = await screen.findByRole('textbox', { name: 'SOUL' })
+    expect(textarea).toHaveValue('Ship it.\n')
+    await fireEvent.input(textarea, { target: { value: 'Ship sooner.\n' } })
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(api.putProjectInstruction).toHaveBeenCalledWith('p1', 'soul', 'Ship sooner.\n')
+    })
   })
 
   it('wires quiet Notes and Review header links', async () => {

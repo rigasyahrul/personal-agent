@@ -1,6 +1,12 @@
 // web/src/lib/api/index.ts
 import { request, api as baseApi } from './client'
 import { createCompound, decideCompound, getCompound } from './compound'
+import {
+  getGlobalInstruction,
+  getProjectInstruction,
+  putGlobalInstruction,
+  putProjectInstruction,
+} from './instructions'
 import { getProjectMemoryLessons } from './memory'
 import { listProjectNoteBacklinks, searchProject } from './notes'
 import type {
@@ -28,6 +34,13 @@ import type {
 export * from './client'
 export * from './types'
 export { createCompound, decideCompound, getCompound } from './compound'
+export {
+  getGlobalInstruction,
+  getProjectInstruction,
+  putGlobalInstruction,
+  putProjectInstruction,
+} from './instructions'
+export type { InstructionFile, InstructionName } from './instructions'
 export { getProjectMemoryLessons } from './memory'
 export { listProjectNoteBacklinks, mapNoteBacklink, searchProject } from './notes'
 export type { KnowledgeSearchHit, NoteBacklink, NoteBacklinkDTO } from './notes'
@@ -140,4 +153,8 @@ export const api = {
   getCompound,
   decideCompound,
   getProjectMemoryLessons,
+  getGlobalInstruction,
+  putGlobalInstruction,
+  getProjectInstruction,
+  putProjectInstruction,
 }

@@ -57,6 +57,8 @@ describe('visual baseline', () => {
       '.backlinks__item',
       '.knowledge-search',
       '.knowledge-search__hit',
+      '.instruction-editor',
+      '.instruction-editor__tab',
     ]) {
       expect(css).toContain(token);
     }

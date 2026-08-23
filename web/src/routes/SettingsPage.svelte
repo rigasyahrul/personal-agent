@@ -2,6 +2,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import BackupSection from '../components/settings/BackupSection.svelte'
+  import InstructionEditor from '../components/settings/InstructionEditor.svelte'
   import Skeleton from '../components/Skeleton.svelte'
   import { api } from '../lib/api'
   import type { Settings } from '../lib/api/types'
@@ -64,6 +65,8 @@
         </div>
       </dl>
     </section>
+
+    <InstructionEditor scope="global" />
 
     <BackupSection {settings} onsettingschange={handleSettingsChange} />
   {/if}
