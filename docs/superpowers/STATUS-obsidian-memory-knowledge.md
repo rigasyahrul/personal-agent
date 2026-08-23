@@ -16,7 +16,7 @@
 |-------|-------|--------|--------------------|---------|-------|
 | **P0** Layout + prompt | 1–12 | `done` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
 | **P1** Compound | 20–35 | `done` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
-| **P2** Obsidian links | 40–52 | `ready` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
+| **P2** Obsidian links | 40–52 | `in_progress` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
 | **P3** Search + tools | 60–72 | `blocked` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
 | **Ship** whole branch | — | `blocked` | merge to main | P0–P3 + whole-branch review | Final consulting-grok-review + push |
 
@@ -140,7 +140,8 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 | Task | Review | Complete |
 |------|--------|----------|
-| 40–52 | | |
+| 40 | PASS requesting-code-review (pi session task-40-review) | `44a6c9e` pushed |
+| 41–52 | | |
 
 ### P3
 
@@ -173,6 +174,7 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Task 40 complete (`44a6c9e`); P2 `in_progress`
 - 2026-08-23 — P1 `done` (Tasks 32+35). Gate: go test compound/store/agent/httpapi + web CompoundReviewCard/SessionChat/ProjectRail
 - 2026-08-23 — Tasks 29+33+34 complete (`817abeb`/`7fa79ef`/`1372a13`); vibe-pass Compound on :18080 hub session
 - 2026-08-23 — Tasks 28+30+31 complete (`f96315c`/`dd5bc94`/`8caf7b9`); requesting-code-review pi sessions task-28/30/31-review
