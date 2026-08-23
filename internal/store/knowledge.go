@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
@@ -209,6 +211,175 @@ func removeFTS(ctx context.Context, exec sqlExecer, noteID string) error {
 	}
 	_, err := exec.ExecContext(ctx, `DELETE FROM knowledge_fts WHERE note_id=?`, noteID)
 	return err
+}
+
+// SearchHit is one project-scoped FTS match. KnowledgeID is knowledge_notes.id
+// (API json: knowledge_id) — never v1 notes.id.
+type SearchHit struct {
+	KnowledgeID  string
+	Path         string
+	Title        string
+	Snippet      string
+	Kind         domain.KnowledgeKind
+	SourceNoteID string
+	Rank         float64
+}
+
+const (
+	searchLimitDefault = 20
+	searchLimitMax     = 50
+	snippetRadius      = 60
+)
+
+// SearchProject runs FTS over the current project's knowledge corpus only.
+// Empty/whitespace query returns no hits. limit<=0 defaults to 20; max 50.
+func (s *KnowledgeStore) SearchProject(ctx context.Context, projectID, query string, limit int) ([]SearchHit, error) {
+	if projectID == "" {
+		return nil, fmt.Errorf("%w: project id required", ErrValidation)
+	}
+	if strings.TrimSpace(query) == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = searchLimitDefault
+	}
+	if limit > searchLimitMax {
+		limit = searchLimitMax
+	}
+	match, needle, ok := sanitizeFTSQuery(query)
+	if !ok {
+		return nil, nil
+	}
+	needleLower := strings.ToLower(needle)
+
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT kn.id, kn.relative_path, coalesce(kn.title,''), kn.kind,
+		       coalesce(kn.source_note_id,''), coalesce(knowledge_fts.body,''),
+		       bm25(knowledge_fts)
+		FROM knowledge_fts
+		INNER JOIN knowledge_notes kn ON kn.id = knowledge_fts.note_id
+		WHERE kn.project_id = ?
+		  AND kn.kind IN ('source','memory_detail','memory_index','agents','soul','system')
+		  AND knowledge_fts MATCH ?
+		ORDER BY
+		  CASE WHEN instr(lower(coalesce(kn.title,'')), ?) > 0 THEN 0
+		       WHEN instr(lower(kn.relative_path), ?) > 0 THEN 1
+		       ELSE 2 END,
+		  bm25(knowledge_fts),
+		  kn.updated_at DESC
+		LIMIT ?`,
+		projectID, match, needleLower, needleLower, limit,
+	)
+	if err != nil {
+		if isFTSQueryError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SearchHit
+	for rows.Next() {
+		var hit SearchHit
+		var body string
+		var bm25 float64
+		if err := rows.Scan(&hit.KnowledgeID, &hit.Path, &hit.Title, &hit.Kind, &hit.SourceNoteID, &body, &bm25); err != nil {
+			return nil, err
+		}
+		hit.Snippet = snippetAround(hit.Title, body, needle)
+		hit.Rank = -bm25
+		out = append(out, hit)
+	}
+	if err := rows.Err(); err != nil {
+		if isFTSQueryError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+func sanitizeFTSQuery(query string) (match, needle string, ok bool) {
+	var b strings.Builder
+	for _, r := range query {
+		switch {
+		case r == '"' || r == '*' || r == '(' || r == ')' || r == ':' ||
+			r == '{' || r == '}' || r == '^' || r == '[' || r == ']':
+			b.WriteByte(' ')
+		case unicode.IsSpace(r):
+			b.WriteByte(' ')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	var quoted []string
+	for _, part := range strings.Fields(b.String()) {
+		switch strings.ToUpper(part) {
+		case "AND", "OR", "NOT", "NEAR":
+			continue
+		}
+		quoted = append(quoted, `"`+part+`"`)
+		if needle == "" {
+			needle = part
+		}
+	}
+	if len(quoted) == 0 {
+		return "", "", false
+	}
+	return strings.Join(quoted, " "), needle, true
+}
+
+func isFTSQueryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "fts5") || strings.Contains(msg, "fts3") || strings.Contains(msg, "match")
+}
+
+func snippetAround(title, body, needle string) string {
+	if s, ok := windowAround(body, needle, snippetRadius); ok {
+		return s
+	}
+	if s, ok := windowAround(title, needle, snippetRadius); ok {
+		return s
+	}
+	return clipRunes(body, 2*snippetRadius)
+}
+
+func windowAround(text, needle string, radius int) (string, bool) {
+	if text == "" || needle == "" {
+		return "", false
+	}
+	idx := strings.Index(strings.ToLower(text), strings.ToLower(needle))
+	if idx < 0 {
+		return "", false
+	}
+	runes := []rune(text)
+	start := len([]rune(text[:idx])) - radius
+	if start < 0 {
+		start = 0
+	}
+	end := len([]rune(text[:idx])) + len([]rune(needle)) + radius
+	if end > len(runes) {
+		end = len(runes)
+	}
+	out := string(runes[start:end])
+	if start > 0 {
+		out = "…" + out
+	}
+	if end < len(runes) {
+		out = out + "…"
+	}
+	return strings.TrimSpace(out), true
+}
+
+func clipRunes(text string, max int) string {
+	runes := []rune(strings.TrimSpace(text))
+	if len(runes) <= max {
+		return string(runes)
+	}
+	return string(runes[:max]) + "…"
 }
 
 func (s *KnowledgeStore) ByID(ctx context.Context, id string) (domain.KnowledgeNote, error) {
