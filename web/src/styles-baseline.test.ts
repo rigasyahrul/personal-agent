@@ -52,6 +52,8 @@ describe('visual baseline', () => {
       '.name-row__meta',
       '.compound-card',
       '.compound-item',
+      '.backlinks',
+      '.backlinks__item',
     ]) {
       expect(css).toContain(token);
     }
