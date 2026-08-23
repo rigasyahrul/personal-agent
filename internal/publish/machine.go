@@ -486,6 +486,9 @@ func (m *Machine) resume(ctx context.Context, o store.DirectOperation) error {
 				return err
 			}
 		case "finalized":
+			if err := m.indexPublishedSource(ctx, o); err != nil {
+				return err
+			}
 			if err := m.enqueue(ctx, o); err != nil {
 				return err
 			}
@@ -706,8 +709,55 @@ func (m *Machine) finalize(ctx context.Context, o store.DirectOperation) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	if err := m.indexPublishedSource(ctx, o); err != nil {
+		return err
+	}
 	return m.fireAfterTransition("finalized")
 }
+
+// sourceKnowledgeRelPath maps v1 notes.relative_path (source-relative) to the
+// knowledge_notes scope-root path. It never writes back to notes.relative_path.
+func sourceKnowledgeRelPath(notesRel string) (string, error) {
+	for _, part := range strings.Split(notesRel, "/") {
+		if part == "" || part == "." || part == ".." {
+			return "", ErrInvalid
+		}
+	}
+	if strings.Contains(notesRel, `\`) {
+		return "", ErrInvalid
+	}
+	rel := path.Join("source", notesRel)
+	if err := pathcheck.ValidateKnowledgeRelPath(rel); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	return rel, nil
+}
+
+func (m *Machine) indexPublishedSource(ctx context.Context, o store.DirectOperation) error {
+	rel, err := sourceKnowledgeRelPath(o.RelativePath)
+	if err != nil {
+		return err
+	}
+	r, err := m.root(ctx, o)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	body, err := r.ReadFile(o.RelativePath, pathcheck.MaxMarkdownBytes)
+	if err != nil {
+		return err
+	}
+	_, err = (&store.KnowledgeStore{DB: m.DB, Clock: m.Clock}).UpsertFromContent(ctx, store.UpsertKnowledgeInput{
+		Kind:         domain.KnowledgeKindSource,
+		ProjectID:    o.ProjectID,
+		RelativePath: rel,
+		Content:      body,
+		Status:       "ready",
+		SourceNoteID: o.NoteID,
+	})
+	return err
+}
+
 func (m *Machine) enqueue(ctx context.Context, o store.DirectOperation) error {
 	tx, err := m.DB.BeginTx(ctx, nil)
 	if err != nil {

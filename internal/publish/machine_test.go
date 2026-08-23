@@ -161,6 +161,67 @@ func TestDirectCreateIsIdempotentAndNeverOverwrites(t *testing.T) {
 	}
 }
 
+func TestDirectPublishUpsertsSourceKnowledgeNote(t *testing.T) {
+	d, db, c := fixture(t)
+	m := publish.Machine{DB: db, DataDir: d, Clock: c}
+	in := input()
+	status, noteID, err := m.Run(context.Background(), in)
+	if err != nil || status != "completed" || noteID != "n1" {
+		t.Fatalf("publish=(%q,%q,%v)", status, noteID, err)
+	}
+	assertSourceKnowledgeMirror(t, db, "n1", "guide/one.md", "source/guide/one.md")
+
+	if _, _, err := m.Run(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM knowledge_notes WHERE project_id='p1' AND relative_path='source/guide/one.md'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("knowledge rows=%d err=%v", n, err)
+	}
+}
+
+func TestPromotePublishUpsertsSourceKnowledgeNote(t *testing.T) {
+	d, db, c, in := promoteFixture(t)
+	status, noteID, err := (&publish.Machine{DB: db, DataDir: d, Clock: c}).Run(context.Background(), in)
+	if err != nil || status != "completed" || noteID != in.NoteID {
+		t.Fatalf("publish=(%q,%q,%v)", status, noteID, err)
+	}
+	assertSourceKnowledgeMirror(t, db, in.NoteID, "guides/frozen.md", "source/guides/frozen.md")
+}
+
+func assertSourceKnowledgeMirror(t *testing.T, db *sql.DB, noteID, notesRel, knowledgeRel string) {
+	t.Helper()
+	var gotNotesRel string
+	if err := db.QueryRow(`SELECT relative_path FROM notes WHERE id=?`, noteID).Scan(&gotNotesRel); err != nil {
+		t.Fatal(err)
+	}
+	if gotNotesRel != notesRel {
+		t.Fatalf("notes.relative_path=%q, want %q", gotNotesRel, notesRel)
+	}
+	if strings.HasPrefix(gotNotesRel, "source/") {
+		t.Fatalf("v1 notes.relative_path must not be prefixed with source/: %q", gotNotesRel)
+	}
+	got, err := (&store.KnowledgeStore{DB: db}).ByScopePath(context.Background(), "p1", "", false, knowledgeRel)
+	if err != nil {
+		t.Fatalf("knowledge row for %s: %v", knowledgeRel, err)
+	}
+	if got.Kind != domain.KnowledgeKindSource {
+		t.Fatalf("kind=%q, want source", got.Kind)
+	}
+	if got.RelativePath != knowledgeRel {
+		t.Fatalf("knowledge relative_path=%q, want %q", got.RelativePath, knowledgeRel)
+	}
+	if got.SourceNoteID != noteID {
+		t.Fatalf("source_note_id=%q, want %q", got.SourceNoteID, noteID)
+	}
+	if got.ID == noteID {
+		t.Fatal("knowledge_notes.id must not equal notes.id")
+	}
+	if got.Status != "ready" {
+		t.Fatalf("knowledge status=%q, want ready", got.Status)
+	}
+}
+
 func TestDirectValidation(t *testing.T) {
 	d, db, c := fixture(t)
 	m := publish.Machine{DB: db, DataDir: d, Clock: c}
@@ -393,7 +454,8 @@ func preparePromoteRecovery(t *testing.T, status string, mode domain.ReviewMode)
 	}
 	switch status {
 	case "accepted", "frozen":
-		if _, err := db.Exec(`DELETE FROM notes WHERE id=?`, in.NoteID); err != nil {
+		// Rewind to pre-reserve: drop the source mirror first (FK source_note_id).
+		if _, err := db.Exec(`DELETE FROM knowledge_notes WHERE source_note_id=?; DELETE FROM notes WHERE id=?`, in.NoteID, in.NoteID); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Remove(destination); err != nil {
