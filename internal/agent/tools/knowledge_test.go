@@ -3,11 +3,14 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/rigasyahrul/personal-agent/internal/agent/tools"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
+	"github.com/rigasyahrul/personal-agent/internal/layout"
 	"github.com/rigasyahrul/personal-agent/internal/store"
 	"github.com/rigasyahrul/personal-agent/internal/testutil"
 )
@@ -92,4 +95,165 @@ func TestKnowledgeRejectsUnknownName(t *testing.T) {
 	if _, err := h.Execute(context.Background(), "search_vault", json.RawMessage(`{"query":"x"}`)); err == nil {
 		t.Fatal("unknown name accepted")
 	}
+}
+
+// Break this would catch: read_knowledge not registered, or instruction files
+// opened via fsroot.Open(projectRoot) without the allowlist.
+func TestReadKnowledgeReturnsAGENTS(t *testing.T) {
+	root := t.TempDir()
+	want := "## Memory\n- Lesson index lives here.\n"
+	if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte(want), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := tools.NewKnowledgeToolHandler(nil, "p1")
+	h.ScopeRoot = root
+	raw, err := h.Execute(context.Background(), tools.ToolReadKnowledge, json.RawMessage(`{"path":"AGENTS.md"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("result JSON: %v\n%s", err, raw)
+	}
+	if out.Path != "AGENTS.md" || out.Content != want {
+		t.Fatalf("got %+v, want path=AGENTS.md content=%q", out, want)
+	}
+}
+
+// Break this would catch: path validation skipped so ../ escapes the scope.
+func TestReadKnowledgeRejectsTraversal(t *testing.T) {
+	h := tools.NewKnowledgeToolHandler(nil, "p1")
+	h.ScopeRoot = t.TempDir()
+	if _, err := h.Execute(context.Background(), tools.ToolReadKnowledge, json.RawMessage(`{"path":"../secret.md"}`)); err == nil {
+		t.Fatal("accepted ../ traversal")
+	}
+}
+
+// Break this would catch: opening via fsroot.Open(projectRoot)+memory/…
+// (ValidateRelPath rejects) instead of MemoryDir as the sub-root.
+func TestReadKnowledgeReadsMemoryViaMemoryDir(t *testing.T) {
+	root := t.TempDir()
+	want := "# Lessons\n\n- Rooted memory read.\n"
+	if err := os.MkdirAll(layout.MemoryDir(root), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(layout.MemoryDir(root), "lessons.md"), []byte(want), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := tools.NewKnowledgeToolHandler(nil, "p1")
+	h.ScopeRoot = root
+	raw, err := h.Execute(context.Background(), tools.ToolReadKnowledge, json.RawMessage(`{"path":"memory/lessons.md"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("result JSON: %v\n%s", err, raw)
+	}
+	if out.Path != "memory/lessons.md" || out.Content != want {
+		t.Fatalf("got %+v, want memory/lessons.md %q", out, want)
+	}
+}
+
+func TestReadKnowledgeRejectsAgentsAndSessions(t *testing.T) {
+	h := tools.NewKnowledgeToolHandler(nil, "p1")
+	h.ScopeRoot = t.TempDir()
+	for _, p := range []string{".agents/skills/compounding/SKILL.md", "sessions/s1/file.md", "source/.agents/x.md"} {
+		if _, err := h.Execute(context.Background(), tools.ToolReadKnowledge, json.RawMessage(`{"path":`+jsonString(p)+`}`)); err == nil {
+			t.Fatalf("accepted reserved path %q", p)
+		}
+	}
+}
+
+// Break this would catch: listing the project root via fsroot.Open(scopeRoot)
+// (leaks .agents/sessions) or omitting source/memory children.
+func TestListKnowledgeListsEntriesOmitsAgentsAndSessions(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(layout.SourceDir(root), "guide"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(layout.SourceDir(root), "guide", "intro.md"), []byte("# Intro\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(layout.MemoryDir(root), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(layout.MemoryDir(root), "lessons.md"), []byte("# Lessons\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".agents", "skills"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".agents", "skills", "hidden.md"), []byte("nope\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "sessions", "s1"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "sessions", "s1", "secret.md"), []byte("nope\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := tools.NewKnowledgeToolHandler(nil, "p1")
+	h.ScopeRoot = root
+	raw, err := h.Execute(context.Background(), tools.ToolListKnowledge, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Entries []struct {
+			Path string `json:"path"`
+			Kind string `json:"kind"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("result JSON: %v\n%s", err, raw)
+	}
+	seen := map[string]string{}
+	for _, e := range out.Entries {
+		seen[e.Path] = e.Kind
+		if strings.Contains(e.Path, ".agents") || strings.HasPrefix(e.Path, "sessions") || strings.Contains(e.Path, "/sessions/") {
+			t.Fatalf("list leaked excluded path %q", e.Path)
+		}
+	}
+	if seen["source"] != "directory" || seen["memory"] != "directory" {
+		t.Fatalf("missing knowledge roots: %#v", seen)
+	}
+
+	raw, err = h.Execute(context.Background(), tools.ToolListKnowledge, json.RawMessage(`{"path":"source"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("source list JSON: %v\n%s", err, raw)
+	}
+	seen = map[string]string{}
+	for _, e := range out.Entries {
+		seen[e.Path] = e.Kind
+	}
+	if seen["source/guide"] != "directory" {
+		t.Fatalf("source children = %#v, want source/guide directory", seen)
+	}
+}
+
+// Break this would catch: list_knowledge skipping path validation.
+func TestListKnowledgeRejectsTraversal(t *testing.T) {
+	h := tools.NewKnowledgeToolHandler(nil, "p1")
+	h.ScopeRoot = t.TempDir()
+	if _, err := h.Execute(context.Background(), tools.ToolListKnowledge, json.RawMessage(`{"path":"../"}`)); err == nil {
+		t.Fatal("accepted ../ list")
+	}
+}
+
+func jsonString(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
