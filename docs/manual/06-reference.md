@@ -70,7 +70,8 @@ Never commit real tokens or keys. Prefer `deploy/.env` (gitignored) for Compose.
 | `make build` | `web-build` + Go binary |
 | `make test` / `go test ./...` | Go tests (build `web/dist` first if static tests need assets) |
 | `make run` | Run API (expects assets as configured) |
-| `make docker-dev` | API + Vite HMR (dev compose override) |
+| `make docker-dev` | API + Vite HMR (dev compose override; no image rebuild) |
+| `make docker-dev-build` | Rebuild dev image, then live-reload up |
 | `make docker-dev-down` | Stop dev stack |
 
 ## API surface (owner mental model)

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help test lint fmt-check run build web-install web-build web-test docker-dev docker-dev-down docker-dev-logs
+.PHONY: help test lint fmt-check run build web-install web-build web-test docker-dev docker-dev-build docker-dev-down docker-dev-logs
 
 COMPOSE_ENV := --env-file deploy/.env
 COMPOSE_PROD := -f deploy/docker-compose.yml
@@ -27,7 +27,7 @@ help: ## Show command help
 	@echo " --- Common ---"
 	@$(call print-help-section,help)
 	@echo " --- Development ---"
-	@$(call print-help-section,test lint fmt-check run build web-install web-build web-test docker-dev docker-dev-down docker-dev-logs)
+	@$(call print-help-section,test lint fmt-check run build web-install web-build web-test docker-dev docker-dev-build docker-dev-down docker-dev-logs)
 
 test: ## Run all Go tests
 	go test ./...
@@ -55,6 +55,10 @@ web-test: web-install ## Run web unit tests
 	npm --prefix web test
 
 docker-dev: ## Live-reload Docker (API+web); needs deploy/.env
+	@test -f deploy/.env || (echo "Create deploy/.env first: cp deploy/.env.example deploy/.env"; exit 1)
+	docker compose $(COMPOSE_ENV) $(COMPOSE_DEV) up
+
+docker-dev-build: ## Rebuild dev image, then live-reload up; needs deploy/.env
 	@test -f deploy/.env || (echo "Create deploy/.env first: cp deploy/.env.example deploy/.env"; exit 1)
 	docker compose $(COMPOSE_ENV) $(COMPOSE_DEV) up --build
 

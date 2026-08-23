@@ -1,7 +1,9 @@
 # Live-reload override for local development (API + web as one service).
 # Usage:
+#   make docker-dev              # up (no rebuild)
+#   make docker-dev-build        # up --build
 #   docker compose --env-file deploy/.env \
-#     -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up --build
+#     -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up
 #
 # Do not combine with a plain production up on the same :8080 port.
 services:

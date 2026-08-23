@@ -107,13 +107,18 @@ Production compose is **image-baked** (binary + `web/dist` only — **no live so
 
 ```sh
 # one-time: cp deploy/.env.example deploy/.env  (set BOOTSTRAP_TOKEN)
-make docker-dev
+make docker-dev-build   # first time / after Dockerfile.dev changes
+make docker-dev         # day-to-day: up without image rebuild
 # open http://localhost:8080
 ```
 
 Equivalent raw compose (dev file is an **override** — it still needs the base file for ports/env/data):
 
 ```sh
+# day-to-day
+docker compose --env-file deploy/.env \
+  -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up
+# rebuild dev image
 docker compose --env-file deploy/.env \
   -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up --build
 ```
@@ -123,7 +128,7 @@ docker compose --env-file deploy/.env \
 - Reuses the same `pa-data` volume and `.env` as production compose.
 - Live repository mounts exist **only** in `docker-compose.dev.yml` — never on production compose.
 - Do **not** run plain production `up` and the dev override on `:8080` at the same time.
-- Stop: `make docker-dev-down` · logs: `make docker-dev-logs`
+- Stop: `make docker-dev-down` · logs: `make docker-dev-logs` · rebuild image: `make docker-dev-build`
 
 For a real domain with Caddy TLS:
 

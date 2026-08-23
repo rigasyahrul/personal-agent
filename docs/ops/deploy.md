@@ -48,7 +48,10 @@ Production compose uses a baked image. Start the one-command API and UI loop:
 make docker-dev
 # open http://localhost:8080
 # stop: make docker-dev-down
+# first time / after Dockerfile.dev changes: make docker-dev-build
 ```
+
+`make docker-dev` runs `up` only (no image rebuild). Use `make docker-dev-build` when the dev image itself must be rebuilt (`Dockerfile.dev`, base tools, etc.). Day-to-day Go/UI edits hot-reload via the mounted repo.
 
 `deploy/docker-compose.dev.yml` mounts the repository at `/src` and starts `deploy/dev-entrypoint.sh`. The script runs Air for Go reloads and Vite for Svelte/TypeScript/CSS HMR. Go remains the only browser-facing server on port 8080: API and health requests terminate in Go, while non-API GETs are proxied because the override sets `PA_UI_DEV_PROXY=http://127.0.0.1:5173`.
 

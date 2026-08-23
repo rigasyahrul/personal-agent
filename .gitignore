@@ -52,3 +52,7 @@ web/dist/
 
 # Isolated agent checkouts
 .worktrees/
+
+# Pi worker scratch (generated briefs + sessions). Keep .pi/prompts/ committed.
+.pi/worker-sessions/
+.pi/workers/

@@ -66,7 +66,8 @@ For coding on API **and** Svelte with HMR:
 
 ```sh
 cp deploy/.env.example deploy/.env   # one-time; set BOOTSTRAP_TOKEN
-make docker-dev
+make docker-dev-build                # first time / after Dockerfile.dev changes
+make docker-dev                      # day-to-day (no image rebuild)
 # open http://localhost:8080
 # stop: make docker-dev-down
 ```
