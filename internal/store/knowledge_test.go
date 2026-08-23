@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -364,5 +366,72 @@ func TestKnowledgeGlobalAndVaultScopes(t *testing.T) {
 	got, err = s.ByScopePath(ctx, "", "v1", false, "memory/lessons.md")
 	if err != nil || got.ID != vault.ID {
 		t.Fatalf("vault ByScopePath = %+v err=%v", got, err)
+	}
+}
+
+// Break this would catch: Backlinks missing a memory detail that wikilinks
+// [[source/intro|Intro]] / [[AGENTS]] after those targets exist in the same project,
+// including when memory is upserted before the targets.
+func TestKnowledgeBacklinksCrossKindMemorySourceAgents(t *testing.T) {
+	body, err := os.ReadFile("../knowledge/testdata/sample_memory.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "[[source/intro|Intro]]") || !strings.Contains(string(body), "[[AGENTS]]") {
+		t.Fatal("sample_memory.md must contain [[source/intro|Intro]] and [[AGENTS]]")
+	}
+
+	const wantTitle = "Hub startSession is not create-and-send atomic"
+	orders := [][]string{
+		{"memory", "source", "agents"},
+		{"memory", "agents", "source"},
+		{"source", "memory", "agents"},
+		{"source", "agents", "memory"},
+		{"agents", "memory", "source"},
+		{"agents", "source", "memory"},
+	}
+	for _, order := range orders {
+		t.Run(strings.Join(order, "-"), func(t *testing.T) {
+			s, _, _ := knowledgeHarness(t)
+			ctx := context.Background()
+
+			var memory, source, agents domain.KnowledgeNote
+			for _, name := range order {
+				var note domain.KnowledgeNote
+				var err error
+				switch name {
+				case "memory":
+					note, err = s.UpsertFromContent(ctx, projectUpsert(domain.KnowledgeKindMemoryDetail, "memory/hub.md", body))
+					memory = note
+				case "source":
+					note, err = s.UpsertFromContent(ctx, projectUpsert(domain.KnowledgeKindSource, "source/intro.md", []byte("# Intro\n")))
+					source = note
+				case "agents":
+					note, err = s.UpsertFromContent(ctx, projectUpsert(domain.KnowledgeKindAgents, "AGENTS.md", []byte("Standing rules\n")))
+					agents = note
+				default:
+					t.Fatalf("unknown upsert %q", name)
+				}
+				if err != nil {
+					t.Fatalf("upsert %s: %v", name, err)
+				}
+			}
+
+			assertBacklinkFromMemory := func(targetID, label string) {
+				t.Helper()
+				got, err := s.Backlinks(ctx, targetID)
+				if err != nil {
+					t.Fatalf("Backlinks(%s): %v", label, err)
+				}
+				for _, bl := range got {
+					if bl.FromNoteID == memory.ID && bl.FromPath == "memory/hub.md" && bl.FromTitle == wantTitle {
+						return
+					}
+				}
+				t.Fatalf("Backlinks(%s) = %#v, want FromNoteID=%s FromPath=memory/hub.md FromTitle=%q", label, got, memory.ID, wantTitle)
+			}
+			assertBacklinkFromMemory(source.ID, "source")
+			assertBacklinkFromMemory(agents.ID, "AGENTS")
+		})
 	}
 }
