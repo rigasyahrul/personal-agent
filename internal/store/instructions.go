@@ -7,13 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/fsroot"
-	"github.com/rigasyahrul/personal-agent/internal/ids"
 	"github.com/rigasyahrul/personal-agent/internal/layout"
 	"github.com/rigasyahrul/personal-agent/internal/paths"
 )
@@ -191,81 +189,15 @@ func (s *InstructionStore) put(ctx context.Context, meta ScopeMeta, name Instruc
 		return domain.KnowledgeNote{}, err
 	}
 
-	now := s.Clock.Now().UTC()
-	sum := fmt.Sprintf("%x", sha256.Sum256(body))
-	byteSize := int64(len(body))
-	title := instructionTitle(fileName, content)
-
-	// Upsert knowledge_notes via partial unique indexes.
-	existingID, err := s.findInstructionNoteID(ctx, projectID, vaultID, isGlobal, fileName)
-	if err != nil {
-		return domain.KnowledgeNote{}, err
-	}
-
-	var note domain.KnowledgeNote
-	if existingID == "" {
-		note = domain.KnowledgeNote{
-			ID:            ids.NewID(),
-			RelativePath:  fileName,
-			Title:         title,
-			Kind:          kind,
-			ProjectID:     projectID,
-			VaultID:       vaultID,
-			IsGlobal:      isGlobal,
-			ContentSHA256: sum,
-			ByteSize:      byteSize,
-			Status:        "ready",
-			CreatedAt:     now,
-			UpdatedAt:     now,
-		}
-		_, err = s.DB.ExecContext(ctx, `
-			INSERT INTO knowledge_notes(
-				id, kind, project_id, vault_id, is_global, relative_path, title,
-				content_sha256, byte_size, status, created_at, updated_at
-			) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-			note.ID, string(note.Kind), nullable(projectID), nullable(vaultID), boolToInt(isGlobal),
-			note.RelativePath, nullable(title), note.ContentSHA256, note.ByteSize, note.Status,
-			formatTime(note.CreatedAt), formatTime(note.UpdatedAt),
-		)
-		if err != nil {
-			return domain.KnowledgeNote{}, err
-		}
-	} else {
-		note = domain.KnowledgeNote{
-			ID:            existingID,
-			RelativePath:  fileName,
-			Title:         title,
-			Kind:          kind,
-			ProjectID:     projectID,
-			VaultID:       vaultID,
-			IsGlobal:      isGlobal,
-			ContentSHA256: sum,
-			ByteSize:      byteSize,
-			Status:        "ready",
-			UpdatedAt:     now,
-		}
-		// Preserve created_at
-		var createdAt string
-		err = s.DB.QueryRowContext(ctx, `SELECT created_at FROM knowledge_notes WHERE id=?`, existingID).Scan(&createdAt)
-		if err != nil {
-			return domain.KnowledgeNote{}, err
-		}
-		note.CreatedAt, err = parseTime(createdAt)
-		if err != nil {
-			return domain.KnowledgeNote{}, err
-		}
-		_, err = s.DB.ExecContext(ctx, `
-			UPDATE knowledge_notes SET
-				kind=?, title=?, content_sha256=?, byte_size=?, status='ready', updated_at=?
-			WHERE id=?`,
-			string(kind), nullable(title), sum, byteSize, formatTime(now), existingID,
-		)
-		if err != nil {
-			return domain.KnowledgeNote{}, err
-		}
-	}
-	// Link reparse deferred to P2 — stub OK.
-	return note, nil
+	return (&KnowledgeStore{DB: s.DB, Clock: s.Clock}).UpsertFromContent(ctx, UpsertKnowledgeInput{
+		Kind:         kind,
+		ProjectID:    projectID,
+		VaultID:      vaultID,
+		IsGlobal:     isGlobal,
+		RelativePath: fileName,
+		Content:      body,
+		Status:       "ready",
+	})
 }
 
 func resolveInstructionScope(meta ScopeMeta) (scopeRoot, projectID, vaultID string, isGlobal bool, err error) {
@@ -338,15 +270,4 @@ func boolToInt(v bool) int {
 		return 1
 	}
 	return 0
-}
-
-func instructionTitle(fileName, content string) string {
-	// Prefer first markdown heading; fall back to basename without extension.
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "# ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "# "))
-		}
-	}
-	return strings.TrimSuffix(path.Base(fileName), path.Ext(fileName))
 }

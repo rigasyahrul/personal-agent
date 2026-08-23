@@ -2,9 +2,7 @@ package compound
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,12 +10,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/rigasyahrul/personal-agent/internal/clock"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/fsroot"
-	"github.com/rigasyahrul/personal-agent/internal/ids"
 	"github.com/rigasyahrul/personal-agent/internal/layout"
 	"github.com/rigasyahrul/personal-agent/internal/paths"
 	"github.com/rigasyahrul/personal-agent/internal/store"
@@ -367,26 +363,25 @@ func (p *Publisher) upsertKnowledge(ctx context.Context, proposal domain.Compoun
 	if p.DB == nil {
 		return nil
 	}
-	now := time.Now().UTC()
-	if p.Clock != nil {
-		now = p.Clock.Now().UTC()
-	}
 	projectID, vaultID, isGlobal, err := knowledgeScope(proposal)
 	if err != nil {
 		return err
 	}
-	tx, err := p.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
+	ks := &store.KnowledgeStore{DB: p.DB, Clock: p.Clock}
 	for _, w := range writes {
-		if err := upsertKnowledgeRow(ctx, tx, projectID, vaultID, isGlobal, w, now); err != nil {
+		if _, err := ks.UpsertFromContent(ctx, store.UpsertKnowledgeInput{
+			Kind:         w.kind,
+			ProjectID:    projectID,
+			VaultID:      vaultID,
+			IsGlobal:     isGlobal,
+			RelativePath: w.relPath,
+			Content:      w.body,
+			Status:       "ready",
+		}); err != nil {
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 func knowledgeScope(p domain.CompoundProposal) (projectID, vaultID string, isGlobal bool, err error) {
@@ -406,67 +401,4 @@ func knowledgeScope(p domain.CompoundProposal) (projectID, vaultID string, isGlo
 	default:
 		return "", "", false, fmt.Errorf("%w: invalid compound scope", store.ErrValidation)
 	}
-}
-
-func upsertKnowledgeRow(ctx context.Context, tx *sql.Tx, projectID, vaultID string, isGlobal bool, w plannedWrite, now time.Time) error {
-	sum := sha256.Sum256(w.body)
-	hash := hex.EncodeToString(sum[:])
-	byteSize := int64(len(w.body))
-
-	existingID, err := findKnowledgeID(ctx, tx, projectID, vaultID, isGlobal, w.relPath)
-	if err != nil {
-		return err
-	}
-	if existingID == "" {
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO knowledge_notes(
-				id, kind, project_id, vault_id, is_global, relative_path, title,
-				content_sha256, byte_size, status, created_at, updated_at
-			) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-			ids.NewID(), string(w.kind), nullIfEmpty(projectID), nullIfEmpty(vaultID), boolInt(isGlobal),
-			w.relPath, nullIfEmpty(w.title), hash, byteSize, "ready",
-			now.UTC().Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano),
-		)
-		return err
-	}
-	_, err = tx.ExecContext(ctx, `
-		UPDATE knowledge_notes SET
-			kind=?, title=?, content_sha256=?, byte_size=?, status='ready', updated_at=?
-		WHERE id=?`,
-		string(w.kind), nullIfEmpty(w.title), hash, byteSize, now.UTC().Format(time.RFC3339Nano), existingID,
-	)
-	return err
-}
-
-func findKnowledgeID(ctx context.Context, tx *sql.Tx, projectID, vaultID string, isGlobal bool, relPath string) (string, error) {
-	var id string
-	var err error
-	switch {
-	case isGlobal:
-		err = tx.QueryRowContext(ctx, `SELECT id FROM knowledge_notes WHERE is_global=1 AND relative_path=?`, relPath).Scan(&id)
-	case projectID != "":
-		err = tx.QueryRowContext(ctx, `SELECT id FROM knowledge_notes WHERE project_id=? AND relative_path=?`, projectID, relPath).Scan(&id)
-	case vaultID != "":
-		err = tx.QueryRowContext(ctx, `SELECT id FROM knowledge_notes WHERE vault_id=? AND is_global=0 AND relative_path=?`, vaultID, relPath).Scan(&id)
-	default:
-		return "", fmt.Errorf("%w: missing knowledge scope", store.ErrValidation)
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	return id, err
-}
-
-func nullIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-func boolInt(v bool) int {
-	if v {
-		return 1
-	}
-	return 0
 }

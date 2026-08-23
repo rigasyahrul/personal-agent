@@ -3,6 +3,7 @@ package compound_test
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"os"
 	"path/filepath"
@@ -279,5 +280,206 @@ func TestPublishApproved_SecondCompoundMergesLessons(t *testing.T) {
 	}
 	if !strings.Contains(text, "20260822-1300-beta") {
 		t.Fatalf("missing beta row:\n%s", text)
+	}
+}
+
+type knowledgeRow struct {
+	id, kind, rel, projectID, vaultID string
+	isGlobal                          int
+}
+
+func loadKnowledgeByPath(t *testing.T, db *sql.DB, rel string) knowledgeRow {
+	t.Helper()
+	var r knowledgeRow
+	var project, vault sql.NullString
+	err := db.QueryRow(`SELECT id, kind, relative_path, coalesce(project_id,''), coalesce(vault_id,''), is_global FROM knowledge_notes WHERE relative_path=?`, rel).
+		Scan(&r.id, &r.kind, &r.rel, &project, &vault, &r.isGlobal)
+	if err != nil {
+		t.Fatalf("knowledge_notes %s: %v", rel, err)
+	}
+	r.projectID = project.String
+	r.vaultID = vault.String
+	return r
+}
+
+type publishedLink struct {
+	raw, toPath, toNote string
+}
+
+func loadPublishedLinks(t *testing.T, db *sql.DB, fromID string) []publishedLink {
+	t.Helper()
+	rows, err := db.Query(`SELECT raw_target, to_path, coalesce(to_note_id,'') FROM note_links WHERE from_note_id=? ORDER BY to_path`, fromID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []publishedLink
+	for rows.Next() {
+		var l publishedLink
+		if err := rows.Scan(&l.raw, &l.toPath, &l.toNote); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, l)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func approveAndPublish(t *testing.T, pub *compound.Publisher, cs *store.CompoundStore, in store.CreateProposalInput, decideAt time.Time) {
+	t.Helper()
+	pending, err := cs.CreatePending(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved, err := cs.Decide(context.Background(), store.DecideInput{
+		ProposalID: pending.ID,
+		Decision:   "approve",
+		Now:        decideAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pub.PublishApproved(context.Background(), approved); err != nil {
+		t.Fatalf("PublishApproved: %v", err)
+	}
+}
+
+func TestPublishApproved_ReindexesKindsPathsAndWikilinks(t *testing.T) {
+	pub, cs, sessionID, _, projectID := seedProjectPublisher(t)
+	var vaultID string
+	if err := pub.DB.QueryRow(`SELECT vault_id FROM sessions WHERE id=?`, sessionID).Scan(&vaultID); err != nil {
+		t.Fatal(err)
+	}
+	agents := "# Agents\n\nrule: always test first\n\n## Memory\n- Lesson index: [[memory/lessons|lessons.md]] — scan titles.\n"
+	detailPath := "memory/20260822-1200-first-lesson.md"
+	detail := "# First lesson\n\nSee [[AGENTS]] and [[memory/lessons]].\n"
+	lessons := "- [[memory/20260822-1200-first-lesson|First lesson]] — do the thing\n"
+	approveAndPublish(t, pub, cs, store.CreateProposalInput{
+		SessionID:  sessionID,
+		RequestKey: "rk-reindex",
+		Scope:      domain.CompoundScopeProject,
+		ProjectID:  projectID,
+		VaultID:    vaultID,
+		Items: []store.CompoundItem{
+			item("agents_patch", "AGENTS.md", "update", agents),
+			item("memory_detail", detailPath, "create", detail),
+			item("lessons_index_row", "memory/lessons.md", "update", lessons),
+		},
+		Now: time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC),
+	}, time.Date(2026, 8, 22, 12, 1, 0, 0, time.UTC))
+
+	agentsNote := loadKnowledgeByPath(t, pub.DB, "AGENTS.md")
+	if agentsNote.kind != "agents" || agentsNote.projectID != projectID || agentsNote.vaultID != "" || agentsNote.isGlobal != 0 {
+		t.Fatalf("AGENTS.md row = %+v", agentsNote)
+	}
+	detailNote := loadKnowledgeByPath(t, pub.DB, detailPath)
+	if detailNote.kind != "memory_detail" || detailNote.projectID != projectID || detailNote.vaultID != "" {
+		t.Fatalf("detail row = %+v", detailNote)
+	}
+	indexNote := loadKnowledgeByPath(t, pub.DB, "memory/lessons.md")
+	if indexNote.kind != "memory_index" || indexNote.projectID != projectID {
+		t.Fatalf("lessons row = %+v", indexNote)
+	}
+
+	agentsLinks := loadPublishedLinks(t, pub.DB, agentsNote.id)
+	if len(agentsLinks) != 1 || agentsLinks[0].raw != "memory/lessons" || agentsLinks[0].toPath != "memory/lessons.md" {
+		t.Fatalf("AGENTS links = %#v", agentsLinks)
+	}
+	if agentsLinks[0].toNote != indexNote.id {
+		t.Fatalf("AGENTS to_note_id = %q, want %s", agentsLinks[0].toNote, indexNote.id)
+	}
+
+	detailLinks := loadPublishedLinks(t, pub.DB, detailNote.id)
+	got := map[string]publishedLink{}
+	for _, l := range detailLinks {
+		got[l.toPath] = l
+	}
+	if l, ok := got["AGENTS.md"]; !ok || l.raw != "AGENTS" || l.toNote != agentsNote.id {
+		t.Fatalf("detail AGENTS link = %#v", detailLinks)
+	}
+	if l, ok := got["memory/lessons.md"]; !ok || l.toNote != indexNote.id {
+		t.Fatalf("detail lessons link = %#v", detailLinks)
+	}
+}
+
+func TestPublishApproved_VaultMemoryUsesVaultScope(t *testing.T) {
+	db, dataDir := testutil.TempDB(t)
+	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	c := &clock.FakeClock{T: now}
+	ctx := context.Background()
+	vs := store.NewVaultStore(db, dataDir, c)
+	v, err := vs.Create(ctx, "Vault")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := now.Format(time.RFC3339Nano)
+	sessionID := "sess-vault"
+	if _, err := db.Exec(`INSERT INTO sessions(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at)
+		VALUES(?,?,?,NULL,'active','openai','gpt-test','{}','{}','S',?,?)`,
+		sessionID, "vault", v.ID, ts, ts); err != nil {
+		t.Fatal(err)
+	}
+	cs := &store.CompoundStore{DB: db, Clock: c}
+	pub := &compound.Publisher{DataDir: dataDir, DB: db, Clock: c}
+
+	detailPath := "memory/20260822-1400-vault-lesson.md"
+	approveAndPublish(t, pub, cs, store.CreateProposalInput{
+		SessionID:  sessionID,
+		RequestKey: "rk-vault",
+		Scope:      domain.CompoundScopeVault,
+		VaultID:    v.ID,
+		Items: []store.CompoundItem{
+			item("memory_detail", detailPath, "create", "See [[memory/lessons]]\n"),
+			item("lessons_index_row", "memory/lessons.md", "update", "- [[memory/20260822-1400-vault-lesson|Vault lesson]]\n"),
+		},
+		Now: now,
+	}, now.Add(time.Minute))
+
+	detailNote := loadKnowledgeByPath(t, db, detailPath)
+	if detailNote.kind != "memory_detail" || detailNote.vaultID != v.ID || detailNote.projectID != "" || detailNote.isGlobal != 0 {
+		t.Fatalf("vault detail = %+v", detailNote)
+	}
+	indexNote := loadKnowledgeByPath(t, db, "memory/lessons.md")
+	if indexNote.kind != "memory_index" || indexNote.vaultID != v.ID || indexNote.projectID != "" {
+		t.Fatalf("vault index = %+v", indexNote)
+	}
+	links := loadPublishedLinks(t, db, detailNote.id)
+	if len(links) != 1 || links[0].toPath != "memory/lessons.md" || links[0].toNote != indexNote.id {
+		t.Fatalf("vault links = %#v", links)
+	}
+}
+
+func TestPublishApproved_GlobalAgentsUsesGlobalScope(t *testing.T) {
+	db, dataDir := testutil.TempDB(t)
+	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	c := &clock.FakeClock{T: now}
+	ts := now.Format(time.RFC3339Nano)
+	sessionID := "sess-global"
+	if _, err := db.Exec(`INSERT INTO sessions(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at)
+		VALUES(?,?,NULL,NULL,'active','openai','gpt-test','{}','{}','S',?,?)`,
+		sessionID, "global", ts, ts); err != nil {
+		t.Fatal(err)
+	}
+	cs := &store.CompoundStore{DB: db, Clock: c}
+	pub := &compound.Publisher{DataDir: dataDir, DB: db, Clock: c}
+
+	agents := "# Global agents\n\n## Memory\n- Lesson index: [[memory/lessons|lessons.md]] — scan titles.\n"
+	approveAndPublish(t, pub, cs, store.CreateProposalInput{
+		SessionID:  sessionID,
+		RequestKey: "rk-global",
+		Scope:      domain.CompoundScopeGlobal,
+		Items:      []store.CompoundItem{item("agents_patch", "AGENTS.md", "update", agents)},
+		Now:        now,
+	}, now.Add(time.Minute))
+
+	note := loadKnowledgeByPath(t, db, "AGENTS.md")
+	if note.kind != "agents" || note.projectID != "" || note.vaultID != "" || note.isGlobal != 1 {
+		t.Fatalf("global AGENTS = %+v", note)
+	}
+	links := loadPublishedLinks(t, db, note.id)
+	if len(links) != 1 || links[0].raw != "memory/lessons" || links[0].toPath != "memory/lessons.md" {
+		t.Fatalf("global links = %#v", links)
 	}
 }

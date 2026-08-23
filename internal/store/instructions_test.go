@@ -255,6 +255,137 @@ func TestInstructionStoreGetMissing(t *testing.T) {
 	}
 }
 
+func TestInstructionStorePutReindexesWikilinks(t *testing.T) {
+	db, dataDir := testutil.TempDB(t)
+	clk := &clock.FakeClock{T: time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)}
+	ctx := context.Background()
+	if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x')`); err != nil {
+		t.Fatal(err)
+	}
+	root := layout.ProjectRoot(dataDir, "", "p1")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &store.InstructionStore{DB: db, Clock: clk}
+	meta := store.ScopeMeta{DataDir: dataDir, Scope: domain.CompoundScopeProject, ProjectID: "p1"}
+	body := "# Agents\n\nSee [[memory/lessons]] and [[SOUL]].\n"
+	note, err := s.Put(ctx, meta, "agents", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note.Kind != domain.KnowledgeKindAgents || note.RelativePath != "AGENTS.md" || note.ProjectID != "p1" || note.VaultID != "" || note.IsGlobal {
+		t.Fatalf("note = %+v", note)
+	}
+
+	links := loadLinksFrom(t, db, note.ID)
+	if len(links) != 2 {
+		t.Fatalf("links = %#v, want 2 edges", links)
+	}
+	want := map[string]string{
+		"memory/lessons": "memory/lessons.md",
+		"SOUL":           "SOUL.md",
+	}
+	for _, l := range links {
+		toPath, ok := want[l.raw]
+		if !ok || l.toPath != toPath || l.fromID != note.ID {
+			t.Fatalf("unexpected edge %#v", l)
+		}
+		delete(want, l.raw)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing edges for %v", want)
+	}
+}
+
+func TestInstructionStorePutReindexesSoulAndSystemKinds(t *testing.T) {
+	db, dataDir := testutil.TempDB(t)
+	clk := &clock.FakeClock{T: time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)}
+	ctx := context.Background()
+	if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(layout.ProjectRoot(dataDir, "", "p1"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	s := &store.InstructionStore{DB: db, Clock: clk}
+	meta := store.ScopeMeta{DataDir: dataDir, Scope: domain.CompoundScopeProject, ProjectID: "p1"}
+
+	cases := []struct {
+		name string
+		kind domain.KnowledgeKind
+		path string
+	}{
+		{"soul", domain.KnowledgeKindSoul, "SOUL.md"},
+		{"system", domain.KnowledgeKindSystem, "SYSTEM.md"},
+	}
+	for _, tc := range cases {
+		note, err := s.Put(ctx, meta, store.InstructionName(tc.name), "See [[AGENTS]]\n")
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if note.Kind != tc.kind || note.RelativePath != tc.path || note.ProjectID != "p1" {
+			t.Fatalf("%s note = %+v", tc.name, note)
+		}
+		links := loadLinksFrom(t, db, note.ID)
+		if len(links) != 1 || links[0].raw != "AGENTS" || links[0].toPath != "AGENTS.md" {
+			t.Fatalf("%s links = %#v", tc.name, links)
+		}
+	}
+}
+
+func TestInstructionStorePutReplacesOutboundLinks(t *testing.T) {
+	db, dataDir := testutil.TempDB(t)
+	clk := &clock.FakeClock{T: time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)}
+	ctx := context.Background()
+	if _, err := db.Exec(`INSERT INTO projects(id,name,created_at,updated_at) VALUES('p1','P','x','x')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(layout.ProjectRoot(dataDir, "", "p1"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	s := &store.InstructionStore{DB: db, Clock: clk}
+	meta := store.ScopeMeta{DataDir: dataDir, Scope: domain.CompoundScopeProject, ProjectID: "p1"}
+
+	first, err := s.Put(ctx, meta, "agents", "See [[memory/lessons]]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.Put(ctx, meta, "agents", "Now [[SOUL]]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID != second.ID {
+		t.Fatalf("id changed: %s vs %s", first.ID, second.ID)
+	}
+	links := loadLinksFrom(t, db, second.ID)
+	if len(links) != 1 || links[0].raw != "SOUL" || links[0].toPath != "SOUL.md" {
+		t.Fatalf("replaced links = %#v", links)
+	}
+}
+
+func TestInstructionStorePutGlobalReindexesWikilinks(t *testing.T) {
+	db, dataDir := testutil.TempDB(t)
+	clk := &clock.FakeClock{T: time.Date(2026, 8, 22, 15, 0, 0, 0, time.UTC)}
+	ctx := context.Background()
+	if err := os.MkdirAll(layout.GlobalRoot(dataDir), 0700); err != nil {
+		t.Fatal(err)
+	}
+	s := &store.InstructionStore{DB: db, Clock: clk}
+	meta := store.ScopeMeta{DataDir: dataDir, Scope: domain.CompoundScopeGlobal}
+	note, err := s.Put(ctx, meta, "system", "Global [[AGENTS]]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !note.IsGlobal || note.ProjectID != "" || note.VaultID != "" || note.Kind != domain.KnowledgeKindSystem || note.RelativePath != "SYSTEM.md" {
+		t.Fatalf("global note = %+v", note)
+	}
+	links := loadLinksFrom(t, db, note.ID)
+	if len(links) != 1 || links[0].toPath != "AGENTS.md" {
+		t.Fatalf("global links = %#v", links)
+	}
+}
+
 func TestInstructionStoreGetScopedAcrossProjects(t *testing.T) {
 	// Same AGENTS body in two projects must not cross-attach knowledge_notes ids.
 	db, dataDir := testutil.TempDB(t)
