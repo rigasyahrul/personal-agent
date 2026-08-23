@@ -677,19 +677,58 @@ a.list-row:hover {
   width: 100%;
   max-width: none;
   padding-inline: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 52px);
+  height: calc(100vh - 52px);
+  max-height: calc(100vh - 52px);
+  overflow: hidden;
+}
+.content-canvas--session-focus > .session-focus {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* —— Project hub workspace + rail (benchmark B2) —— */
+/* Lock shell to viewport so chat/rail own their scroll (scrollbar next to rail).
+   Scoped to project hub only — other routes keep normal document scroll. */
+.app-shell:has(.project-workspace) {
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+.app-shell:has(.project-workspace) .app-shell__body {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+.app-shell:has(.project-workspace) .topbar {
+  flex-shrink: 0;
+}
 .content-canvas--project-workspace {
   width: 100%;
   max-width: none;
   margin: 0;
   padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .project-workspace {
   display: grid;
   gap: 0;
-  min-height: calc(100vh - 52px);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  align-items: stretch;
 }
 .project-workspace[data-rail="open"] {
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -711,14 +750,21 @@ a.list-row:hover {
 }
 .project-workspace__main {
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   padding: 0;
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 52px);
+  /* Hub start (long session list) scrolls here; open session fills and scrolls inside. */
+  overflow: auto;
 }
 .project-workspace__main > .session-focus {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 /* Hub start state still needs breathing room */
 .project-workspace__main > .hub-header,
@@ -738,7 +784,11 @@ a.list-row:hover {
   background: var(--panel);
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 /* Shared chrome height with .session-focus__header (workspace top row). */
 .rail-iconbar {
@@ -820,10 +870,46 @@ a.list-row:hover {
   background: var(--accent-soft);
 }
 .rail-panel {
-  flex: 1;
-  overflow: auto;
-  padding: 12px;
+  flex: 1 1 auto;
   min-height: 0;
+  /* Scroll only when panel content exceeds the rail viewport. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px;
+}
+/* Config: instructions field fills rail height; scrolls inside when content grows. */
+.rail-panel--config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden; /* child textarea owns overflow */
+}
+.rail-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 550;
+  color: #3f3f46;
+}
+.rail-config-field__label {
+  flex-shrink: 0;
+}
+.rail-config-field__input {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  height: 100%;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.45;
+}
+.rail-config-hint {
+  margin: 0;
+  flex-shrink: 0;
+  color: var(--muted);
 }
 .rail-memory-preview {
   margin: 0;
@@ -841,7 +927,10 @@ a.list-row:hover {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 /* Collapsed strip: 48px top chrome row (matches .rail-iconbar / session header). */
 .project-rail--collapsed {
@@ -1148,9 +1237,13 @@ a.list-row:hover {
 .session-focus {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 52px - 40px);
+  /* Prefer filling the parent canvas; fall back when not in a locked hub shell. */
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   gap: 0;
   background: var(--panel, #fff);
+  overflow: hidden;
 }
 /* Match .rail-iconbar height (48px) so workspace top borders align. */
 .session-focus__header {
@@ -1201,22 +1294,34 @@ a.list-row:hover {
   font-weight: 500;
 }
 .session-chat-column {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* Full main width so the message scrollbar sits on the edge next to the rail. */
   width: 100%;
-  max-width: 44rem;
-  margin-inline: auto;
-  padding-inline: 24px;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: 0;
   /* Clear air under Agent tabs before first bubble */
   padding-top: 8px;
 }
 .session-focus__messages {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  /* Scrollbar on the main column’s right edge (adjacent to the project rail). */
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 36px 0 24px;
+  width: 100%;
+}
+/* Keep the conversation column ~44rem centered while the scroller stays full-bleed. */
+.session-focus__messages > .message-row {
+  width: 100%;
+  max-width: 44rem;
+  margin-inline: auto;
+  padding-inline: 24px;
+  box-sizing: border-box;
 }
 /* Extra separation when the thread starts with a user bubble (common hub path). */
 .session-focus__messages > .message-row:first-child {
@@ -2141,8 +2246,7 @@ a.list-row:hover {
   .project-workspace[data-rail='collapsed'] {
     grid-template-columns: minmax(0, 1fr) 48px;
   }
-  .session-chat-column {
-    max-width: none;
+  .session-focus__messages > .message-row {
     padding-inline: 16px;
   }
   .session-focus__header-meta .run-status {
@@ -2170,9 +2274,6 @@ a.list-row:hover {
   /* Hub: main full-bleed; open rail stays overlay from 960 rule. */
   .content-canvas--project-workspace {
     padding: 0;
-  }
-  .project-workspace {
-    min-height: calc(100vh - 52px);
   }
   .project-workspace[data-rail='collapsed'] {
     grid-template-columns: minmax(0, 1fr) 44px;

@@ -196,6 +196,42 @@ describe('visual baseline', () => {
     expect(css).toMatch(/data-rail=['"]collapsed['"][^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+48px/s);
   });
 
+  it('locks project hub height so chat scrollbar sits on the main edge by the rail', () => {
+    // Viewport-locked shell only when hub workspace is present
+    expect(css).toMatch(
+      /\.app-shell:has\(\.project-workspace\)\s*\{[^}]*height:\s*100vh/s,
+    );
+    expect(css).toMatch(
+      /\.app-shell:has\(\.project-workspace\)\s*\{[^}]*overflow:\s*hidden/s,
+    );
+    expect(css).toMatch(
+      /\.content-canvas--project-workspace\s*\{[^}]*overflow:\s*hidden/s,
+    );
+    expect(css).toMatch(/\.project-workspace\s*\{[^}]*height:\s*100%/s);
+    expect(css).toMatch(/\.project-workspace__rail\s*\{[^}]*overflow:\s*hidden/s);
+    // Rail panel scrolls only when content overflows
+    expect(css).toMatch(/\.rail-panel\s*\{[^}]*overflow-y:\s*auto/s);
+    // Message list is the chat scroller (full main width → scrollbar next to rail)
+    expect(css).toMatch(
+      /\.session-focus__messages\s*\{[^}]*overflow-y:\s*auto/s,
+    );
+    expect(css).toMatch(
+      /\.session-chat-column\s*\{[^}]*max-width:\s*none/s,
+    );
+    // Conversation column stays ~44rem centered inside the full-bleed scroller
+    expect(css).toMatch(
+      /\.session-focus__messages\s*>\s*\.message-row\s*\{[^}]*max-width:\s*44rem/s,
+    );
+    // Config instructions fill the rail and scroll with content
+    expect(css).toContain('.rail-panel--config');
+    expect(css).toMatch(
+      /\.rail-config-field__input\s*\{[^}]*overflow-y:\s*auto/s,
+    );
+    expect(css).toMatch(
+      /\.rail-config-field__input\s*\{[^}]*resize:\s*none/s,
+    );
+  });
+
   it('hub project title is 1.5rem', () => {
     expect(css).toMatch(/\.hub-header__title\s*\{[^}]*font-size:\s*1\.5rem/s);
   });

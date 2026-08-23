@@ -253,7 +253,12 @@
     </div>
 
     {#if activeTab === 'config'}
-      <div class="rail-panel form-stack" role="tabpanel" id="rail-panel-config" aria-labelledby="rail-tab-config">
+      <div
+        class="rail-panel rail-panel--config"
+        role="tabpanel"
+        id="rail-panel-config"
+        aria-labelledby="rail-tab-config"
+      >
         {#if memoryLoading}
           <div class="space-y-2" aria-busy="true">
             <Skeleton class="h-6" />
@@ -271,17 +276,17 @@
             Open memory
           </button>
         {/if}
-        <label class="block text-sm" for="rail-instructions">
-          Instructions (system)
+        <label class="rail-config-field" for="rail-instructions">
+          <span class="rail-config-field__label">Instructions (system)</span>
           <textarea
             id="rail-instructions"
-            class="field-textarea mt-1"
+            class="field-textarea rail-config-field__input"
             aria-label="Instructions (system)"
             bind:value={instructions}
-            rows="6"
+            rows="8"
           ></textarea>
         </label>
-        <p class="text-sm text-slate-500" style="margin:0">Not saved yet — persistence coming later.</p>
+        <p class="rail-config-hint text-sm text-slate-500">Not saved yet — persistence coming later.</p>
       </div>
     {:else}
       <div class="rail-panel form-stack" role="tabpanel" id="rail-panel-files" aria-labelledby="rail-tab-files">
@@ -297,7 +302,7 @@
           <p class="text-sm text-slate-500" style="margin:0">No project files available.</p>
         {:else}
           {#if projectRows.length}
-            <div class="workspace-tree space-y-0.5 overflow-auto text-sm" aria-label="Project notes">
+            <div class="workspace-tree space-y-0.5 text-sm" aria-label="Project notes">
               {#each projectRows as row (row.path)}
                 <button
                   type="button"
@@ -312,7 +317,7 @@
           {#if workspaceRows.length}
             <div class="form-stack" style="gap:6px">
               <p class="text-sm font-medium text-slate-700" style="margin:0">Workspace</p>
-              <div class="workspace-tree space-y-0.5 overflow-auto text-sm" aria-label="Workspace files">
+              <div class="workspace-tree space-y-0.5 text-sm" aria-label="Workspace files">
                 {#each workspaceRows as row (row.path)}
                   <button
                     type="button"
