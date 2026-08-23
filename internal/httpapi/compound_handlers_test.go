@@ -281,6 +281,9 @@ type compoundProposalResp struct {
 	ID         string `json:"id"`
 	Status     string `json:"status"`
 	SessionID  string `json:"session_id"`
+	Scope      string `json:"scope"`
+	ProjectID  string `json:"project_id"`
+	VaultID    string `json:"vault_id"`
 	RequestKey string `json:"request_key"`
 	Error      string `json:"error"`
 	Items      []struct {
@@ -505,4 +508,178 @@ func TestCompoundDecideRequiresCSRFAndAuth(t *testing.T) {
 	if got := apiRequest(t, f.h, "POST", path, req, f.cookies, "").Code; got != http.StatusForbidden {
 		t.Fatalf("no csrf decide = %d", got)
 	}
+}
+
+func insertScopedSession(t *testing.T, db *sql.DB, id, home, vaultID string) {
+	t.Helper()
+	ts := time.Unix(1000, 0).UTC().Format(time.RFC3339Nano)
+	var err error
+	switch home {
+	case "vault":
+		_, err = db.Exec(`INSERT INTO sessions(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at)
+			VALUES(?,?,?,NULL,'active','openai','m','{}','{}',?,?,?)`, id, home, vaultID, id, ts, ts)
+	case "global":
+		_, err = db.Exec(`INSERT INTO sessions(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at)
+			VALUES(?,?,NULL,NULL,'active','openai','m','{}','{}',?,?,?)`, id, home, id, ts, ts)
+	default:
+		t.Fatalf("unsupported home %q", home)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func compoundMemoryItems(detailPath, detail, lessons string) []map[string]string {
+	return []map[string]string{
+		{"kind": "memory_detail", "path": detailPath, "action": "create", "content": detail, "content_sha256": shaHexTest(detail)},
+		{"kind": "lessons_index_row", "path": "memory/lessons.md", "action": "update", "content": lessons, "content_sha256": shaHexTest(lessons)},
+	}
+}
+
+func mustNotExist(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err == nil {
+		t.Fatalf("path must not exist: %s", path)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+}
+
+func TestCompoundPOSTVaultRejectsAgentsPatch(t *testing.T) {
+	h, db, _, _, cookies := chatAPIServer(t, nil)
+	insertScopedSession(t, db, "sess-vault", "vault", "v")
+	body := "# Agents\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	res := apiRequest(t, h, "POST", "/api/v1/sessions/sess-vault/compound", map[string]any{
+		"request_key": "rk-vault-agents",
+		"items": []map[string]string{{
+			"kind":           "agents_patch",
+			"path":           "AGENTS.md",
+			"action":         "update",
+			"content":        body,
+			"content_sha256": shaHexTest(body),
+		}},
+	}, cookies, "csrf")
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("vault agents_patch = %d %s want 400", res.Code, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), "invalid_items") {
+		t.Fatalf("body = %s, want invalid_items", res.Body.String())
+	}
+}
+
+func TestCompoundPOSTVaultAcceptsMemoryDetail(t *testing.T) {
+	h, db, dataDir, pid, cookies := chatAPIServer(t, nil)
+	insertScopedSession(t, db, "sess-vault-mem", "vault", "v")
+	detailPath := "memory/20260822-1200-vault-http.md"
+	detail := "# Vault http lesson\n"
+	lessons := "- [[memory/20260822-1200-vault-http]]\n"
+	res := apiRequest(t, h, "POST", "/api/v1/sessions/sess-vault-mem/compound", map[string]any{
+		"request_key": "rk-vault-mem",
+		"items":       compoundMemoryItems(detailPath, detail, lessons),
+	}, cookies, "csrf")
+	if res.Code != http.StatusOK {
+		t.Fatalf("vault memory POST = %d %s want 200", res.Code, res.Body.String())
+	}
+	got := decodeCompoundProposal(t, res.Body.Bytes())
+	if got.Status != "pending" || got.Scope != "vault" || got.VaultID != "v" || got.ProjectID != "" {
+		t.Fatalf("vault proposal = %+v", got)
+	}
+
+	decide := apiRequest(t, h, "POST", "/api/v1/sessions/sess-vault-mem/compound/"+got.ID+"/decide", map[string]any{
+		"request_key": "rk-vault-mem",
+		"decision":    "approve",
+	}, cookies, "csrf")
+	if decide.Code != http.StatusOK {
+		t.Fatalf("vault decide = %d %s", decide.Code, decide.Body.String())
+	}
+	vaultFile := filepath.Join(layout.VaultRoot(dataDir, "v"), filepath.FromSlash(detailPath))
+	raw, err := os.ReadFile(vaultFile)
+	if err != nil {
+		t.Fatalf("vault memory missing: %v", err)
+	}
+	if string(raw) != detail {
+		t.Fatalf("vault memory = %q", raw)
+	}
+	mustNotExist(t, filepath.Join(layout.ProjectRoot(dataDir, "v", pid), filepath.FromSlash(detailPath)))
+	mustNotExist(t, filepath.Join(layout.GlobalRoot(dataDir), filepath.FromSlash(detailPath)))
+}
+
+func TestCompoundPOSTGlobalWritesGlobalOnly(t *testing.T) {
+	h, db, dataDir, pid, cookies := chatAPIServer(t, nil)
+	insertScopedSession(t, db, "sess-global", "global", "")
+	body := "# Global agents\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	res := apiRequest(t, h, "POST", "/api/v1/sessions/sess-global/compound", map[string]any{
+		"request_key": "rk-global-agents",
+		"items": []map[string]string{{
+			"kind":           "agents_patch",
+			"path":           "AGENTS.md",
+			"action":         "update",
+			"content":        body,
+			"content_sha256": shaHexTest(body),
+		}},
+	}, cookies, "csrf")
+	if res.Code != http.StatusOK {
+		t.Fatalf("global agents POST = %d %s want 200", res.Code, res.Body.String())
+	}
+	got := decodeCompoundProposal(t, res.Body.Bytes())
+	if got.Status != "pending" || got.Scope != "global" || got.ProjectID != "" || got.VaultID != "" {
+		t.Fatalf("global proposal = %+v", got)
+	}
+
+	decide := apiRequest(t, h, "POST", "/api/v1/sessions/sess-global/compound/"+got.ID+"/decide", map[string]any{
+		"request_key": "rk-global-agents",
+		"decision":    "approve",
+	}, cookies, "csrf")
+	if decide.Code != http.StatusOK {
+		t.Fatalf("global decide = %d %s", decide.Code, decide.Body.String())
+	}
+	finished := decodeCompoundProposal(t, decide.Body.Bytes())
+	if finished.Status != "approved" {
+		t.Fatalf("global approve status = %+v", finished)
+	}
+	raw, err := os.ReadFile(filepath.Join(layout.GlobalRoot(dataDir), "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("global AGENTS.md missing: %v", err)
+	}
+	if string(raw) != body {
+		t.Fatalf("global AGENTS.md = %q", raw)
+	}
+	mustNotExist(t, filepath.Join(layout.ProjectRoot(dataDir, "v", pid), "AGENTS.md"))
+	mustNotExist(t, filepath.Join(layout.VaultRoot(dataDir, "v"), "AGENTS.md"))
+}
+
+func TestCompoundPOSTProjectMemoryStaysInProjectRoot(t *testing.T) {
+	f := newCompoundHTTPFixture(t)
+	detailPath := "memory/20260822-1200-project-http.md"
+	detail := "# Project http lesson\n"
+	lessons := "- [[memory/20260822-1200-project-http]]\n"
+	res := apiRequest(t, f.h, "POST", "/api/v1/sessions/"+f.sess.ID+"/compound", map[string]any{
+		"request_key": "rk-proj-mem",
+		"items":       compoundMemoryItems(detailPath, detail, lessons),
+	}, f.cookies, "csrf")
+	if res.Code != http.StatusOK {
+		t.Fatalf("project memory POST = %d %s", res.Code, res.Body.String())
+	}
+	got := decodeCompoundProposal(t, res.Body.Bytes())
+	if got.Scope != "project" || got.ProjectID != f.pid || got.VaultID != "v" {
+		t.Fatalf("project proposal = %+v", got)
+	}
+
+	decide := apiRequest(t, f.h, "POST", "/api/v1/sessions/"+f.sess.ID+"/compound/"+got.ID+"/decide", map[string]any{
+		"request_key": "rk-proj-mem",
+		"decision":    "approve",
+	}, f.cookies, "csrf")
+	if decide.Code != http.StatusOK {
+		t.Fatalf("project decide = %d %s", decide.Code, decide.Body.String())
+	}
+	projectFile := filepath.Join(layout.ProjectRoot(f.dataDir, "v", f.pid), filepath.FromSlash(detailPath))
+	raw, err := os.ReadFile(projectFile)
+	if err != nil {
+		t.Fatalf("project memory missing: %v", err)
+	}
+	if string(raw) != detail {
+		t.Fatalf("project memory = %q", raw)
+	}
+	mustNotExist(t, filepath.Join(layout.VaultRoot(f.dataDir, "v"), filepath.FromSlash(detailPath)))
+	mustNotExist(t, filepath.Join(layout.GlobalRoot(f.dataDir), filepath.FromSlash(detailPath)))
 }

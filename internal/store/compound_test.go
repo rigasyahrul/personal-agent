@@ -32,6 +32,13 @@ func compoundItem(kind, path, action, content string) store.CompoundItem {
 	}
 }
 
+func memoryPair(detailPath, detail, lessons string) []store.CompoundItem {
+	return []store.CompoundItem{
+		compoundItem("memory_detail", detailPath, "create", detail),
+		compoundItem("lessons_index_row", "memory/lessons.md", "update", lessons),
+	}
+}
+
 func seedCompoundSession(t *testing.T, home string) (*store.CompoundStore, string) {
 	t.Helper()
 	db, _ := testutil.TempDB(t)
@@ -140,6 +147,111 @@ func TestCreatePending_VaultRejectsAgentsPatch(t *testing.T) {
 	})
 	if !errors.Is(err, store.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
+	}
+}
+
+func TestCreatePending_VaultAcceptsMemoryDetail(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "vault")
+	detailPath := "memory/20260822-1200-vault-lesson.md"
+	got, err := s.CreatePending(context.Background(), store.CreateProposalInput{
+		SessionID:  sessionID,
+		RequestKey: "rk-vault-mem",
+		Scope:      domain.CompoundScopeVault,
+		VaultID:    "v1",
+		Items:      memoryPair(detailPath, "# Vault lesson\n", "- [[memory/20260822-1200-vault-lesson]]\n"),
+		Now:        time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreatePending vault memory: %v", err)
+	}
+	if got.Scope != domain.CompoundScopeVault || got.VaultID != "v1" || got.ProjectID != "" {
+		t.Fatalf("vault proposal leaked project scope: %+v", got)
+	}
+	if got.Status != domain.CompoundStatusPending {
+		t.Fatalf("status = %q", got.Status)
+	}
+	var decoded []store.CompoundItem
+	if err := json.Unmarshal([]byte(got.ItemsJSON), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded) != 2 || decoded[0].Path != detailPath || decoded[1].Path != "memory/lessons.md" {
+		t.Fatalf("items: %+v", decoded)
+	}
+}
+
+func TestCreatePending_GlobalAgentsAndMemory(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "global")
+	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	agents := "# Global agents\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	agentsGot, err := s.CreatePending(context.Background(), store.CreateProposalInput{
+		SessionID:  sessionID,
+		RequestKey: "rk-global-agents",
+		Scope:      domain.CompoundScopeGlobal,
+		Items:      []store.CompoundItem{compoundItem("agents_patch", "AGENTS.md", "update", agents)},
+		Now:        now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePending global agents: %v", err)
+	}
+	if agentsGot.Scope != domain.CompoundScopeGlobal || agentsGot.ProjectID != "" || agentsGot.VaultID != "" {
+		t.Fatalf("global agents proposal bound a vault/project: %+v", agentsGot)
+	}
+
+	detailPath := "memory/20260822-1200-global-lesson.md"
+	memGot, err := s.CreatePending(context.Background(), store.CreateProposalInput{
+		SessionID:  sessionID,
+		RequestKey: "rk-global-mem",
+		Scope:      domain.CompoundScopeGlobal,
+		Items:      memoryPair(detailPath, "# Global lesson\n", "- [[memory/20260822-1200-global-lesson]]\n"),
+		Now:        now,
+	})
+	if err != nil {
+		t.Fatalf("CreatePending global memory: %v", err)
+	}
+	if memGot.Scope != domain.CompoundScopeGlobal || memGot.ProjectID != "" || memGot.VaultID != "" {
+		t.Fatalf("global memory proposal bound a vault/project: %+v", memGot)
+	}
+}
+
+func TestCreatePending_ProjectMemoryKeepsProjectScope(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	detailPath := "memory/20260822-1200-project-lesson.md"
+	got, err := s.CreatePending(context.Background(), store.CreateProposalInput{
+		SessionID:  sessionID,
+		RequestKey: "rk-proj-mem",
+		Scope:      domain.CompoundScopeProject,
+		ProjectID:  "p1",
+		VaultID:    "v1",
+		Items:      memoryPair(detailPath, "# Project lesson\n", "- [[memory/20260822-1200-project-lesson]]\n"),
+		Now:        time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreatePending project memory: %v", err)
+	}
+	if got.Scope != domain.CompoundScopeProject || got.ProjectID != "p1" || got.VaultID != "v1" {
+		t.Fatalf("project memory must stay bound to project root ids: %+v", got)
+	}
+}
+
+func TestCreatePending_ProjectRejectsEscapingMemoryPath(t *testing.T) {
+	s, sessionID := seedCompoundSession(t, "project")
+	for _, path := range []string{
+		"memory/../AGENTS.md",
+		"/tmp/x.md",
+		"memory/../../vaults/v1/memory/20260822-1200-escape.md",
+	} {
+		_, err := s.CreatePending(context.Background(), store.CreateProposalInput{
+			SessionID:  sessionID,
+			RequestKey: "rk-escape-" + path,
+			Scope:      domain.CompoundScopeProject,
+			ProjectID:  "p1",
+			VaultID:    "v1",
+			Items:      []store.CompoundItem{compoundItem("memory_detail", path, "create", "# no\n")},
+			Now:        time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC),
+		})
+		if !errors.Is(err, store.ErrValidation) {
+			t.Fatalf("path %q: err = %v, want ErrValidation", path, err)
+		}
 	}
 }
 
