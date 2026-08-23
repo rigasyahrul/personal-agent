@@ -159,9 +159,11 @@ Task 35: complete (P1 gate empty commit, pushed)
 | Task | Review | Complete |
 |------|--------|----------|
 | 60 | PASS requesting-code-review (pi session task-60-review) | `260a2ff` pushed |
-| 61–67 | | |
+| 61 | PASS requesting-code-review (pi session task-61-review) | `3ac5af5` pushed |
+| 62–67 | | |
 | 68 | PASS requesting-code-review (pi session task-68-review) | `5919379` pushed |
-| 69–72 | | |
+| 69 | PASS requesting-code-review (pi session task-69-review) | `de7f3ad` pushed |
+| 70–72 | | |
 
 ### Whole-branch
 
@@ -188,6 +190,7 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Tasks 61+69 complete (`3ac5af5`/`de7f3ad`)
 - 2026-08-23 — Tasks 60+68 complete (`260a2ff`/`5919379`); P3 `in_progress`
 - 2026-08-23 — P2 `done` (Task 52 gate). Next P3 Task 60 FTS
 - 2026-08-23 — Task 48 complete (`96e3af0`)
