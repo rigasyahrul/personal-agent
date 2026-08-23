@@ -204,6 +204,54 @@ func (s *KnowledgeStore) ByScopePath(ctx context.Context, projectID, vaultID str
 	return note, err
 }
 
+// Backlink is an inbound wikilink to a knowledge note. Snippet is empty in v1.
+type Backlink struct {
+	FromNoteID string
+	FromPath   string
+	FromTitle  string
+	Snippet    string
+}
+
+// Backlinks returns notes that link to noteID (knowledge_notes.id only).
+// Matches resolved edges (to_note_id) and same-scope unresolved path edges.
+func (s *KnowledgeStore) Backlinks(ctx context.Context, noteID string) ([]Backlink, error) {
+	note, err := s.ByID(ctx, noteID)
+	if err != nil {
+		return nil, err
+	}
+	scopeSQL, scopeArgs, err := knowledgeScopeWhere(note.ProjectID, note.VaultID, note.IsGlobal)
+	if err != nil {
+		return nil, err
+	}
+	args := append([]any{note.ID, note.RelativePath}, scopeArgs...)
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT kn.id, kn.relative_path, coalesce(kn.title,'')
+		FROM note_links nl
+		INNER JOIN knowledge_notes kn ON kn.id = nl.from_note_id
+		WHERE nl.to_note_id = ?
+		   OR (nl.to_path = ? AND nl.from_note_id IN (SELECT id FROM knowledge_notes WHERE `+scopeSQL+`))
+		ORDER BY kn.relative_path, kn.id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Backlink
+	seen := map[string]bool{}
+	for rows.Next() {
+		var bl Backlink
+		if err := rows.Scan(&bl.FromNoteID, &bl.FromPath, &bl.FromTitle); err != nil {
+			return nil, err
+		}
+		if seen[bl.FromNoteID] {
+			continue
+		}
+		seen[bl.FromNoteID] = true
+		out = append(out, bl)
+	}
+	return out, rows.Err()
+}
+
 func (s *KnowledgeStore) DeleteLinksFrom(ctx context.Context, fromID string) error {
 	if fromID == "" {
 		return fmt.Errorf("%w: empty from_note_id", ErrValidation)

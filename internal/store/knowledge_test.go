@@ -286,6 +286,31 @@ func TestKnowledgeByIDAndByScopePathNotFound(t *testing.T) {
 	}
 }
 
+func TestKnowledgeBacklinksIncludesLinker(t *testing.T) {
+	s, _, _ := knowledgeHarness(t)
+	ctx := context.Background()
+
+	b, err := s.UpsertFromContent(ctx, projectUpsert(domain.KnowledgeKindMemoryDetail, "memory/b.md", []byte("B\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := s.UpsertFromContent(ctx, projectUpsert(domain.KnowledgeKindMemoryDetail, "memory/a.md", []byte("---\ntitle: Note A\n---\nSee [[memory/b]]\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Backlinks(ctx, b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Backlinks(B) = %#v, want 1", got)
+	}
+	if got[0].FromNoteID != a.ID || got[0].FromPath != "memory/a.md" || got[0].FromTitle != "Note A" {
+		t.Fatalf("backlink = %#v, want FromNoteID=%s FromPath=memory/a.md FromTitle=Note A", got[0], a.ID)
+	}
+}
+
 func TestKnowledgeDeleteLinksFrom(t *testing.T) {
 	s, db, _ := knowledgeHarness(t)
 	ctx := context.Background()
