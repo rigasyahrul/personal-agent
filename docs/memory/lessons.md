@@ -40,7 +40,10 @@ Scan this first. Open the linked file only when you need detail.
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | knowledge | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | compounding | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
-| craft | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
+| craft | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
+| browser | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
+| vibe-pass | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
+| ux | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
 | benchmark | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
 | darwin | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | dist | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
@@ -48,7 +51,7 @@ Scan this first. Open the linked file only when you need detail.
 | docs | [2026-08-19 — Lessons file is stable `lessons.md`](20260819-2200-lessons-file-is-stable-lessons-md.md) |
 | docs layout | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | fixtures | [2026-08-13 — Verify escaped literals at the byte level](20260813-2300-verify-escaped-literals-at-the-byte-level.md) |
-| frontend | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
+| frontend | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
 | fs | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | git | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | gitignore | [2026-08-19 — Default `make` is help; build binary is gitignored](20260819-2000-default-make-is-help-build-binary-is-gitignored.md) |
@@ -67,10 +70,11 @@ Scan this first. Open the linked file only when you need detail.
 | plans | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
 | restore | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | review | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
-| rail | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
+| rail | [2026-08-21 — CSS grid + display:none collapses track](20260821-1616-css-grid-display-none-collapses-track.md) |
+| css | [2026-08-21 — CSS grid + display:none collapses track](20260821-1616-css-grid-display-none-collapses-track.md) |
 | sdd | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
 | session | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
-| jsdom | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
+| jsdom | [2026-08-21 — CSS grid + display:none collapses track](20260821-1616-css-grid-display-none-collapses-track.md) |
 | session-focus | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | shell | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | ship | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
@@ -101,6 +105,10 @@ Scan this first. Open the linked file only when you need detail.
 - **2026-08-23** — [Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md)  
   Tags: pi, master, sqlite, knowledge, compound, ship, vibe-pass, worktree
 - [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) — consulting-grok-review gates + Canonical traps
+- **2026-08-21** — [UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md)  
+  Tags: frontend, craft, ux, browser, docker-dev, vibe-pass
+- **2026-08-21** — [CSS grid + display:none collapses track](20260821-1616-css-grid-display-none-collapses-track.md)  
+  Tags: frontend, css, rail, jsdom, craft, hub
 - **2026-08-20** — [Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md)  
   Tags: hub, session, rail, review, sdd, frontend, jsdom, grok45
 - **2026-08-21** — [Grok plan drafts: no triple-retry](20260821-0002-grok-plan-drafts-no-triple-retry.md)  

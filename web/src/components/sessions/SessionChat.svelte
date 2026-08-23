@@ -7,6 +7,7 @@
     CompoundItem,
     CompoundProposal,
     OperationStatus,
+    Project,
     RunStatus,
     Session,
     WorkspaceFile,
@@ -25,6 +26,8 @@
     writeFilesBarOpen,
     writeFilesBarWidthPct,
   } from '../../lib/session-prefs'
+  import { formatMessageDateTime, formatSessionDate } from '../../lib/format-session-date'
+  import Breadcrumbs from '../Breadcrumbs.svelte'
   import MarkdownView from '../markdown/MarkdownView.svelte'
   import { createSessionPoller } from './session-poller'
   import OperationBadges from './OperationBadges.svelte'
@@ -61,6 +64,7 @@
   let {
     session,
     projectId,
+    project: projectProp = null,
     pollInterval = 1500,
     onclose,
     uuid = () => crypto.randomUUID(),
@@ -71,6 +75,8 @@
   }: {
     session: Session
     projectId: string
+    /** When provided (hub), used for header breadcrumbs without an extra fetch. */
+    project?: Project | null
     pollInterval?: number
     onclose?: () => void
     uuid?: () => string
@@ -82,6 +88,9 @@
     /** When true, hide internal Show files toggle / SessionFilesBar (hub ProjectRail owns files). */
     embeddedInHub?: boolean
   } = $props()
+
+  let loadedProject = $state<Project | null>(null)
+  const breadcrumbProject = $derived(projectProp ?? loadedProject)
 
   let messages = $state<ChatMessage[]>([])
   let run = $state<RunStatus | null>(null)
@@ -392,6 +401,16 @@
     }
   }
 
+  /** Enter sends; Shift+Enter inserts a newline (same as hub composer). */
+  function onComposerKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.shiftKey) return
+    if (e.isComposing) return
+    e.preventDefault()
+    if (sendDisabled || !draft.trim()) return
+    const form = (e.currentTarget as HTMLTextAreaElement).form
+    form?.requestSubmit()
+  }
+
   async function copyAssistant(text: string, sequence: number) {
     try {
       await navigator.clipboard.writeText(text)
@@ -585,6 +604,27 @@
     resetForSession(value)
   })
 
+  $effect(() => {
+    void projectId
+    void projectProp
+    if (projectProp) {
+      loadedProject = projectProp
+      return
+    }
+    let cancelled = false
+    void api
+      .getProject(projectId)
+      .then((p) => {
+        if (!cancelled) loadedProject = p
+      })
+      .catch(() => {
+        if (!cancelled) loadedProject = null
+      })
+    return () => {
+      cancelled = true
+    }
+  })
+
   onMount(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
     const mql = window.matchMedia(NARROW_MQ)
@@ -644,23 +684,21 @@
 
 <div class="session-focus" data-files-open={filesOpen && showWorkspace ? '1' : '0'}>
   <header class="session-focus__header">
-    <div class="flex flex-wrap items-center gap-3 min-w-0">
-      <button type="button" class="link-accent" onclick={() => onclose?.()}>Back</button>
-      <h2 class="text-xl font-semibold" style="margin:0">{session.title}</h2>
-      <span class="badge-chip" style="background:#f4f4f5;color:#52525b"
-      >{session.provider}:{session.model_id}</span>
-      <p class="run-status text-sm text-slate-600" role="status" aria-live="polite" style="margin:0"
-      >{runLabel}</p>
+    <div class="session-focus__header-lead">
+      {#if breadcrumbProject}
+        <Breadcrumbs
+          project={breadcrumbProject}
+          leaf={session.title}
+          onProjectClick={onclose}
+        />
+      {:else}
+        <button type="button" class="link-accent" onclick={() => onclose?.()}>Back</button>
+        <h2 class="session-focus__title">{session.title}</h2>
+      {/if}
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        class="btn btn--secondary"
-        disabled={compoundDisabled}
-        title={compoundTitle}
-        aria-busy={compoundBusy}
-        onclick={() => void startCompound()}
-      >Compound</button>
+    <div class="session-focus__header-meta">
+      <span class="session-focus__model-quiet">{session.provider}:{session.model_id}</span>
+      <p class="run-status session-focus__run" role="status" aria-live="polite">{runLabel}</p>
       {#if showWorkspace && !embeddedInHub}
         <button
           type="button"
@@ -670,6 +708,14 @@
         >{filesOpen ? 'Hide files' : 'Show files'}</button>
       {/if}
     </div>
+    <button
+      type="button"
+      class="btn btn--secondary"
+      disabled={compoundDisabled}
+      title={compoundTitle}
+      aria-busy={compoundBusy}
+      onclick={() => void startCompound()}
+    >Compound</button>
   </header>
 
   <OperationBadges
@@ -730,49 +776,95 @@
   >
     <div class="session-split__main">
       {#if agentActive}
-        <ol class="messages message-thread session-focus__messages">
-          {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
-            {#if message.role === 'user'}
-              <li
-                class="message message-row message-row--user"
-                data-role="user"
-                data-raw-role={message.role}
-              >
-                <div class="message-bubble message-bubble--user">
-                  <p>{message.content}</p>
-                </div>
-              </li>
-            {:else if message.role === 'assistant' || message.role === 'model'}
-              <li
-                class="message message-row message-row--assistant"
-                data-role="assistant"
-                data-raw-role={message.role}
-              >
-                <div class="message-prose">
-                  <MarkdownView source={message.content} />
-                </div>
-                <button
-                  type="button"
-                  class="message-copy"
-                  aria-label="Copy response"
-                  onclick={() => void copyAssistant(message.content, message.sequence)}
-                >{copiedSeq === message.sequence ? 'Copied' : 'Copy'}</button>
-              </li>
-            {:else}
-              <li
-                class="message message-row message-row--other"
-                data-role="other"
-                data-raw-role={message.role}
-              >
-                <div class="message-meta text-sm text-slate-500">
-                  <span class="font-medium uppercase tracking-wide" style="font-size:11px"
-                  >{message.role}</span>
-                  <p style="margin:0.25rem 0 0; white-space:pre-wrap">{message.content}</p>
-                </div>
-              </li>
-            {/if}
-          {/each}
-        </ol>
+        <div class="session-chat-column">
+          <ol class="messages message-thread session-focus__messages">
+            {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
+              {#if message.role === 'user'}
+                <li
+                  class="message message-row message-row--user"
+                  data-role="user"
+                  data-raw-role={message.role}
+                >
+                  <div class="message-bubble message-bubble--user">
+                    <p>{message.content}</p>
+                  </div>
+                </li>
+              {:else if message.role === 'assistant' || message.role === 'model'}
+                {@const shortDate = formatSessionDate(message.created_at)}
+                {@const fullDate = formatMessageDateTime(message.created_at)}
+                <li
+                  class="message message-row message-row--assistant"
+                  data-role="assistant"
+                  data-raw-role={message.role}
+                >
+                  <div class="message-assistant">
+                    <div class="message-prose">
+                      <MarkdownView source={message.content} />
+                    </div>
+                    <div class="message-assistant__footer">
+                      <button
+                        type="button"
+                        class="message-copy"
+                        aria-label={copiedSeq === message.sequence ? 'Copied' : 'Copy response'}
+                        title={copiedSeq === message.sequence ? 'Copied' : 'Copy response'}
+                        onclick={() => void copyAssistant(message.content, message.sequence)}
+                      >
+                        {#if copiedSeq === message.sequence}
+                          <svg
+                            class="message-copy__icon"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M20 6 9 17l-5-5"></path>
+                          </svg>
+                        {:else}
+                          <svg
+                            class="message-copy__icon"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                            <path d="M5 15V5a2 2 0 0 1 2-2h10"></path>
+                          </svg>
+                        {/if}
+                      </button>
+                      {#if shortDate && fullDate}
+                        <time
+                          class="message-assistant__date"
+                          datetime={message.created_at}
+                          data-tooltip={fullDate}
+                          title={fullDate}
+                        >{shortDate}</time>
+                      {/if}
+                    </div>
+                  </div>
+                </li>
+              {:else}
+                <li
+                  class="message message-row message-row--other"
+                  data-role="other"
+                  data-raw-role={message.role}
+                >
+                  <div class="message-meta text-sm text-slate-500">
+                    <span class="font-medium uppercase tracking-wide" style="font-size:11px"
+                    >{message.role}</span>
+                    <p style="margin:0.25rem 0 0; white-space:pre-wrap">{message.content}</p>
+                  </div>
+                </li>
+              {/if}
+            {/each}
+          </ol>
+        </div>
       {:else if activeFileTab}
         <SessionFileTab
           sessionId={session.id}
@@ -808,20 +900,26 @@
         inert={!agentActive ? true : undefined}
         onsubmit={send}
       >
-        <textarea
-          class="field-textarea"
-          name="message"
-          aria-label="Message"
-          required
-          rows="3"
-          bind:value={draft}
-        ></textarea>
-        <div class="session-composer__actions">
-          <button
-            type="submit"
-            class="btn btn--primary"
-            disabled={sendDisabled}
-          >Send</button>
+        <div class="session-composer__card">
+          <textarea
+            class="session-composer__input"
+            name="message"
+            aria-label="Message"
+            placeholder="Reply…"
+            required
+            rows="2"
+            bind:value={draft}
+            onkeydown={onComposerKeydown}
+          ></textarea>
+          <div class="session-composer__toolbar">
+            <span class="session-composer__model">{session.provider}:{session.model_id}</span>
+            <button
+              type="submit"
+              class="session-composer__send btn btn--primary"
+              disabled={sendDisabled}
+              aria-label="Send"
+            >Send</button>
+          </div>
         </div>
       </form>
     </div>

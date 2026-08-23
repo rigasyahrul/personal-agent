@@ -104,7 +104,7 @@
 {#if activeSession}
   <div class="content-canvas--session-focus">
     {#key activeSession.id}
-      <SessionChat session={activeSession} {projectId} onclose={closeSession} />
+      <SessionChat session={activeSession} {projectId} {project} onclose={closeSession} />
     {/key}
   </div>
 {:else}

@@ -55,10 +55,43 @@ describe('SessionChat', () => {
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
     vi.mocked(api.sendMessage).mockReset()
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
-    vi.mocked(api.getProject).mockResolvedValue({ id: 'p1', name: 'P', note_count: 0 })
+    vi.mocked(api.getProject).mockReset().mockResolvedValue({
+      id: 'p1',
+      name: 'Sleep Protocol',
+      vault_id: 'v1',
+      vault_name: 'HEALTH',
+      note_count: 0,
+    })
     vi.mocked(api.createCompound).mockReset()
     vi.mocked(api.decideCompound).mockReset()
     vi.mocked(api.getCompound).mockReset()
+  })
+
+  it('shows breadcrumbs instead of Back + title when project is known', async () => {
+    const onclose = vi.fn()
+    render(SessionChat, {
+      props: {
+        session: { ...session, title: 'Test 1' },
+        projectId: 'p1',
+        project: {
+          id: 'p1',
+          name: 'Sleep Protocol',
+          vault_id: 'v1',
+          vault_name: 'HEALTH',
+          note_count: 0,
+        },
+        onclose,
+        pollInterval: 60_000,
+      },
+    })
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sleep Protocol' })).toBeInTheDocument()
+    expect(screen.getByText('Test 1')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Test 1' })).toBeNull()
+
+    await fireEvent.click(screen.getByRole('link', { name: 'Sleep Protocol' }))
+    expect(onclose).toHaveBeenCalledTimes(1)
   })
 
   it('posts once with one stable request_key and retains draft after failure', async () => {
@@ -130,6 +163,26 @@ describe('SessionChat', () => {
     await waitFor(() => expect(composer).toHaveValue(''))
   })
 
+  it('Enter sends message; Shift+Enter does not submit', async () => {
+    vi.mocked(api.sendMessage).mockResolvedValue(null)
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000, uuid: () => 'enter-key' },
+    })
+    const composer = await screen.findByLabelText('Message')
+    await fireEvent.input(composer, { target: { value: 'Hello from Enter' } })
+
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true })
+    expect(api.sendMessage).not.toHaveBeenCalled()
+
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
+    await waitFor(() => {
+      expect(api.sendMessage).toHaveBeenCalledWith(
+        session.id,
+        expect.objectContaining({ content: 'Hello from Enter', request_key: 'enter-key' }),
+      )
+    })
+  })
+
   it('renders assistant as bare prose without Assistant label', async () => {
     vi.mocked(api.listMessages).mockResolvedValue([
       { sequence: 1, role: 'user', content: 'hello from me' },
@@ -153,16 +206,18 @@ describe('SessionChat', () => {
     expect(assistantRow?.querySelector('.message-prose')).toBeTruthy()
   })
 
-  it('copy control copies assistant plain text', async () => {
+  it('copy control is an icon under assistant prose and copies plain text', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
 
+    const created = new Date(2026, 4, 30, 22, 36, 0)
     vi.mocked(api.listMessages).mockResolvedValue([
       { sequence: 1, role: 'user', content: 'hello' },
       {
         sequence: 2,
         role: 'assistant',
         content: 'Hi — how can I help you today?',
+        created_at: created.toISOString(),
       },
     ])
     render(SessionChat, {
@@ -170,11 +225,45 @@ describe('SessionChat', () => {
     })
     expect(await screen.findByText('Hi — how can I help you today?')).toBeInTheDocument()
 
+    const row = screen.getByText('Hi — how can I help you today?').closest('li')
+    const footer = row?.querySelector('.message-assistant__footer')
+    expect(footer).toBeTruthy()
+
     const copyBtn = screen.getByRole('button', { name: 'Copy response' })
     expect(copyBtn).toHaveClass('message-copy')
+    expect(copyBtn.querySelector('svg')).toBeTruthy()
+    expect(copyBtn).not.toHaveTextContent(/^Copy$/)
+
+    const dateEl = screen.getByText('May 30')
+    expect(dateEl.tagName).toBe('TIME')
+    expect(dateEl).toHaveAttribute('data-tooltip', 'May 30, 2026 10:36 PM')
+    expect(dateEl).toHaveAttribute('title', 'May 30, 2026 10:36 PM')
+    expect(dateEl).toHaveAttribute('datetime', created.toISOString())
+
+    // Order: copy icon first, then date
+    const footerKids = Array.from(footer?.children ?? [])
+    expect(footerKids[0]).toBe(copyBtn)
+    expect(footerKids[1]).toBe(dateEl)
+
+    // Footer sits after prose in DOM order
+    const prose = row?.querySelector('.message-prose')
+    expect(prose && footer && (prose.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy()
+
     await fireEvent.click(copyBtn)
     expect(writeText).toHaveBeenCalledWith('Hi — how can I help you today?')
-    expect(await screen.findByText('Copied')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+  })
+
+  it('omits assistant date when created_at is missing', async () => {
+    vi.mocked(api.listMessages).mockResolvedValue([
+      { sequence: 1, role: 'assistant', content: 'no stamp' },
+    ])
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000 },
+    })
+    expect(await screen.findByText('no stamp')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy response' })).toBeInTheDocument()
+    expect(document.querySelector('.message-assistant__date')).toBeNull()
   })
 
   it('composer has no visible Message label text node soup', async () => {
@@ -186,6 +275,24 @@ describe('SessionChat', () => {
     expect(composer.tagName).toBe('TEXTAREA')
     expect(screen.queryByText('Message', { selector: 'span.font-medium' })).toBeNull()
     expect(composer.closest('form')?.className).toMatch(/session-composer/)
+  })
+
+  it('composer shows Reply… placeholder and Claude chat card chrome', async () => {
+    render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000 },
+    })
+    const composer = await screen.findByLabelText('Message')
+    expect(composer).toHaveAttribute('placeholder', 'Reply…')
+    const form = composer.closest('form')
+    expect(form?.className).toMatch(/session-composer/)
+    expect(form?.querySelector('.session-composer__card')).toBeTruthy()
+    expect(form?.querySelector('.session-composer__model')).toBeTruthy()
+    expect(form?.querySelector('.session-composer__model')?.textContent).toMatch(
+      /openai:gpt/,
+    )
+    const send = form?.querySelector('button[type="submit"]')
+    expect(send).toBeTruthy()
+    expect(send?.className).toMatch(/session-composer__send|btn--primary/)
   })
 
   const memStorage = () => {

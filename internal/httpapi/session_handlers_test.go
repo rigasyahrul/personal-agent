@@ -101,6 +101,20 @@ func TestSessionAPIAuthModelsCreateGetListDeleteAndImmutable(t *testing.T) {
 	if got := apiRequest(t, h, "PUT", "/api/v1/sessions/"+s.ID, body, cookies, "csrf").Code; got != 405 {
 		t.Fatalf("put=%d", got)
 	}
+	renamed := apiRequest(t, h, "PATCH", "/api/v1/sessions/"+s.ID, map[string]any{"title": "renamed"}, cookies, "csrf")
+	if renamed.Code != 200 {
+		t.Fatalf("patch rename=%d %s", renamed.Code, renamed.Body.String())
+	}
+	var after domain.Session
+	if err := json.Unmarshal(renamed.Body.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	if after.Title != "renamed" {
+		t.Fatalf("title=%q", after.Title)
+	}
+	if got := apiRequest(t, h, "PATCH", "/api/v1/sessions/"+s.ID, map[string]any{"title": "  "}, cookies, "csrf").Code; got != 400 {
+		t.Fatalf("empty title patch=%d", got)
+	}
 	for _, p := range []string{path, "/api/v1/sessions/" + s.ID} {
 		if got := apiRequest(t, h, "GET", p, nil, cookies, "").Code; got != 200 {
 			t.Fatalf("get %s=%d", p, got)

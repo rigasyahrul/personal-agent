@@ -2,7 +2,9 @@
 <script lang="ts">
   import { api } from '../lib/api'
   import type { NoteTreeEntry, WorkspaceEntry } from '../lib/api/types'
+  import type { ProjectRailMode, ProjectRailTab } from '../lib/project-rail-prefs'
   import { buildHierarchy, flattenTree, type TreeNode } from '../lib/workspace-tree'
+  import { railIconPath, type RailIconName } from './rail-icons'
   import Skeleton from './Skeleton.svelte'
 
   export type OpenFileMeta = {
@@ -14,21 +16,29 @@
     projectId,
     sessionId = null,
     workspaceFilesEnabled = false,
+    tab: controlledTab,
+    mode,
+    onTabChange,
+    onModeChange,
     onOpenFile,
   }: {
     projectId: string
     sessionId?: string | null
     workspaceFilesEnabled?: boolean
+    tab?: ProjectRailTab
+    mode?: ProjectRailMode
+    onTabChange?: (tab: ProjectRailTab) => void
+    onModeChange?: (mode: ProjectRailMode) => void
     onOpenFile?: (path: string, meta?: OpenFileMeta) => void
   } = $props()
 
-  type RailTab = 'memory' | 'files'
   type RailEntry = WorkspaceEntry & { note_id?: string }
 
   const MEMORY_PREVIEW_LINES = 12
-
-  let tab = $state<RailTab>('memory')
+  let localTab = $state<ProjectRailTab>('config')
   let instructions = $state('')
+  const activeTab = $derived(controlledTab ?? localTab)
+  const activeMode = $derived(mode ?? 'open')
 
   let projectEntries = $state<RailEntry[]>([])
   let workspaceEntries = $state<WorkspaceEntry[]>([])
@@ -118,16 +128,13 @@
     void projectId
     void sessionId
     void workspaceFilesEnabled
-    if (tab === 'files') {
-      void loadFiles()
-    }
-    if (tab === 'memory') {
-      void loadLessons()
-    }
+    if (activeTab === 'files') void loadFiles()
+    if (activeTab === 'config') void loadLessons()
   })
 
-  function selectTab(next: RailTab) {
-    tab = next
+  function selectTab(next: ProjectRailTab) {
+    if (controlledTab === undefined) localTab = next
+    onTabChange?.(next)
   }
 
   const projectRows = $derived(flattenTree(buildHierarchy(projectEntries)))
@@ -169,110 +176,157 @@
   }
 </script>
 
-<div class="project-rail">
-  <div class="rail-tabs" role="tablist" aria-label="Project rail">
-    <button
-      type="button"
-      role="tab"
-      id="rail-tab-memory"
-      class="rail-tab {tab === 'memory' ? 'rail-tab--active' : ''}"
-      aria-selected={tab === 'memory'}
-      aria-controls="rail-panel-memory"
-      tabindex={tab === 'memory' ? 0 : -1}
-      onclick={() => selectTab('memory')}
-    >Memory</button>
-    <button
-      type="button"
-      role="tab"
-      id="rail-tab-files"
-      class="rail-tab {tab === 'files' ? 'rail-tab--active' : ''}"
-      aria-selected={tab === 'files'}
-      aria-controls="rail-panel-files"
-      tabindex={tab === 'files' ? 0 : -1}
-      onclick={() => selectTab('files')}
-    >Files</button>
-  </div>
+{#snippet icon(name: RailIconName)}
+  <svg
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d={railIconPath(name)}></path>
+  </svg>
+{/snippet}
 
-  {#if tab === 'memory'}
-    <div class="rail-panel form-stack" role="tabpanel" id="rail-panel-memory">
-      {#if memoryLoading}
-        <div class="space-y-2" aria-busy="true">
-          <Skeleton class="h-6" />
-          <Skeleton class="h-6" />
-          <Skeleton class="h-6" />
-        </div>
-      {:else if memoryError}
-        <p role="alert" class="alert alert--error">{memoryError}</p>
-      {:else if !lessonsPreview}
-        <p class="text-sm text-muted" style="margin:0">No lessons yet.</p>
-      {:else}
-        <pre
-          class="text-sm rail-memory-preview"
-          data-testid="memory-lessons-preview"
-        >{lessonsPreview}</pre>
-      {/if}
-      {#if canOpenMemory && !memoryLoading}
-        <button type="button" class="btn btn--ghost" onclick={() => void openMemory()}>
-          Open memory
-        </button>
-      {/if}
-      <label class="block text-sm" for="rail-instructions">
-        Instructions (system)
-        <textarea
-          id="rail-instructions"
-          class="field-textarea mt-1"
-          aria-label="Instructions (system)"
-          bind:value={instructions}
-          rows="6"
-        ></textarea>
-      </label>
-      <p class="text-sm text-muted" style="margin:0">
-        Not saved yet — persistence coming later.
-      </p>
+<div
+  class="project-rail"
+  class:project-rail--collapsed={activeMode === 'collapsed'}
+  data-rail-mode={activeMode}
+>
+  {#if activeMode === 'collapsed'}
+    <div class="rail-collapsed-chrome" data-testid="rail-collapsed-chrome">
+      <button
+        type="button"
+        class="rail-icon"
+        aria-label="Show canvas"
+        title="Show canvas"
+        onclick={() => onModeChange?.('open')}
+      >{@render icon('show-canvas')}</button>
     </div>
   {:else}
-    <div class="rail-panel form-stack" role="tabpanel" id="rail-panel-files">
-      {#if loading}
-        <div class="space-y-2" aria-busy="true">
-          <Skeleton class="h-6" />
-          <Skeleton class="h-6" />
-          <Skeleton class="h-6" />
-        </div>
-      {:else if error}
-        <p role="alert" class="alert alert--error">{error}</p>
-      {:else if !hasAnyFiles}
-        <p class="text-sm text-slate-500" style="margin:0">No project files available.</p>
-      {:else}
-        {#if projectRows.length}
-          <div class="workspace-tree space-y-0.5 overflow-auto text-sm" aria-label="Project notes">
-            {#each projectRows as row (row.path)}
-              <button
-                type="button"
-                class="tree-item {row.kind === 'directory' ? 'text-slate-500' : ''}"
-                style="padding-left: {8 + row.depth * 12}px"
-                disabled={row.kind === 'directory'}
-                onclick={() => onProjectRowClick(row.path, row.kind)}
-              >{row.path}</button>
-            {/each}
+    <div class="rail-iconbar" role="toolbar" aria-label="Project rail">
+      <div class="rail-iconbar__group" role="tablist" aria-label="Project rail panels">
+        <button
+          type="button"
+          role="tab"
+          id="rail-tab-config"
+          class="rail-icon {activeTab === 'config' ? 'rail-icon--active' : ''}"
+          aria-label="Config"
+          title="Config"
+          aria-selected={activeTab === 'config'}
+          aria-controls="rail-panel-config"
+          tabindex={activeTab === 'config' ? 0 : -1}
+          onclick={() => selectTab('config')}
+        >{@render icon('config')}</button>
+        <button
+          type="button"
+          role="tab"
+          id="rail-tab-files"
+          class="rail-icon {activeTab === 'files' ? 'rail-icon--active' : ''}"
+          aria-label="Files"
+          title="Files"
+          aria-selected={activeTab === 'files'}
+          aria-controls="rail-panel-files"
+          tabindex={activeTab === 'files' ? 0 : -1}
+          onclick={() => selectTab('files')}
+        >{@render icon('files')}</button>
+      </div>
+      <div class="rail-iconbar__group">
+        <button
+          type="button"
+          class="rail-icon"
+          aria-label={activeMode === 'expanded' ? 'Exit expanded' : 'Expand workspace'}
+          title={activeMode === 'expanded' ? 'Exit expanded' : 'Expand workspace'}
+          aria-pressed={activeMode === 'expanded'}
+          onclick={() => onModeChange?.(activeMode === 'expanded' ? 'open' : 'expanded')}
+        >{@render icon('expand-workspace')}</button>
+        <button
+          type="button"
+          class="rail-icon"
+          aria-label="Collapse canvas"
+          title="Collapse canvas"
+          onclick={() => onModeChange?.('collapsed')}
+        >{@render icon('collapse-canvas')}</button>
+      </div>
+    </div>
+
+    {#if activeTab === 'config'}
+      <div class="rail-panel form-stack" role="tabpanel" id="rail-panel-config" aria-labelledby="rail-tab-config">
+        {#if memoryLoading}
+          <div class="space-y-2" aria-busy="true">
+            <Skeleton class="h-6" />
+            <Skeleton class="h-6" />
           </div>
+        {:else if memoryError}
+          <p role="alert" class="alert alert--error">{memoryError}</p>
+        {:else if !lessonsPreview}
+          <p class="text-sm text-muted" style="margin:0">No lessons yet.</p>
+        {:else}
+          <pre class="text-sm rail-memory-preview" data-testid="memory-lessons-preview">{lessonsPreview}</pre>
         {/if}
-        {#if workspaceRows.length}
-          <div class="form-stack" style="gap:6px">
-            <p class="text-sm font-medium text-slate-700" style="margin:0">Workspace</p>
-            <div class="workspace-tree space-y-0.5 overflow-auto text-sm" aria-label="Workspace files">
-              {#each workspaceRows as row (row.path)}
+        {#if canOpenMemory && !memoryLoading}
+          <button type="button" class="btn btn--ghost" onclick={() => void openMemory()}>
+            Open memory
+          </button>
+        {/if}
+        <label class="block text-sm" for="rail-instructions">
+          Instructions (system)
+          <textarea
+            id="rail-instructions"
+            class="field-textarea mt-1"
+            aria-label="Instructions (system)"
+            bind:value={instructions}
+            rows="6"
+          ></textarea>
+        </label>
+        <p class="text-sm text-slate-500" style="margin:0">Not saved yet — persistence coming later.</p>
+      </div>
+    {:else}
+      <div class="rail-panel form-stack" role="tabpanel" id="rail-panel-files" aria-labelledby="rail-tab-files">
+        {#if loading}
+          <div class="space-y-2" aria-busy="true">
+            <Skeleton class="h-6" />
+            <Skeleton class="h-6" />
+            <Skeleton class="h-6" />
+          </div>
+        {:else if error}
+          <p role="alert" class="alert alert--error">{error}</p>
+        {:else if !hasAnyFiles}
+          <p class="text-sm text-slate-500" style="margin:0">No project files available.</p>
+        {:else}
+          {#if projectRows.length}
+            <div class="workspace-tree space-y-0.5 overflow-auto text-sm" aria-label="Project notes">
+              {#each projectRows as row (row.path)}
                 <button
                   type="button"
                   class="tree-item {row.kind === 'directory' ? 'text-slate-500' : ''}"
                   style="padding-left: {8 + row.depth * 12}px"
                   disabled={row.kind === 'directory'}
-                  onclick={() => onWorkspaceRowClick(row.path, row.kind)}
+                  onclick={() => onProjectRowClick(row.path, row.kind)}
                 >{row.path}</button>
               {/each}
             </div>
-          </div>
+          {/if}
+          {#if workspaceRows.length}
+            <div class="form-stack" style="gap:6px">
+              <p class="text-sm font-medium text-slate-700" style="margin:0">Workspace</p>
+              <div class="workspace-tree space-y-0.5 overflow-auto text-sm" aria-label="Workspace files">
+                {#each workspaceRows as row (row.path)}
+                  <button
+                    type="button"
+                    class="tree-item {row.kind === 'directory' ? 'text-slate-500' : ''}"
+                    style="padding-left: {8 + row.depth * 12}px"
+                    disabled={row.kind === 'directory'}
+                    onclick={() => onWorkspaceRowClick(row.path, row.kind)}
+                  >{row.path}</button>
+                {/each}
+              </div>
+            </div>
+          {/if}
         {/if}
-      {/if}
-    </div>
+      </div>
+    {/if}
   {/if}
 </div>

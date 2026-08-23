@@ -59,6 +59,8 @@ export interface ChatMessage {
   sequence: number
   role: string
   content: string
+  /** RFC3339 from API when present (domain.Message.created_at). */
+  created_at?: string
   changed_path?: string
 }
 

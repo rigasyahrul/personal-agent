@@ -90,6 +90,10 @@ describe('visual baseline', () => {
       '.message-prose',
       '.session-composer',
       '.session-compound',
+      '.session-composer__card',
+      '.session-composer__model',
+      '.session-composer__send',
+      '.session-chat-column',
       '.message-copy',
       '.content-canvas--session-focus',
     ]) {
@@ -97,24 +101,120 @@ describe('visual baseline', () => {
     }
   });
 
+  it('aligns session header height with rail iconbar (48px chrome row)', () => {
+    expect(css).toMatch(/\.rail-iconbar\s*\{[^}]*height:\s*48px/s);
+    expect(css).toMatch(/\.session-focus__header\s*\{[^}]*height:\s*48px/s);
+    expect(css).toMatch(/\.session-focus__header\s*\{[^}]*min-height:\s*48px/s);
+  });
+
+  it('gives session tabs and message thread breathing room', () => {
+    expect(css).toMatch(/\.session-tabs\s*\{[^}]*padding:\s*8px\s+20px\s+0/s);
+    expect(css).toMatch(/\.session-tab\s*\{[^}]*min-height:\s*40px/s);
+    expect(css).toMatch(/\.session-focus__messages\s*\{[^}]*padding:\s*36px\s+0\s+24px/s);
+    expect(css).toMatch(/\.session-chat-column\s*\{[^}]*padding-top:\s*8px/s);
+    expect(css).toMatch(/\.message-thread\s*\{[^}]*gap:\s*22px/s);
+    expect(css).toMatch(/\.message-bubble\s*\{[^}]*padding:\s*14px\s+18px/s);
+  });
+
+  it('places assistant copy as footer icon with date chrome', () => {
+    expect(css).toContain('.message-assistant__footer');
+    expect(css).toContain('.message-assistant__date');
+    expect(css).toMatch(/\.message-copy\s*\{[^}]*width:\s*28px/s);
+    expect(css).toContain('.message-copy__icon');
+    expect(css).toMatch(/\.message-assistant__date\[data-tooltip\]::after/);
+  });
+
+  it('collapsed rail restore control uses 48px chrome row without extra top pad', () => {
+    expect(css).toContain('.project-rail--collapsed');
+    expect(css).toContain('.rail-collapsed-chrome');
+    expect(css).toMatch(
+      /\.project-workspace\[data-rail=["']collapsed["']\]\s+\.project-workspace__rail\s*\{[^}]*padding-top:\s*0/s,
+    );
+    expect(css).toMatch(/\.rail-collapsed-chrome\s*\{[^}]*height:\s*48px/s);
+    expect(css).toMatch(/\.rail-collapsed-chrome\s*\{[^}]*border-bottom:\s*1px\s+solid/s);
+  });
+
+  it('declares project-workspace responsive breakpoints', () => {
+    expect(css).toMatch(/@media\s*\(max-width:\s*1280px\)/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*1100px\)/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*960px\)/);
+    // Overlay rail on narrow open mode so chat keeps width
+    expect(css).toMatch(
+      /@media\s*\(max-width:\s*960px\)[\s\S]*?\.project-workspace\[data-rail=['"]open['"]\]\s+\.project-workspace__rail\s*\{[^}]*position:\s*fixed/s,
+    );
+  });
+
+  it('user bubbles use soft lavender not solid accent fill (Claude chat)', () => {
+    const userBubble = css.match(/\.message-bubble--user\s*\{[^}]*\}/);
+    expect(userBubble?.[0]).toBeTruthy();
+    // Soft surface + dark text (layout-chat.png), not brand-blue pill
+    expect(userBubble![0]).toMatch(/background:\s*(#ede9fe|#eef2ff|#f3e8ff)/i);
+    expect(userBubble![0]).not.toMatch(/background:\s*var\(--accent\)/);
+    expect(css).toMatch(/\.message-bubble--user p\s*\{[^}]*color:\s*#18181b/s);
+  });
+
   it('declares hub/rail workspace tokens', () => {
     for (const token of [
       '.project-workspace',
       '.project-workspace__main',
       '.project-workspace__rail',
-      '.rail-tabs',
-      '.rail-tab',
-      '.rail-tab--active',
+      '.project-rail',
+      '.rail-iconbar',
+      '.rail-icon',
+      '.rail-icon--active',
       '.rail-panel',
       '.rail-memory-preview',
       '.hub-start',
       '.hub-start__title',
       '.hub-composer',
       '.hub-session-list',
+      '.hub-session-list__label',
+      '.session-row',
+      '.session-row__icon',
+      '.session-row__title',
+      '.session-row__date',
+      '.session-row__menu',
       '.content-canvas--project-workspace',
     ]) {
       expect(css).toContain(token);
     }
+
+    expect(css).toMatch(/\.project-workspace\[data-rail=['"]open['"]\]/);
+    expect(css).toMatch(/\.project-workspace\[data-rail=['"]expanded['"]\]/);
+    expect(css).toMatch(/\.project-workspace\[data-rail=['"]collapsed['"]\]/);
+    // Single column when expanded: main is display:none and leaves the grid;
+    // a two-track "0 1fr" would assign the rail the zero-width first track.
+    expect(css).toMatch(
+      /data-rail=['"]expanded['"][^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/s,
+    );
+    expect(css).not.toMatch(
+      /data-rail=['"]expanded['"][^}]*grid-template-columns:\s*0\s+minmax\(0,\s*1fr\)/s,
+    );
+    expect(css).toMatch(
+      /\.project-workspace\[data-rail=['"]expanded['"]\]\s+\.project-workspace__main\s*\{[^}]*display:\s*none/s,
+    );
+    expect(css).toMatch(/data-rail=['"]collapsed['"][^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+48px/s);
+  });
+
+  it('hub project title is 1.5rem', () => {
+    expect(css).toMatch(/\.hub-header__title\s*\{[^}]*font-size:\s*1\.5rem/s);
+  });
+
+  it('hub start and session list are full width; session rows have hover', () => {
+    expect(css).toMatch(/\.hub-start\s*\{[^}]*max-width:\s*none/s);
+    expect(css).toMatch(/\.hub-session-list\s*\{[^}]*max-width:\s*none/s);
+    expect(css).toMatch(/\.session-row:hover\s*\{[^}]*background:/s);
+  });
+
+  it('hub composer card is full width with 20px radius', () => {
+    // Must appear after .session-composer__card and force full width
+    const hubOverride = css.match(
+      /\.hub-composer \.session-composer__card[\s\S]*?max-width:\s*none\s*!important/,
+    );
+    expect(hubOverride).toBeTruthy();
+    expect(css).toMatch(
+      /\.hub-composer \.session-composer__card[\s\S]*?border-radius:\s*20px/,
+    );
   });
 
   it('bans scaffold soup leftovers in Svelte markup', () => {
