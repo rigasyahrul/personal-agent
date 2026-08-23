@@ -91,7 +91,11 @@ Task 12: complete (P0 gate empty commit, pushed)
 | 25 | PASS requesting-code-review (pi session task-25-review-2) | `b70e769` pushed |
 | 26 | PASS requesting-code-review (pi session task-26-review) | `14c25eb` pushed |
 | 27 | PASS requesting-code-review (pi session task-27-review) | `9a9202f` pushed |
-| 28–35 | | |
+| 28 | PASS requesting-code-review (pi session task-28-review) | `f96315c` pushed |
+| 29 | | |
+| 30 | PASS requesting-code-review (pi session task-30-review) | `dd5bc94` pushed |
+| 31 | PASS requesting-code-review (pi session task-31-review) | `8caf7b9` pushed |
+| 32–35 | | |
 
 Ledger:
 ```
@@ -111,6 +115,12 @@ Task 26: requesting-code-review PASS (pi session task-26-review, Critical none, 
 Task 26: complete (commit 14c25eb, pushed)
 Task 27: requesting-code-review PASS (pi session task-27-review, Critical none, Important none)
 Task 27: complete (commit 9a9202f, pushed)
+Task 28: requesting-code-review PASS (pi session task-28-review, Critical none, Important none)
+Task 28: complete (commit f96315c, pushed)
+Task 30: requesting-code-review PASS (pi session task-30-review, Critical none, Important none)
+Task 30: complete (commit dd5bc94, pushed)
+Task 31: requesting-code-review PASS (pi session task-31-review, Critical none, Important none)
+Task 31: complete (commit 8caf7b9, pushed)
 ```
 
 ### P2
@@ -150,6 +160,7 @@ Task 27: complete (commit 9a9202f, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Tasks 28+30+31 complete (`f96315c`/`dd5bc94`/`8caf7b9`); requesting-code-review pi sessions task-28/30/31-review
 - 2026-08-23 — Task 27 complete (`9a9202f`); requesting-code-review pi session task-27-review
 - 2026-08-23 — Task 26 complete (`14c25eb`); requesting-code-review pi session task-26-review
 - 2026-08-23 — Task 25 complete (`b70e769`); requesting-code-review pi session task-25-review-2 (re-PASS after finishRun Background detach)
