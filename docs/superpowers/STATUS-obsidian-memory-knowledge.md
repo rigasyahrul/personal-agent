@@ -147,7 +147,9 @@ Task 35: complete (P1 gate empty commit, pushed)
 | 44 | PASS requesting-code-review (pi session task-44-review) | `4fd9fc1` pushed |
 | 45 | PASS requesting-code-review (pi session task-45-review) | `e345ec4` pushed |
 | 46 | PASS requesting-code-review (pi session task-46-review) | `d4c2b12` pushed |
-| 47–49 | | |
+| 47 | PASS requesting-code-review (pi session task-47-review) | `9b4fec7` pushed |
+| 48 | | |
+| 49 | PASS requesting-code-review (pi session task-49-review) | `b59205e` pushed |
 | 51 | PASS requesting-code-review (pi session task-51-review) | `f3c0345` pushed |
 | 50 | PASS requesting-code-review (pi session task-50-review) | `f2bb301` pushed |
 | 52 | | |
@@ -183,6 +185,7 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Tasks 47+49 complete (`9b4fec7`/`b59205e`)
 - 2026-08-23 — Tasks 46+51 complete (`d4c2b12`/`f3c0345`)
 - 2026-08-23 — Tasks 43+44+45 complete (`9083b58`/`4fd9fc1`/`e345ec4`)
 - 2026-08-23 — Task 42 complete (`7bcad7f`)
