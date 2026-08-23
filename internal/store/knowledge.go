@@ -28,11 +28,15 @@ type UpsertKnowledgeInput struct {
 	SourceNoteID string // optional; set for source mirror
 }
 
-// KnowledgeStore upserts knowledge_notes and reindexes note_links.
-// It does not write files or update FTS (those are later tasks).
+// KnowledgeStore upserts knowledge_notes, reindexes note_links, and maintains knowledge_fts.
+// It does not write files.
 type KnowledgeStore struct {
 	DB    *sql.DB
 	Clock clock.Clock
+}
+
+type sqlExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 const knowledgeNoteSelect = `
@@ -169,10 +173,42 @@ func (s *KnowledgeStore) UpsertFromContent(ctx context.Context, in UpsertKnowled
 	if err := resolveInboundLinks(ctx, tx, note.ID, note.RelativePath, scopeSQL, scopeArgs); err != nil {
 		return domain.KnowledgeNote{}, err
 	}
+	if err := reindexFTS(ctx, tx, note, title, body); err != nil {
+		return domain.KnowledgeNote{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return domain.KnowledgeNote{}, err
 	}
 	return note, nil
+}
+
+// ReindexFTS replaces the FTS row for note. note_id is knowledge_notes.id.
+func (s *KnowledgeStore) ReindexFTS(ctx context.Context, note domain.KnowledgeNote, title, body string) error {
+	return reindexFTS(ctx, s.DB, note, title, body)
+}
+
+// RemoveFTS deletes the FTS row for noteID (knowledge_notes.id).
+func (s *KnowledgeStore) RemoveFTS(ctx context.Context, noteID string) error {
+	return removeFTS(ctx, s.DB, noteID)
+}
+
+func reindexFTS(ctx context.Context, exec sqlExecer, note domain.KnowledgeNote, title, body string) error {
+	if err := removeFTS(ctx, exec, note.ID); err != nil {
+		return err
+	}
+	_, err := exec.ExecContext(ctx, `
+		INSERT INTO knowledge_fts(note_id, title, path, body) VALUES(?,?,?,?)`,
+		note.ID, title, note.RelativePath, body,
+	)
+	return err
+}
+
+func removeFTS(ctx context.Context, exec sqlExecer, noteID string) error {
+	if noteID == "" {
+		return fmt.Errorf("%w: empty note id", ErrValidation)
+	}
+	_, err := exec.ExecContext(ctx, `DELETE FROM knowledge_fts WHERE note_id=?`, noteID)
+	return err
 }
 
 func (s *KnowledgeStore) ByID(ctx context.Context, id string) (domain.KnowledgeNote, error) {
