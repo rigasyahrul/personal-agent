@@ -40,6 +40,7 @@ describe('visual baseline', () => {
       '.scope-chip',
       '.list-panel',
       '.link-accent',
+      '.wikilink',
       '.catalog-grid',
       '.alert--error',
       '.btn--primary',

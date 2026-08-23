@@ -45,4 +45,13 @@ describe('MarkdownView', () => {
       expect(fallback?.textContent).toContain('not valid mermaid')
     })
   })
+
+  it('renders a path wikilink as an in-app title-mask anchor', () => {
+    render(MarkdownView, { props: { source: 'See [[memory/a|Title]] here.' } })
+    const link = document.querySelector('a.wikilink')
+    expect(link).toBeTruthy()
+    expect(link?.textContent).toBe('Title')
+    expect(link?.getAttribute('data-path')).toBe('memory/a.md')
+    expect(link?.getAttribute('target')).not.toBe('_blank')
+  })
 })
