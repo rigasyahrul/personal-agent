@@ -16,8 +16,8 @@
 |-------|-------|--------|--------------------|---------|-------|
 | **P0** Layout + prompt | 1–12 | `done` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
 | **P1** Compound | 20–35 | `done` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
-| **P2** Obsidian links | 40–52 | `in_progress` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
-| **P3** Search + tools | 60–72 | `blocked` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
+| **P2** Obsidian links | 40–52 | `done` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
+| **P3** Search + tools | 60–72 | `ready` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
 | **Ship** whole branch | — | `blocked` | merge to main | P0–P3 + whole-branch review | Final consulting-grok-review + push |
 
 Statuses: `ready` | `in_progress` | `review` | `done` | `blocked`
@@ -148,11 +148,11 @@ Task 35: complete (P1 gate empty commit, pushed)
 | 45 | PASS requesting-code-review (pi session task-45-review) | `e345ec4` pushed |
 | 46 | PASS requesting-code-review (pi session task-46-review) | `d4c2b12` pushed |
 | 47 | PASS requesting-code-review (pi session task-47-review) | `9b4fec7` pushed |
-| 48 | | |
+| 48 | PASS requesting-code-review (pi session task-48-review) | `96e3af0` pushed |
 | 49 | PASS requesting-code-review (pi session task-49-review) | `b59205e` pushed |
 | 51 | PASS requesting-code-review (pi session task-51-review) | `f3c0345` pushed |
 | 50 | PASS requesting-code-review (pi session task-50-review) | `f2bb301` pushed |
-| 52 | | |
+| 52 | PASS (master P2 gate) | empty `test: P2…` pushed |
 
 ### P3
 
@@ -185,6 +185,8 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 ## Last updated
 
+- 2026-08-23 — P2 `done` (Task 52 gate). Next P3 Task 60 FTS
+- 2026-08-23 — Task 48 complete (`96e3af0`)
 - 2026-08-23 — Tasks 47+49 complete (`9b4fec7`/`b59205e`)
 - 2026-08-23 — Tasks 46+51 complete (`d4c2b12`/`f3c0345`)
 - 2026-08-23 — Tasks 43+44+45 complete (`9083b58`/`4fd9fc1`/`e345ec4`)
