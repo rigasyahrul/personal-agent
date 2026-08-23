@@ -90,7 +90,8 @@ Task 12: complete (P0 gate empty commit, pushed)
 | 24 | PASS requesting-code-review (no-amp) | `2591eac` |
 | 25 | PASS requesting-code-review (pi session task-25-review-2) | `b70e769` pushed |
 | 26 | PASS requesting-code-review (pi session task-26-review) | `14c25eb` pushed |
-| 27–35 | | |
+| 27 | PASS requesting-code-review (pi session task-27-review) | `9a9202f` pushed |
+| 28–35 | | |
 
 Ledger:
 ```
@@ -108,6 +109,8 @@ Task 25: requesting-code-review PASS (pi session task-25-review-2, Critical none
 Task 25: complete (commit b70e769, pushed)
 Task 26: requesting-code-review PASS (pi session task-26-review, Critical none, Important none)
 Task 26: complete (commit 14c25eb, pushed)
+Task 27: requesting-code-review PASS (pi session task-27-review, Critical none, Important none)
+Task 27: complete (commit 9a9202f, pushed)
 ```
 
 ### P2
@@ -147,6 +150,7 @@ Task 26: complete (commit 14c25eb, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Task 27 complete (`9a9202f`); requesting-code-review pi session task-27-review
 - 2026-08-23 — Task 26 complete (`14c25eb`); requesting-code-review pi session task-26-review
 - 2026-08-23 — Task 25 complete (`b70e769`); requesting-code-review pi session task-25-review-2 (re-PASS after finishRun Background detach)
 - 2026-08-23 — Task 24 complete (`2591eac`); requesting-code-review no-amp
