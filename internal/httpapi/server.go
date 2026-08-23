@@ -8,6 +8,7 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/agent"
 	"github.com/rigasyahrul/personal-agent/internal/backup"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
+	"github.com/rigasyahrul/personal-agent/internal/compound"
 	"github.com/rigasyahrul/personal-agent/internal/config"
 	"github.com/rigasyahrul/personal-agent/internal/publish"
 	"github.com/rigasyahrul/personal-agent/internal/review"
@@ -85,12 +86,15 @@ func New(deps ServerDeps) http.Handler {
 	mux.Handle("GET /api/v1/sessions/{id}/messages", auth(http.HandlerFunc(ch.messagesRoute)))
 	mux.Handle("POST /api/v1/sessions/{id}/messages", mutation(http.HandlerFunc(ch.messagesRoute)))
 	co := &compoundHandlers{
-		sessions: sessions,
-		compound: compounds,
-		runner:   runner,
-		clock:    deps.Clock,
+		sessions:  sessions,
+		compound:  compounds,
+		publisher: &compound.Publisher{DataDir: deps.DataDir, DB: deps.DB, Clock: deps.Clock, Barrier: deps.Barrier},
+		runner:    runner,
+		clock:     deps.Clock,
 	}
 	mux.Handle("POST /api/v1/sessions/{id}/compound", mutation(http.HandlerFunc(co.create)))
+	mux.Handle("GET /api/v1/sessions/{id}/compound/{proposal_id}", auth(http.HandlerFunc(co.get)))
+	mux.Handle("POST /api/v1/sessions/{id}/compound/{proposal_id}/decide", mutation(http.HandlerFunc(co.decide)))
 	mux.Handle("GET /api/v1/sessions/{id}/runs/current", auth(http.HandlerFunc(ch.currentRun)))
 	mux.Handle("GET /api/v1/sessions/{id}/workspace/tree", auth(http.HandlerFunc(ch.workspaceTree)))
 	mux.Handle("GET /api/v1/sessions/{id}/workspace/file", auth(http.HandlerFunc(ch.workspaceFile)))

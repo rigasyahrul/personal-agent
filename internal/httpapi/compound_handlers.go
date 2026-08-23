@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,22 +10,30 @@ import (
 
 	"github.com/rigasyahrul/personal-agent/internal/agent"
 	"github.com/rigasyahrul/personal-agent/internal/clock"
+	"github.com/rigasyahrul/personal-agent/internal/compound"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
 	"github.com/rigasyahrul/personal-agent/internal/layout"
 	"github.com/rigasyahrul/personal-agent/internal/store"
 )
 
 type compoundHandlers struct {
-	sessions *store.SessionStore
-	compound *store.CompoundStore
-	runner   *agent.Runner
-	clock    clock.Clock
+	sessions  *store.SessionStore
+	compound  *store.CompoundStore
+	publisher *compound.Publisher
+	runner    *agent.Runner
+	clock     clock.Clock
 }
 
 type compoundCreateRequest struct {
 	RequestKey  string               `json:"request_key"`
 	UserContext string               `json:"user_context"`
 	Items       []store.CompoundItem `json:"items"`
+}
+
+type compoundDecideRequest struct {
+	RequestKey string               `json:"request_key"`
+	Decision   string               `json:"decision"`
+	Items      []store.CompoundItem `json:"items"`
 }
 
 type compoundProposalDTO struct {
@@ -132,6 +141,134 @@ func (h *compoundHandlers) generate(w http.ResponseWriter, r *http.Request, sess
 		return
 	}
 	dto, err := proposalDTO(got)
+	if err != nil {
+		internalError(w)
+		return
+	}
+	jsonResponse(w, http.StatusOK, dto)
+}
+
+func (h *compoundHandlers) get(w http.ResponseWriter, r *http.Request) {
+	sid := r.PathValue("id")
+	if _, ok := h.loadMutableSession(w, r, sid); !ok {
+		return
+	}
+	got, ok := h.loadSessionProposal(w, r, sid, r.PathValue("proposal_id"))
+	if !ok {
+		return
+	}
+	got, err := h.recoverIfNeeded(r.Context(), got)
+	if err != nil {
+		internalError(w)
+		return
+	}
+	h.writeProposal(w, got)
+}
+
+func (h *compoundHandlers) decide(w http.ResponseWriter, r *http.Request) {
+	sid := r.PathValue("id")
+	if _, ok := h.loadMutableSession(w, r, sid); !ok {
+		return
+	}
+	var in compoundDecideRequest
+	if decodeStrictJSON(r, &in) != nil || strings.TrimSpace(in.RequestKey) == "" {
+		apiError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	switch in.Decision {
+	case "approve", "reject":
+	default:
+		apiError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	before, ok := h.loadSessionProposal(w, r, sid, r.PathValue("proposal_id"))
+	if !ok {
+		return
+	}
+	now := time.Now().UTC()
+	if h.clock != nil {
+		now = h.clock.Now().UTC()
+	}
+	got, err := h.compound.Decide(r.Context(), store.DecideInput{
+		ProposalID: before.ID,
+		RequestKey: strings.TrimSpace(in.RequestKey),
+		Decision:   in.Decision,
+		Items:      in.Items,
+		Now:        now,
+	})
+	if errors.Is(err, store.ErrValidation) {
+		apiError(w, http.StatusBadRequest, "invalid_items")
+		return
+	}
+	if errors.Is(err, store.ErrConflict) {
+		apiError(w, http.StatusConflict, "conflict")
+		return
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		apiError(w, http.StatusNotFound, "proposal_not_found")
+		return
+	}
+	if err != nil {
+		internalError(w)
+		return
+	}
+	if in.Decision == "approve" && before.Status == domain.CompoundStatusPending &&
+		got.Status == domain.CompoundStatusApproved && got.FinishedAt == nil {
+		_ = h.publishAndFinish(r.Context(), got)
+		reloaded, loadErr := h.compound.Get(r.Context(), got.ID)
+		if loadErr != nil {
+			internalError(w)
+			return
+		}
+		got = reloaded
+	}
+	h.writeProposal(w, got)
+}
+
+func (h *compoundHandlers) loadSessionProposal(w http.ResponseWriter, r *http.Request, sessionID, proposalID string) (domain.CompoundProposal, bool) {
+	got, err := h.compound.Get(r.Context(), proposalID)
+	if errors.Is(err, store.ErrNotFound) {
+		apiError(w, http.StatusNotFound, "proposal_not_found")
+		return domain.CompoundProposal{}, false
+	}
+	if err != nil {
+		internalError(w)
+		return domain.CompoundProposal{}, false
+	}
+	if got.SessionID != sessionID {
+		apiError(w, http.StatusNotFound, "proposal_not_found")
+		return domain.CompoundProposal{}, false
+	}
+	return got, true
+}
+
+func (h *compoundHandlers) recoverIfNeeded(ctx context.Context, p domain.CompoundProposal) (domain.CompoundProposal, error) {
+	if p.Status != domain.CompoundStatusApproved || p.FinishedAt != nil {
+		return p, nil
+	}
+	_ = h.publishAndFinish(ctx, p)
+	return h.compound.Get(ctx, p.ID)
+}
+
+func (h *compoundHandlers) publishAndFinish(ctx context.Context, p domain.CompoundProposal) error {
+	now := time.Now().UTC()
+	if h.clock != nil {
+		now = h.clock.Now().UTC()
+	}
+	if h.publisher == nil {
+		msg := "publisher unavailable"
+		_ = h.compound.MarkFinished(ctx, p.ID, string(domain.CompoundStatusFailed), msg, now)
+		return errors.New(msg)
+	}
+	if err := h.publisher.PublishApproved(ctx, p); err != nil {
+		_ = h.compound.MarkFinished(ctx, p.ID, string(domain.CompoundStatusFailed), err.Error(), now)
+		return err
+	}
+	return h.compound.MarkFinished(ctx, p.ID, string(domain.CompoundStatusApproved), "", now)
+}
+
+func (h *compoundHandlers) writeProposal(w http.ResponseWriter, p domain.CompoundProposal) {
+	dto, err := proposalDTO(p)
 	if err != nil {
 		internalError(w)
 		return

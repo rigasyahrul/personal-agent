@@ -3,14 +3,19 @@ package httpapi
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rigasyahrul/personal-agent/internal/agent"
 	"github.com/rigasyahrul/personal-agent/internal/domain"
+	"github.com/rigasyahrul/personal-agent/internal/layout"
 )
 
 func shaHexTest(content string) string {
@@ -260,5 +265,244 @@ func TestCompoundPOSTMissingSession(t *testing.T) {
 	}, cookies, "csrf")
 	if res.Code != http.StatusNotFound {
 		t.Fatalf("missing = %d %s", res.Code, res.Body.String())
+	}
+}
+
+type compoundHTTPFixture struct {
+	h       http.Handler
+	db      *sql.DB
+	dataDir string
+	pid     string
+	cookies []*http.Cookie
+	sess    domain.Session
+}
+
+type compoundProposalResp struct {
+	ID         string `json:"id"`
+	Status     string `json:"status"`
+	SessionID  string `json:"session_id"`
+	RequestKey string `json:"request_key"`
+	Error      string `json:"error"`
+	Items      []struct {
+		Kind    string `json:"kind"`
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	} `json:"items"`
+	DecidedAt  *time.Time `json:"decided_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+}
+
+func newCompoundHTTPFixture(t *testing.T) compoundHTTPFixture {
+	t.Helper()
+	h, db, dir, pid, cookies := chatAPIServer(t, nil)
+	created := apiRequest(t, h, "POST", "/api/v1/projects/"+pid+"/sessions", map[string]string{
+		"title": "c", "provider": "openai", "model_id": "m",
+	}, cookies, "csrf")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create session = %d %s", created.Code, created.Body.String())
+	}
+	var sess domain.Session
+	if err := json.Unmarshal(created.Body.Bytes(), &sess); err != nil {
+		t.Fatal(err)
+	}
+	return compoundHTTPFixture{h: h, db: db, dataDir: dir, pid: pid, cookies: cookies, sess: sess}
+}
+
+func (f compoundHTTPFixture) createSession(t *testing.T, title string) domain.Session {
+	t.Helper()
+	created := apiRequest(t, f.h, "POST", "/api/v1/projects/"+f.pid+"/sessions", map[string]string{
+		"title": title, "provider": "openai", "model_id": "m",
+	}, f.cookies, "csrf")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create session = %d %s", created.Code, created.Body.String())
+	}
+	var sess domain.Session
+	if err := json.Unmarshal(created.Body.Bytes(), &sess); err != nil {
+		t.Fatal(err)
+	}
+	return sess
+}
+
+func (f compoundHTTPFixture) postPending(t *testing.T, key, body string) compoundProposalResp {
+	t.Helper()
+	res := apiRequest(t, f.h, "POST", "/api/v1/sessions/"+f.sess.ID+"/compound", map[string]any{
+		"request_key": key,
+		"items": []map[string]string{{
+			"kind":           "agents_patch",
+			"path":           "AGENTS.md",
+			"action":         "update",
+			"content":        body,
+			"content_sha256": shaHexTest(body),
+		}},
+	}, f.cookies, "csrf")
+	if res.Code != http.StatusOK {
+		t.Fatalf("POST compound = %d %s", res.Code, res.Body.String())
+	}
+	return decodeCompoundProposal(t, res.Body.Bytes())
+}
+
+func (f compoundHTTPFixture) agentsPath() string {
+	return filepath.Join(layout.ProjectRoot(f.dataDir, "v", f.pid), "AGENTS.md")
+}
+
+func decodeCompoundProposal(t *testing.T, raw []byte) compoundProposalResp {
+	t.Helper()
+	var got compoundProposalResp
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestCompoundGETProposal(t *testing.T) {
+	f := newCompoundHTTPFixture(t)
+	body := "# Agents\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	pending := f.postPending(t, "rk-get", body)
+	path := "/api/v1/sessions/" + f.sess.ID + "/compound/" + pending.ID
+
+	if got := apiRequest(t, f.h, "GET", path, nil, nil, "").Code; got != http.StatusUnauthorized {
+		t.Fatalf("anon GET = %d", got)
+	}
+	res := apiRequest(t, f.h, "GET", path, nil, f.cookies, "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("GET proposal = %d %s", res.Code, res.Body.String())
+	}
+	got := decodeCompoundProposal(t, res.Body.Bytes())
+	if got.ID != pending.ID || got.Status != "pending" || got.SessionID != f.sess.ID {
+		t.Fatalf("GET proposal = %+v", got)
+	}
+	if len(got.Items) != 1 || got.Items[0].Path != "AGENTS.md" {
+		t.Fatalf("items = %+v", got.Items)
+	}
+}
+
+func TestCompoundDecideReject(t *testing.T) {
+	f := newCompoundHTTPFixture(t)
+	body := "# Agents\n\nrule: reject-must-not-write\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	pending := f.postPending(t, "rk-reject", body)
+	path := "/api/v1/sessions/" + f.sess.ID + "/compound/" + pending.ID + "/decide"
+	res := apiRequest(t, f.h, "POST", path, map[string]any{
+		"request_key": "rk-reject",
+		"decision":    "reject",
+	}, f.cookies, "csrf")
+	if res.Code != http.StatusOK {
+		t.Fatalf("decide reject = %d %s", res.Code, res.Body.String())
+	}
+	got := decodeCompoundProposal(t, res.Body.Bytes())
+	if got.Status != "rejected" || got.DecidedAt == nil || got.FinishedAt == nil {
+		t.Fatalf("reject proposal = %+v", got)
+	}
+	if raw, err := os.ReadFile(f.agentsPath()); err == nil && strings.Contains(string(raw), "reject-must-not-write") {
+		t.Fatalf("reject wrote AGENTS.md: %s", raw)
+	}
+}
+
+func TestCompoundDecideApproveWritesAgents(t *testing.T) {
+	f := newCompoundHTTPFixture(t)
+	body := "# Agents\n\nrule: task-26-approve\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	pending := f.postPending(t, "rk-approve", body)
+	path := "/api/v1/sessions/" + f.sess.ID + "/compound/" + pending.ID + "/decide"
+	res := apiRequest(t, f.h, "POST", path, map[string]any{
+		"request_key": "rk-approve",
+		"decision":    "approve",
+	}, f.cookies, "csrf")
+	if res.Code != http.StatusOK {
+		t.Fatalf("decide approve = %d %s", res.Code, res.Body.String())
+	}
+	got := decodeCompoundProposal(t, res.Body.Bytes())
+	if got.Status != "approved" || got.DecidedAt == nil || got.FinishedAt == nil {
+		t.Fatalf("approve proposal = %+v", got)
+	}
+	raw, err := os.ReadFile(f.agentsPath())
+	if err != nil {
+		t.Fatalf("AGENTS.md missing after approve: %v", err)
+	}
+	if string(raw) != body {
+		t.Fatalf("AGENTS.md = %q, want %q", raw, body)
+	}
+
+	again := apiRequest(t, f.h, "POST", path, map[string]any{
+		"request_key": "rk-approve",
+		"decision":    "approve",
+	}, f.cookies, "csrf")
+	if again.Code != http.StatusOK {
+		t.Fatalf("idempotent approve = %d %s", again.Code, again.Body.String())
+	}
+	repeat := decodeCompoundProposal(t, again.Body.Bytes())
+	if repeat.Status != "approved" || repeat.FinishedAt == nil {
+		t.Fatalf("idempotent approve = %+v", repeat)
+	}
+}
+
+func TestCompoundWrongSessionProposal404(t *testing.T) {
+	f := newCompoundHTTPFixture(t)
+	body := "# Agents\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	pending := f.postPending(t, "rk-wrong-sess", body)
+	other := f.createSession(t, "other")
+	own := apiRequest(t, f.h, "GET", "/api/v1/sessions/"+f.sess.ID+"/compound/"+pending.ID, nil, f.cookies, "")
+	if own.Code != http.StatusOK {
+		t.Fatalf("GET own session = %d %s want 200 (route must exist)", own.Code, own.Body.String())
+	}
+
+	get := apiRequest(t, f.h, "GET", "/api/v1/sessions/"+other.ID+"/compound/"+pending.ID, nil, f.cookies, "")
+	if get.Code != http.StatusNotFound {
+		t.Fatalf("GET wrong session = %d %s want 404", get.Code, get.Body.String())
+	}
+	if !strings.Contains(get.Body.String(), "proposal_not_found") || strings.Contains(get.Body.String(), pending.ID) {
+		t.Fatalf("GET wrong session body = %s", get.Body.String())
+	}
+
+	decide := apiRequest(t, f.h, "POST", "/api/v1/sessions/"+other.ID+"/compound/"+pending.ID+"/decide", map[string]any{
+		"request_key": "rk-wrong-sess",
+		"decision":    "approve",
+	}, f.cookies, "csrf")
+	if decide.Code != http.StatusNotFound {
+		t.Fatalf("decide wrong session = %d %s want 404", decide.Code, decide.Body.String())
+	}
+	if !strings.Contains(decide.Body.String(), "proposal_not_found") || strings.Contains(decide.Body.String(), pending.ID) {
+		t.Fatalf("decide wrong session body = %s", decide.Body.String())
+	}
+}
+
+func TestCompoundGETRecoversApprovedUnfinished(t *testing.T) {
+	f := newCompoundHTTPFixture(t)
+	body := "# Agents\n\nrule: task-26-recovery\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	pending := f.postPending(t, "rk-recover", body)
+	decided := time.Unix(2000, 0).UTC().Format(time.RFC3339Nano)
+	if _, err := f.db.Exec(`UPDATE compound_proposals SET status='approved', decided_at=?, finished_at=NULL WHERE id=?`, decided, pending.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(f.agentsPath()); err == nil {
+		t.Fatal("AGENTS.md already present before recovery GET")
+	}
+
+	res := apiRequest(t, f.h, "GET", "/api/v1/sessions/"+f.sess.ID+"/compound/"+pending.ID, nil, f.cookies, "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("recovery GET = %d %s", res.Code, res.Body.String())
+	}
+	got := decodeCompoundProposal(t, res.Body.Bytes())
+	if got.Status != "approved" || got.FinishedAt == nil {
+		t.Fatalf("recovery proposal = %+v", got)
+	}
+	raw, err := os.ReadFile(f.agentsPath())
+	if err != nil {
+		t.Fatalf("AGENTS.md missing after recovery: %v", err)
+	}
+	if string(raw) != body {
+		t.Fatalf("AGENTS.md after recovery = %q, want %q", raw, body)
+	}
+}
+
+func TestCompoundDecideRequiresCSRFAndAuth(t *testing.T) {
+	f := newCompoundHTTPFixture(t)
+	body := "# Agents\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
+	pending := f.postPending(t, "rk-csrf", body)
+	path := "/api/v1/sessions/" + f.sess.ID + "/compound/" + pending.ID + "/decide"
+	req := map[string]any{"request_key": "rk-csrf", "decision": "reject"}
+	if got := apiRequest(t, f.h, "POST", path, req, nil, "csrf").Code; got != http.StatusUnauthorized {
+		t.Fatalf("anon decide = %d", got)
+	}
+	if got := apiRequest(t, f.h, "POST", path, req, f.cookies, "").Code; got != http.StatusForbidden {
+		t.Fatalf("no csrf decide = %d", got)
 	}
 }
