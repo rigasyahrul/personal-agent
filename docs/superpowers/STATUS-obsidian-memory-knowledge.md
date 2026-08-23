@@ -15,8 +15,8 @@
 | Phase | Tasks | Status | Branch (suggested) | Depends | Notes |
 |-------|-------|--------|--------------------|---------|-------|
 | **P0** Layout + prompt | 1–12 | `done` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
-| **P1** Compound | 20–35 | `in_progress` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
-| **P2** Obsidian links | 40–52 | `blocked` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
+| **P1** Compound | 20–35 | `done` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
+| **P2** Obsidian links | 40–52 | `ready` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
 | **P3** Search + tools | 60–72 | `blocked` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
 | **Ship** whole branch | — | `blocked` | merge to main | P0–P3 + whole-branch review | Final consulting-grok-review + push |
 
@@ -95,10 +95,10 @@ Task 12: complete (P0 gate empty commit, pushed)
 | 29 | PASS requesting-code-review (pi session task-29-review) | `817abeb` pushed |
 | 30 | PASS requesting-code-review (pi session task-30-review) | `dd5bc94` pushed |
 | 31 | PASS requesting-code-review (pi session task-31-review) | `8caf7b9` pushed |
-| 32 | | |
+| 32 | PASS requesting-code-review (pi session task-32-review-2) | `de09a43` pushed |
 | 33 | PASS requesting-code-review (pi session task-33-review) | `7fa79ef` pushed |
 | 34 | PASS requesting-code-review (pi session task-34-review) | `1372a13` pushed |
-| 35 | | |
+| 35 | PASS (master P1 gate) | empty `test: P1…` pushed |
 
 Ledger:
 ```
@@ -130,6 +130,10 @@ Task 33: requesting-code-review PASS (pi session task-33-review, Critical none, 
 Task 33: complete (commit 7fa79ef, pushed)
 Task 34: requesting-code-review PASS (pi session task-34-review, Critical none, Important none)
 Task 34: complete (commit 1372a13, pushed)
+Task 32: requesting-code-review PASS (pi session task-32-review-2, Critical none, Important none)
+Task 32: complete (commit de09a43, pushed)
+Task 35: requesting-code-review PASS (master P1 verification gate; package tests green)
+Task 35: complete (P1 gate empty commit, pushed)
 ```
 
 ### P2
@@ -169,6 +173,7 @@ Task 34: complete (commit 1372a13, pushed)
 
 ## Last updated
 
+- 2026-08-23 — P1 `done` (Tasks 32+35). Gate: go test compound/store/agent/httpapi + web CompoundReviewCard/SessionChat/ProjectRail
 - 2026-08-23 — Tasks 29+33+34 complete (`817abeb`/`7fa79ef`/`1372a13`); vibe-pass Compound on :18080 hub session
 - 2026-08-23 — Tasks 28+30+31 complete (`f96315c`/`dd5bc94`/`8caf7b9`); requesting-code-review pi sessions task-28/30/31-review
 - 2026-08-23 — Task 27 complete (`9a9202f`); requesting-code-review pi session task-27-review
