@@ -141,7 +141,10 @@ Task 35: complete (P1 gate empty commit, pushed)
 | Task | Review | Complete |
 |------|--------|----------|
 | 40 | PASS requesting-code-review (pi session task-40-review) | `44a6c9e` pushed |
-| 41–52 | | |
+| 41 | PASS requesting-code-review (pi session task-41-review) | `a2bf7f8` pushed |
+| 42–49 | | |
+| 50 | PASS requesting-code-review (pi session task-50-review) | `f2bb301` pushed |
+| 51–52 | | |
 
 ### P3
 
@@ -174,6 +177,7 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Tasks 41+50 complete (`a2bf7f8`/`f2bb301`)
 - 2026-08-23 — Task 40 complete (`44a6c9e`); P2 `in_progress`
 - 2026-08-23 — P1 `done` (Tasks 32+35). Gate: go test compound/store/agent/httpapi + web CompoundReviewCard/SessionChat/ProjectRail
 - 2026-08-23 — Tasks 29+33+34 complete (`817abeb`/`7fa79ef`/`1372a13`); vibe-pass Compound on :18080 hub session
