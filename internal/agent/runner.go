@@ -165,6 +165,7 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 	if r.Provider == nil {
 		return fmt.Errorf("provider %q is unavailable", session.Provider)
 	}
+	// Future: session.tool_grants search_vault / search_global — not in slice 1
 	var grants struct {
 		WorkspaceFiles bool `json:"workspace_files"`
 	}

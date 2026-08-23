@@ -41,6 +41,7 @@ type Session struct {
 	Provider            string             `json:"provider"`
 	ModelID             string             `json:"model_id"`
 	ModelParametersJSON string             `json:"model_parameters_json"`
+	// Future: session.tool_grants search_vault / search_global — not in slice 1
 	ToolGrantsJSON      string             `json:"tool_grants_json"`
 	Title               string             `json:"title"`
 	CreatedAt           time.Time          `json:"created_at"`

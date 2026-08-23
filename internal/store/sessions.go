@@ -14,6 +14,7 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/layout"
 )
 
+// Future: session.tool_grants search_vault / search_global — not in slice 1
 const defaultToolGrantsJSON = `{"workspace_files":false}`
 
 // SessionLocks serializes per-session mutations (promote and delete).
