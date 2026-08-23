@@ -180,3 +180,33 @@ export interface UpdateSettingsInput {
   default_model_id: string
   backup_schedule: 'off' | 'daily' | string
 }
+
+export interface CompoundItem {
+  kind: string
+  path: string
+  action: string
+  title?: string
+  content: string
+  content_sha256: string
+}
+
+export interface CompoundProposal {
+  id: string
+  status: string
+  items: CompoundItem[]
+  created_at: string
+  decided_at?: string
+  finished_at?: string
+}
+
+export interface CreateCompoundInput {
+  request_key: string
+  user_context?: string
+  items?: CompoundItem[]
+}
+
+export interface DecideCompoundInput {
+  request_key: string
+  decision: 'approve' | 'reject'
+  items?: CompoundItem[]
+}

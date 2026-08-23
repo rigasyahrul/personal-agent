@@ -1,5 +1,6 @@
 // web/src/lib/api/index.ts
 import { request, api as baseApi } from './client'
+import { createCompound, decideCompound, getCompound } from './compound'
 import type {
   BackupListResponse,
   BackupRun,
@@ -24,6 +25,7 @@ import type {
 
 export * from './client'
 export * from './types'
+export { createCompound, decideCompound, getCompound } from './compound'
 
 const enc = (value: string) => encodeURIComponent(value)
 
@@ -125,4 +127,8 @@ export const api = {
       method: 'POST',
       body: {},
     }) as Promise<BackupRun>,
+
+  createCompound,
+  getCompound,
+  decideCompound,
 }
