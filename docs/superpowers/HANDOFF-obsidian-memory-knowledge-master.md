@@ -8,7 +8,7 @@
 **Canonical contracts:** plan header (wins over draft task prose)  
 **Design/plan final gate:** consulting-grok-review `T-01a02a5c` — package **locked Safe with Minor**
 
-**2026-08-23 wrap (Pi):** P0–P3 are on `origin/main`. Workers were `pi -p` (see `AGENTS.md` Pi master bullets). **Ship is not done:** whole-branch review Important = decide retry + SessionChat never re-drive `approved && finished_at == null`. Do not mark `ship=done` until that is fixed.
+**2026-08-23 ship:** P0–P3 + recovery + laptop UI merge are on `origin/main`. Workers were `pi -p`. Recovery Important fixed in `0ccb51f` (decide retry + SessionChat keep card). Board **ship=`done`**.
 
 ---
 
