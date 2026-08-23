@@ -20,6 +20,9 @@ vi.mock('../../lib/api', async (importOriginal) => {
       promoteSession: vi.fn(),
       retryReviewPending: vi.fn(),
       getProject: vi.fn(),
+      createCompound: vi.fn(),
+      decideCompound: vi.fn(),
+      getCompound: vi.fn(),
     },
   }
 })
@@ -53,6 +56,9 @@ describe('SessionChat', () => {
     vi.mocked(api.sendMessage).mockReset()
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
     vi.mocked(api.getProject).mockResolvedValue({ id: 'p1', name: 'P', note_count: 0 })
+    vi.mocked(api.createCompound).mockReset()
+    vi.mocked(api.decideCompound).mockReset()
+    vi.mocked(api.getCompound).mockReset()
   })
 
   it('posts once with one stable request_key and retains draft after failure', async () => {
@@ -584,6 +590,157 @@ describe('SessionChat', () => {
       expect(screen.queryByRole('button', { name: /show files/i })).toBeNull()
       expect(screen.queryByRole('button', { name: /hide files/i })).toBeNull()
       expect(screen.queryByLabelText('Session files')).toBeNull()
+    })
+  })
+
+  describe('compound', () => {
+    const pendingProposal = {
+      id: 'prop-1',
+      status: 'pending',
+      created_at: '2026-08-22T00:00:00Z',
+      items: [
+        {
+          kind: 'agents_patch',
+          path: 'AGENTS.md',
+          action: 'upsert',
+          title: 'Memory pointer',
+          content: 'standing rule',
+          content_sha256: 'abc123',
+        },
+      ],
+    }
+
+    async function renderIdle(uuid = () => 'rk-compound') {
+      render(SessionChat, {
+        props: { session, projectId: 'p1', pollInterval: 60_000, uuid },
+      })
+      await screen.findByLabelText('Message')
+    }
+
+    async function startPendingReview() {
+      vi.mocked(api.createCompound).mockResolvedValue(pendingProposal)
+      await renderIdle()
+      await fireEvent.click(screen.getByRole('button', { name: 'Compound' }))
+      expect(await screen.findByText('Compound review')).toBeInTheDocument()
+    }
+
+    it('shows an enabled Compound control when the session is idle', async () => {
+      await renderIdle()
+      const btn = screen.getByRole('button', { name: 'Compound' })
+      expect(btn).toBeEnabled()
+      expect(btn).toHaveClass('btn', 'btn--secondary')
+      expect(btn).not.toHaveAttribute('title', 'Wait for the current run')
+    })
+
+    it('disables Compound while a run is running', async () => {
+      vi.mocked(api.currentRun).mockResolvedValue({ status: 'running' })
+      await renderIdle()
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toHaveTextContent('Run: running')
+      })
+      const btn = screen.getByRole('button', { name: 'Compound' })
+      expect(btn).toBeDisabled()
+      expect(btn).toHaveAttribute('title', 'Wait for the current run')
+    })
+
+    it('disables Compound while a run is queued', async () => {
+      vi.mocked(api.currentRun).mockResolvedValue({ status: 'queued' })
+      await renderIdle()
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toHaveTextContent('Run: queued')
+      })
+      const btn = screen.getByRole('button', { name: 'Compound' })
+      expect(btn).toBeDisabled()
+      expect(btn).toHaveAttribute('title', 'Wait for the current run')
+    })
+
+    it('disables Compound while a send is in flight', async () => {
+      const gate = deferred<null>()
+      vi.mocked(api.sendMessage).mockReturnValue(gate.promise)
+      await renderIdle()
+      const composer = screen.getByLabelText('Message')
+      await fireEvent.input(composer, { target: { value: 'hi' } })
+      await fireEvent.submit(composer.closest('form')!)
+      const btn = screen.getByRole('button', { name: 'Compound' })
+      expect(btn).toBeDisabled()
+      expect(btn).toHaveAttribute('title', 'Wait for the current run')
+      gate.resolve(null)
+    })
+
+    it('clicking Compound posts generate request and shows the review card', async () => {
+      vi.mocked(api.createCompound).mockResolvedValue(pendingProposal)
+      await renderIdle()
+      const composer = screen.getByLabelText('Message')
+      const form = composer.closest('form')
+      await fireEvent.click(screen.getByRole('button', { name: 'Compound' }))
+      await waitFor(() => expect(api.createCompound).toHaveBeenCalledTimes(1))
+      expect(api.createCompound).toHaveBeenCalledWith('s1', {
+        request_key: 'rk-compound',
+        user_context: expect.stringContaining('cached'),
+      })
+      const body = vi.mocked(api.createCompound).mock.calls[0][1]
+      expect(body).not.toHaveProperty('items')
+      expect(body).not.toHaveProperty('scope')
+      expect(body).not.toHaveProperty('project_id')
+      expect(body).not.toHaveProperty('vault_id')
+      expect(await screen.findByText('Compound review')).toBeInTheDocument()
+      expect(screen.getByText('AGENTS.md')).toBeInTheDocument()
+      expect(screen.getByLabelText('Message')).toBe(composer)
+      expect(composer.closest('form')).toBe(form)
+    })
+
+    it('approve calls decideCompound and hides the card', async () => {
+      vi.mocked(api.decideCompound).mockResolvedValue({
+        ...pendingProposal,
+        status: 'approved',
+      })
+      await startPendingReview()
+      await fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+      await waitFor(() => expect(api.decideCompound).toHaveBeenCalledTimes(1))
+      expect(api.decideCompound).toHaveBeenCalledWith('s1', 'prop-1', {
+        request_key: 'rk-compound',
+        decision: 'approve',
+        items: [
+          expect.objectContaining({
+            path: 'AGENTS.md',
+            content: 'standing rule',
+          }),
+        ],
+      })
+      await waitFor(() => {
+        expect(screen.queryByText('Compound review')).not.toBeInTheDocument()
+      })
+    })
+
+    it('reject calls decideCompound', async () => {
+      vi.mocked(api.decideCompound).mockResolvedValue({
+        ...pendingProposal,
+        status: 'rejected',
+      })
+      await startPendingReview()
+      await fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+      await waitFor(() => expect(api.decideCompound).toHaveBeenCalledTimes(1))
+      expect(api.decideCompound).toHaveBeenCalledWith(
+        's1',
+        'prop-1',
+        expect.objectContaining({ decision: 'reject', request_key: 'rk-compound' }),
+      )
+    })
+
+    it('createCompound failure uses the chat error alert', async () => {
+      vi.mocked(api.createCompound).mockRejectedValue(new Error('compound unavailable'))
+      await renderIdle()
+      await fireEvent.click(screen.getByRole('button', { name: 'Compound' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('compound unavailable')
+      expect(screen.queryByText('Compound review')).not.toBeInTheDocument()
+    })
+
+    it('decideCompound failure keeps the card and uses the chat error alert', async () => {
+      vi.mocked(api.decideCompound).mockRejectedValue(new Error('decide failed'))
+      await startPendingReview()
+      await fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('decide failed')
+      expect(screen.getByText('Compound review')).toBeInTheDocument()
     })
   })
 })

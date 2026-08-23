@@ -19,6 +19,9 @@ vi.mock('../../lib/api', async (importOriginal) => {
       promoteSession: vi.fn(),
       retryReviewPending: vi.fn(),
       getProject: vi.fn(),
+      createCompound: vi.fn(),
+      decideCompound: vi.fn(),
+      getCompound: vi.fn(),
     },
   }
 })
@@ -45,6 +48,22 @@ describe('SessionChat focus invariant', () => {
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
     vi.mocked(api.sendMessage).mockReset()
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
+    vi.mocked(api.createCompound).mockReset().mockResolvedValue({
+      id: 'prop-1',
+      status: 'pending',
+      created_at: '2026-08-22T00:00:00Z',
+      items: [
+        {
+          kind: 'agents_patch',
+          path: 'AGENTS.md',
+          action: 'upsert',
+          content: 'rule',
+          content_sha256: 'abc',
+        },
+      ],
+    })
+    vi.mocked(api.decideCompound).mockReset()
+    vi.mocked(api.getCompound).mockReset()
   })
 
   it('patches messages and run state without replacing the focused composer', async () => {
@@ -84,5 +103,40 @@ describe('SessionChat focus invariant', () => {
     expect([composer.selectionStart, composer.selectionEnd]).toEqual([6, 11])
     expect(screen.getByText(reply.content)).toBeVisible()
     expect(screen.getByRole('status')).toHaveTextContent('Run: running')
+  })
+
+  it('keeps composer node identity across poll and compound card toggle', async () => {
+    let messages = [...initialMessages]
+    let run: { status: string } | null = null
+    vi.mocked(api.listMessages).mockImplementation(async () => messages)
+    vi.mocked(api.currentRun).mockImplementation(async () => run)
+
+    const { component } = render(SessionChat, {
+      props: { session, projectId: 'p1', pollInterval: 60_000 },
+    })
+
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await fireEvent.input(composer, { target: { value: 'keep this draft' } })
+    const form = composer.closest('form')
+
+    messages = [...initialMessages, reply]
+    const poll = (component as unknown as { poll?: () => Promise<void> }).poll
+    if (typeof poll !== 'function') {
+      throw new Error('SessionChat must expose poll() for focus regression harness')
+    }
+    await poll()
+
+    expect(screen.getByLabelText('Message')).toBe(composer)
+    expect(composer.closest('form')).toBe(form)
+
+    run = null
+    await poll()
+    await fireEvent.click(screen.getByRole('button', { name: 'Compound' }))
+    expect(await screen.findByText('Compound review')).toBeInTheDocument()
+
+    expect(screen.getByLabelText('Message')).toBe(composer)
+    expect(composer.closest('form')).toBe(form)
+    expect(composer.value).toBe('keep this draft')
+    expect(form).not.toHaveAttribute('hidden')
   })
 })

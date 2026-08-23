@@ -1006,6 +1006,13 @@ a.list-row:hover {
   font-size: 13px;
   line-height: 1.5;
 }
+.session-compound {
+  flex-shrink: 0;
+  padding: 8px 0 0;
+}
+.session-compound[hidden] {
+  display: none !important;
+}
 .session-composer {
   position: sticky;
   bottom: 0;

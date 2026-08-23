@@ -67,6 +67,7 @@ describe('visual baseline', () => {
       '.session-card',
       '.message-prose',
       '.session-composer',
+      '.session-compound',
       '.message-copy',
       '.content-canvas--session-focus',
     ]) {

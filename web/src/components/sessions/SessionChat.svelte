@@ -4,6 +4,8 @@
   import { api } from '../../lib/api'
   import type {
     ChatMessage,
+    CompoundItem,
+    CompoundProposal,
     OperationStatus,
     RunStatus,
     Session,
@@ -27,6 +29,7 @@
   import { createSessionPoller } from './session-poller'
   import OperationBadges from './OperationBadges.svelte'
   import PromoteDialog from './PromoteDialog.svelte'
+  import CompoundReviewCard from './CompoundReviewCard.svelte'
   import SessionFileTab from './SessionFileTab.svelte'
   import SessionFilesBar from './SessionFilesBar.svelte'
 
@@ -99,6 +102,10 @@
   let retryingPending = $state(new Set<string>())
   let promoteOpen = $state(false)
   let promoteSource = $state<WorkspaceFile | null>(null)
+  let compoundProposal = $state<CompoundProposal | null>(null)
+  let compounding = $state(false)
+  let deciding = $state(false)
+  let compoundingLock = false
   let showWorkspace = $derived(workspaceEnabled(session))
   let activePath = $state<string | null>(null)
   let openFileTabs = $state<FileTabState[]>([])
@@ -117,12 +124,33 @@
   const alertText = $derived([operationError, error].filter(Boolean).join(' — '))
   const runLabel = $derived(run ? `Run: ${run.status}` : 'Idle')
   const sendDisabled = $derived(Boolean(sending || run))
+  const runBusy = $derived(run?.status === 'queued' || run?.status === 'running')
+  const compoundWait = $derived(Boolean(sending || runBusy))
+  const compoundBusy = $derived(compounding || deciding)
+  const compoundDisabled = $derived(
+    compoundWait || compoundBusy || Boolean(compoundProposal),
+  )
+  const compoundTitle = $derived(compoundWait ? 'Wait for the current run' : undefined)
   const agentActive = $derived(activeTab === 'agent')
   const activeFileTab = $derived(
     activeTab.startsWith('file:')
       ? openFileTabs.find((t) => fileTabId(t.path) === activeTab) ?? null
       : null,
   )
+
+  function summarizeRecentMessages(list: ChatMessage[]): string {
+    const picked = [...list]
+      .sort((a, b) => a.sequence - b.sequence)
+      .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'model')
+      .slice(-6)
+    return picked
+      .map((m) => {
+        const role = m.role === 'model' ? 'assistant' : m.role
+        const text = (m.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 280)
+        return `${role}: ${text}`
+      })
+      .join('\n')
+  }
 
   function messagesEqual(left: ChatMessage[], right: ChatMessage[]): boolean {
     if (left === right) return true
@@ -289,6 +317,66 @@
         await poll()
       } else if (sendToken === token) {
         sendingLock = false
+      }
+    }
+  }
+
+  async function startCompound() {
+    if (compoundingLock || compoundWait || compoundBusy || compoundProposal) return
+    compoundingLock = true
+    compounding = true
+    error = ''
+    pollFailed = false
+    const id = session.id
+    const gen = generation
+    const key = uuid()
+    try {
+      const proposal = await api.createCompound(id, {
+        request_key: key,
+        user_context: summarizeRecentMessages(messages),
+      })
+      if (!destroyed && gen === generation && session.id === id && proposal?.status === 'pending') {
+        compoundProposal = proposal
+      }
+    } catch (cause) {
+      if (!destroyed && gen === generation && session.id === id) {
+        error = cause instanceof Error ? cause.message : 'Compound failed'
+        pollFailed = false
+      }
+    } finally {
+      if (!destroyed && gen === generation && session.id === id) {
+        compounding = false
+        compoundingLock = false
+      } else if (compoundingLock) {
+        compoundingLock = false
+      }
+    }
+  }
+
+  async function onCompoundConfirm(decision: 'approve' | 'reject', items: CompoundItem[]) {
+    const proposal = compoundProposal
+    if (!proposal || deciding) return
+    deciding = true
+    error = ''
+    const id = session.id
+    const gen = generation
+    const key = uuid()
+    try {
+      await api.decideCompound(id, proposal.id, {
+        request_key: key,
+        decision,
+        items,
+      })
+      if (!destroyed && gen === generation && session.id === id) {
+        compoundProposal = null
+      }
+    } catch (cause) {
+      if (!destroyed && gen === generation && session.id === id) {
+        error = cause instanceof Error ? cause.message : 'Decide failed'
+      }
+    } finally {
+      if (!destroyed && gen === generation && session.id === id) {
+        deciding = false
       }
     }
   }
@@ -461,6 +549,10 @@
     sendToken = null
     promoteOpen = false
     promoteSource = null
+    compoundProposal = null
+    compounding = false
+    deciding = false
+    compoundingLock = false
     activePath = null
     openFileTabs = []
     activeTab = 'agent'
@@ -549,14 +641,24 @@
       <p class="run-status text-sm text-slate-600" role="status" aria-live="polite" style="margin:0"
       >{runLabel}</p>
     </div>
-    {#if showWorkspace && !embeddedInHub}
+    <div class="flex flex-wrap items-center gap-2">
       <button
         type="button"
         class="btn btn--secondary"
-        aria-pressed={filesOpen}
-        onclick={toggleFiles}
-      >{filesOpen ? 'Hide files' : 'Show files'}</button>
-    {/if}
+        disabled={compoundDisabled}
+        title={compoundTitle}
+        aria-busy={compoundBusy}
+        onclick={() => void startCompound()}
+      >Compound</button>
+      {#if showWorkspace && !embeddedInHub}
+        <button
+          type="button"
+          class="btn btn--secondary"
+          aria-pressed={filesOpen}
+          onclick={toggleFiles}
+        >{filesOpen ? 'Hide files' : 'Show files'}</button>
+      {/if}
+    </div>
   </header>
 
   <OperationBadges
@@ -671,6 +773,20 @@
           onmode={(m) => setFileTabMode(activeFileTab.path, m)}
           onpromote={openPromoteFromTab}
         />
+      {/if}
+
+      {#if compoundProposal}
+        <div
+          class="session-compound"
+          hidden={!agentActive}
+          inert={!agentActive ? true : undefined}
+        >
+          <CompoundReviewCard
+            proposal={compoundProposal}
+            busy={deciding}
+            onconfirm={(decision, items) => void onCompoundConfirm(decision, items)}
+          />
+        </div>
       {/if}
 
       <!-- Composer ancestry is stable: never destroy/recreate this form on poll or tab switch. -->
