@@ -1,6 +1,7 @@
 // web/src/lib/api/index.ts
 import { request, api as baseApi } from './client'
 import { createCompound, decideCompound, getCompound } from './compound'
+import { getProjectMemoryLessons } from './memory'
 import type {
   BackupListResponse,
   BackupRun,
@@ -26,6 +27,7 @@ import type {
 export * from './client'
 export * from './types'
 export { createCompound, decideCompound, getCompound } from './compound'
+export { getProjectMemoryLessons } from './memory'
 
 const enc = (value: string) => encodeURIComponent(value)
 
@@ -131,4 +133,5 @@ export const api = {
   createCompound,
   getCompound,
   decideCompound,
+  getProjectMemoryLessons,
 }

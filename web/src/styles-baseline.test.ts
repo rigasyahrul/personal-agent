@@ -84,6 +84,7 @@ describe('visual baseline', () => {
       '.rail-tab',
       '.rail-tab--active',
       '.rail-panel',
+      '.rail-memory-preview',
       '.hub-start',
       '.hub-start__title',
       '.hub-composer',
