@@ -1,8 +1,17 @@
 // web/src/routes/NotesPage.test.ts
-import { cleanup, render, screen, waitFor } from '@testing-library/svelte'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import NotesPage from './NotesPage.svelte'
 import { api } from '../lib/api'
+import { navigate } from '../lib/router'
+
+vi.mock('../lib/router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/router')>()
+  return {
+    ...actual,
+    navigate: vi.fn(),
+  }
+})
 
 vi.mock('../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/api')>()
@@ -14,6 +23,7 @@ vi.mock('../lib/api', async (importOriginal) => {
       listProjectNotes: vi.fn(),
       getProjectNote: vi.fn(),
       listProjectNoteBacklinks: vi.fn(),
+      searchProject: vi.fn(),
     },
   }
 })
@@ -37,7 +47,10 @@ const detail = {
   rendered_html: '<p>Rendered note</p>',
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('NotesPage', () => {
   beforeEach(() => {
@@ -45,6 +58,35 @@ describe('NotesPage', () => {
     vi.mocked(api.listProjectNotes).mockReset().mockResolvedValue([note])
     vi.mocked(api.getProjectNote).mockReset().mockResolvedValue(detail)
     vi.mocked(api.listProjectNoteBacklinks).mockReset().mockResolvedValue([])
+    vi.mocked(api.searchProject).mockReset().mockResolvedValue([])
+    vi.mocked(navigate).mockReset()
+  })
+
+  it('shows a knowledge search field when the project is open', async () => {
+    render(NotesPage, { props: { projectId: 'p1' } })
+    expect(await screen.findByRole('searchbox', { name: /search knowledge/i })).toBeVisible()
+  })
+
+  it('opens a source search hit on the v1 notes route', async () => {
+    vi.mocked(api.searchProject).mockResolvedValue([
+      {
+        knowledge_id: 'k-intro',
+        path: 'source/intro.md',
+        title: 'Intro',
+        snippet: 'alpha in the body',
+        kind: 'source',
+        source_note_id: 'note-src',
+      },
+    ])
+
+    render(NotesPage, { props: { projectId: 'p1' } })
+    const search = await screen.findByRole('searchbox', { name: /search knowledge/i })
+    vi.useFakeTimers()
+    await fireEvent.input(search, { target: { value: 'alpha' } })
+    await vi.advanceTimersByTimeAsync(400)
+    await fireEvent.click(await screen.findByRole('button', { name: /Intro/ }))
+
+    expect(navigate).toHaveBeenCalledWith('#/projects/p1/notes/note-src')
   })
 
   it('shows tree and selected note in two panes', async () => {

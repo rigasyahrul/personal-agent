@@ -632,6 +632,12 @@ a.list-row:hover {
   flex-direction: column;
   gap: 12px;
 }
+.notes-layout__tree {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
 @media (min-width: 768px) {
   .notes-layout {
     flex-direction: row;

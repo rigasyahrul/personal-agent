@@ -1,10 +1,12 @@
 <!-- web/src/routes/NotesPage.svelte -->
 <script lang="ts">
   import Breadcrumbs from '../components/Breadcrumbs.svelte'
+  import KnowledgeSearch from '../components/notes/KnowledgeSearch.svelte'
   import NoteReader from '../components/notes/NoteReader.svelte'
   import NoteTree from '../components/notes/NoteTree.svelte'
   import Skeleton from '../components/Skeleton.svelte'
   import { api } from '../lib/api'
+  import type { KnowledgeSearchHit } from '../lib/api'
   import type { NoteDetail, NoteTreeEntry, Project } from '../lib/api/types'
   import { navigate, routeToHash } from '../lib/router'
 
@@ -80,6 +82,13 @@
   function selectNote(id: string) {
     navigate(routeToHash({ name: 'note', projectId, noteId: id }))
   }
+
+  function openKnowledge(hit: KnowledgeSearchHit) {
+    // Canonical: source + source_note_id → v1 notes route.
+    // Else: navigate notes if possible; knowledge/read is optional.
+    if (!hit.source_note_id) return
+    navigate(routeToHash({ name: 'note', projectId, noteId: hit.source_note_id }))
+  }
 </script>
 
 {#if project}
@@ -93,24 +102,29 @@
 {/if}
 
 <div class="notes-layout">
-  <aside class="notes-layout__tree panel">
-    <h1 class="mb-3 text-lg font-semibold" style="margin-top:0">Notes</h1>
-    {#if treeLoading}
-      <div class="space-y-2" aria-busy="true">
-        <Skeleton class="h-6" />
-        <Skeleton class="h-6" />
-        <Skeleton class="h-6" />
-      </div>
-    {:else if entries.length === 0}
-      <p class="text-sm text-slate-600">No notes yet</p>
-    {:else}
-      <NoteTree
-        {projectId}
-        {entries}
-        selectedNoteId={noteId}
-        onselect={selectNote}
-      />
+  <aside class="notes-layout__tree">
+    {#if project}
+      <KnowledgeSearch projectId={project.id} onopen={openKnowledge} />
     {/if}
+    <div class="panel notes-layout__tree-list">
+      <h1 class="mb-3 text-lg font-semibold" style="margin-top:0">Notes</h1>
+      {#if treeLoading}
+        <div class="space-y-2" aria-busy="true">
+          <Skeleton class="h-6" />
+          <Skeleton class="h-6" />
+          <Skeleton class="h-6" />
+        </div>
+      {:else if entries.length === 0}
+        <p class="text-sm text-slate-600">No notes yet</p>
+      {:else}
+        <NoteTree
+          {projectId}
+          {entries}
+          selectedNoteId={noteId}
+          onselect={selectNote}
+        />
+      {/if}
+    </div>
   </aside>
 
   <section class="notes-layout__reader panel min-h-48">
