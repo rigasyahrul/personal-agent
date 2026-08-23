@@ -163,12 +163,13 @@ Task 35: complete (P1 gate empty commit, pushed)
 | 62 | PASS requesting-code-review (pi session task-62-review) | `f6edab6` pushed |
 | 63 | PASS requesting-code-review (pi session task-63-review) | `b5e5572` pushed |
 | 64 | PASS requesting-code-review (pi session task-64-review) | `5228570` pushed |
-| 65 | | |
+| 65 | PASS requesting-code-review (pi session task-65-review) | `2f00478` pushed |
 | 66 | PASS requesting-code-review (pi session task-66-review) | `57d4811` pushed |
-| 67 | | |
+| 67 | PASS requesting-code-review (pi session task-67-review) | `8fe0a6b` pushed |
 | 68 | PASS requesting-code-review (pi session task-68-review) | `5919379` pushed |
 | 69 | PASS requesting-code-review (pi session task-69-review) | `de7f3ad` pushed |
-| 70–72 | | |
+| 70 | PASS requesting-code-review (pi session task-70-review) | `560bf10` pushed |
+| 71–72 | | |
 
 ### Whole-branch
 
@@ -195,6 +196,7 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Tasks 65+67+70 complete (`2f00478`/`8fe0a6b`/`560bf10`)
 - 2026-08-23 — Tasks 64+66 complete (`5228570`/`57d4811`)
 - 2026-08-23 — Tasks 62+63 complete (`f6edab6`/`b5e5572`)
 - 2026-08-23 — Tasks 61+69 complete (`3ac5af5`/`de7f3ad`)
