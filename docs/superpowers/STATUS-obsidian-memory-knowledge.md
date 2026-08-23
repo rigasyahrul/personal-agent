@@ -17,7 +17,7 @@
 | **P0** Layout + prompt | 1–12 | `done` | `feat/obsidian-p0-layout-prompt` | — | Seed, migrator 002, instructions API, BuildSessionPrompt |
 | **P1** Compound | 20–35 | `done` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
 | **P2** Obsidian links | 40–52 | `done` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
-| **P3** Search + tools | 60–72 | `ready` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
+| **P3** Search + tools | 60–72 | `in_progress` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
 | **Ship** whole branch | — | `blocked` | merge to main | P0–P3 + whole-branch review | Final consulting-grok-review + push |
 
 Statuses: `ready` | `in_progress` | `review` | `done` | `blocked`
@@ -158,7 +158,10 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 | Task | Review | Complete |
 |------|--------|----------|
-| 60–72 | | |
+| 60 | PASS requesting-code-review (pi session task-60-review) | `260a2ff` pushed |
+| 61–67 | | |
+| 68 | PASS requesting-code-review (pi session task-68-review) | `5919379` pushed |
+| 69–72 | | |
 
 ### Whole-branch
 
@@ -185,6 +188,7 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Tasks 60+68 complete (`260a2ff`/`5919379`); P3 `in_progress`
 - 2026-08-23 — P2 `done` (Task 52 gate). Next P3 Task 60 FTS
 - 2026-08-23 — Task 48 complete (`96e3af0`)
 - 2026-08-23 — Tasks 47+49 complete (`9b4fec7`/`b59205e`)
