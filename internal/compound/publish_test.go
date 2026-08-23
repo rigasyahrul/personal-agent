@@ -281,16 +281,3 @@ func TestPublishApproved_SecondCompoundMergesLessons(t *testing.T) {
 		t.Fatalf("missing beta row:\n%s", text)
 	}
 }
-
-func TestValidateAgentsMemoryPointer(t *testing.T) {
-	ok := "# X\n\n## Memory\n- [[memory/lessons|lessons.md]]\n"
-	if err := compound.ValidateAgentsMemoryPointer(ok); err != nil {
-		t.Fatalf("ok: %v", err)
-	}
-	if err := compound.ValidateAgentsMemoryPointer("# X\nno pointer\n"); err == nil {
-		t.Fatal("expected missing Memory to fail")
-	}
-	if err := compound.ValidateAgentsMemoryPointer("## Memory\nno wikilink\n"); err == nil {
-		t.Fatal("expected missing lessons wikilink to fail")
-	}
-}

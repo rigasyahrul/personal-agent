@@ -23,9 +23,6 @@ import (
 	"github.com/rigasyahrul/personal-agent/internal/store"
 )
 
-// AgentsMemoryMarker is the required AGENTS.md section heading.
-const AgentsMemoryMarker = "## Memory"
-
 var wikilinkRE = regexp.MustCompile(`\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]`)
 var listItemRE = regexp.MustCompile(`^\s*[-*]\s+`)
 
@@ -35,17 +32,6 @@ type Publisher struct {
 	DB      *sql.DB
 	Clock   clock.Clock
 	Barrier store.MutBarrier
-}
-
-// ValidateAgentsMemoryPointer requires the Canonical Memory section + lessons wikilink.
-func ValidateAgentsMemoryPointer(content string) error {
-	if !strings.Contains(content, AgentsMemoryMarker) {
-		return fmt.Errorf("%w: AGENTS.md must keep a %s section", store.ErrValidation, AgentsMemoryMarker)
-	}
-	if !strings.Contains(content, "[[memory/lessons") {
-		return fmt.Errorf("%w: AGENTS.md must keep [[memory/lessons pointer", store.ErrValidation)
-	}
-	return nil
 }
 
 // PublishApproved writes final items for an approved proposal.
