@@ -68,6 +68,36 @@ var workspaceToolDefinitions = []ToolDefinition{
 	{Name: "mkdir", Description: "Create workspace directories", Parameters: objectSchema("path")},
 }
 
+// knowledgeToolDefinitions are registered for project home even when
+// workspace_files is false. No write_knowledge in slice 1.
+var knowledgeToolDefinitions = []ToolDefinition{
+	{
+		Name:        "search_project",
+		Description: "Search project knowledge notes",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"query": map[string]any{"type": "string"},
+				"limit": map[string]any{"type": "integer"},
+			},
+			"required":             []string{"query"},
+			"additionalProperties": false,
+		},
+	},
+	{Name: "read_knowledge", Description: "Read a project knowledge file", Parameters: objectSchema("path")},
+	{
+		Name:        "list_knowledge",
+		Description: "List project knowledge files",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"path": map[string]any{"type": "string"},
+			},
+			"additionalProperties": false,
+		},
+	},
+}
+
 func objectSchema(required ...string) map[string]any {
 	properties := make(map[string]any, len(required))
 	for _, name := range required {

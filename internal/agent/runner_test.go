@@ -625,3 +625,300 @@ func TestTwoTabsOneAgentRunSameKeyIsIdempotent(t *testing.T) {
 	close(provider.release)
 	runner.Wait()
 }
+
+func projectKnowledgeRunner(t *testing.T, provider Provider, granted bool) (*Runner, string, *store.RunStore, *store.MessageStore) {
+	t.Helper()
+	db, _ := testutil.TempDB(t)
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	dataDir := t.TempDir()
+	ts := now.Format(time.RFC3339Nano)
+	if _, err := db.Exec(`
+		INSERT INTO vaults(id,name,created_at,updated_at) VALUES('v1','Vault',?,?);
+		INSERT INTO projects(id,vault_id,name,created_at,updated_at) VALUES('p1','v1','Project',?,?);
+		INSERT INTO sessions
+		(id,home,vault_id,project_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at)
+		VALUES('s-proj','project','v1','p1','active','openai','gpt-fixed','{}','{}','Chat',?,?);
+		INSERT INTO notes(id,project_id,relative_path,status,revision,created_at,updated_at)
+			VALUES('note-src','p1','articles/intro.md','ready',1,?,?);
+	`, ts, ts, ts, ts, ts, ts, ts, ts); err != nil {
+		t.Fatal(err)
+	}
+	grants := `{"workspace_files":false}`
+	if granted {
+		grants = `{"workspace_files":true}`
+	}
+	if _, err := db.Exec(`UPDATE sessions SET tool_grants_json=? WHERE id='s-proj'`, grants); err != nil {
+		t.Fatal(err)
+	}
+
+	projectRoot := filepath.Join(dataDir, "files", "vaults", "v1", "projects", "p1")
+	if err := os.MkdirAll(projectRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	const agentsBody = "PROJECT_AGENTS_KNOWLEDGE_BODY\n"
+	if err := os.WriteFile(filepath.Join(projectRoot, "AGENTS.md"), []byte(agentsBody), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&store.KnowledgeStore{DB: db}).UpsertFromContent(context.Background(), store.UpsertKnowledgeInput{
+		Kind:         domain.KnowledgeKindSource,
+		ProjectID:    "p1",
+		RelativePath: "source/articles/intro.md",
+		Content:      []byte("Body mentions searchneedletoken once.\n"),
+		Status:       "ready",
+		SourceNoteID: "note-src",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(projectRoot, "sessions", "s-proj"), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	runs := &store.RunStore{DB: db, Now: func() time.Time { return now }}
+	messages := &store.MessageStore{DB: db, Now: func() time.Time { return now }}
+	return &Runner{
+		DB: db, DataDir: dataDir, Provider: provider, Messages: messages, Runs: runs,
+		Sessions: &store.SessionStore{DB: db},
+	}, "s-proj", runs, messages
+}
+
+func advertisedToolNames(req ChatRequest) []string {
+	names := make([]string, 0, len(req.Tools))
+	for _, tool := range req.Tools {
+		names = append(names, tool.Name)
+	}
+	return names
+}
+
+func hasToolName(names []string, want string) bool {
+	for _, name := range names {
+		if name == want {
+			return true
+		}
+	}
+	return false
+}
+
+// Break this would catch: knowledge tools gated on workspace_files, dispatched
+// through Workspace, or advertising write_knowledge.
+func TestRunnerProjectHomeKnowledgeToolsWithoutWorkspaceGrant(t *testing.T) {
+	search := ToolCall{ID: "call-search", Name: "search_project", Arguments: `{"query":"searchneedletoken","limit":5}`}
+	read := ToolCall{ID: "call-read", Name: "read_knowledge", Arguments: `{"path":"AGENTS.md"}`}
+	provider := &scriptedProvider{responses: []ChatResponse{
+		{ToolCalls: []ToolCall{search, read}},
+		{Content: "done"},
+	}}
+	runner, sessionID, runs, messages := projectKnowledgeRunner(t, provider, false)
+
+	runID, err := runner.Start(context.Background(), sessionID, "req-knowledge", "search then read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner.Wait()
+	run, lookupErr := runs.ByID(context.Background(), runID)
+	if lookupErr != nil || run.Status != domain.AgentRunStatusCompleted {
+		t.Fatalf("run = %#v, %v", run, lookupErr)
+	}
+	if len(provider.requests) != 2 {
+		t.Fatalf("provider calls = %d, want 2", len(provider.requests))
+	}
+	names := advertisedToolNames(provider.requests[0])
+	for _, want := range []string{"search_project", "read_knowledge", "list_knowledge"} {
+		if !hasToolName(names, want) {
+			t.Fatalf("missing knowledge tool %q in %#v", want, names)
+		}
+	}
+	if hasToolName(names, "write_knowledge") {
+		t.Fatalf("write_knowledge advertised: %#v", names)
+	}
+	for _, workspaceName := range []string{"read_file", "write_file", "edit_file", "mkdir"} {
+		if hasToolName(names, workspaceName) {
+			t.Fatalf("workspace tool %q advertised without grant: %#v", workspaceName, names)
+		}
+	}
+
+	history, err := messages.List(context.Background(), sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var searchRaw, readRaw string
+	for _, message := range history {
+		if message.Role != domain.MessageRoleTool || message.ToolCallID == nil {
+			continue
+		}
+		switch *message.ToolCallID {
+		case search.ID:
+			searchRaw = message.Content
+		case read.ID:
+			readRaw = message.Content
+		}
+	}
+	if searchRaw == "" || readRaw == "" {
+		t.Fatalf("missing tool results; history=%#v", history)
+	}
+	var searchOut struct {
+		Hits []struct {
+			KnowledgeID string `json:"knowledge_id"`
+			Path        string `json:"path"`
+		} `json:"hits"`
+	}
+	if err := json.Unmarshal([]byte(searchRaw), &searchOut); err != nil {
+		t.Fatalf("search result %q: %v", searchRaw, err)
+	}
+	if len(searchOut.Hits) != 1 || searchOut.Hits[0].Path != "source/articles/intro.md" || searchOut.Hits[0].KnowledgeID == "" {
+		t.Fatalf("search hits = %#v from %s", searchOut.Hits, searchRaw)
+	}
+	var readOut struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal([]byte(readRaw), &readOut); err != nil {
+		t.Fatalf("read result %q: %v", readRaw, err)
+	}
+	if readOut.Path != "AGENTS.md" || readOut.Content != "PROJECT_AGENTS_KNOWLEDGE_BODY\n" {
+		t.Fatalf("read_knowledge = %+v", readOut)
+	}
+}
+
+// Break this would catch: knowledge tools registered for vault or global homes.
+func TestRunnerVaultAndGlobalDoNotRegisterKnowledgeTools(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		home    string
+		granted bool
+	}{
+		{name: "global no grant", home: "global", granted: false},
+		{name: "global grant", home: "global", granted: true},
+		{name: "vault no grant", home: "vault", granted: false},
+		{name: "vault grant", home: "vault", granted: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &scriptedProvider{responses: []ChatResponse{{Content: "plain"}}}
+			var runner *Runner
+			var sessionID string
+			if tc.home == "global" {
+				runner, sessionID, _, _ = toolRunner(t, provider, tc.granted)
+			} else {
+				runner, sessionID, _, _ = vaultToolRunner(t, provider, tc.granted)
+			}
+			if _, err := runner.Start(context.Background(), sessionID, "req-"+tc.name, "hello"); err != nil {
+				t.Fatal(err)
+			}
+			runner.Wait()
+			if len(provider.requests) != 1 {
+				t.Fatalf("provider calls = %d", len(provider.requests))
+			}
+			names := advertisedToolNames(provider.requests[0])
+			for _, knowledgeName := range []string{"search_project", "read_knowledge", "list_knowledge", "write_knowledge"} {
+				if hasToolName(names, knowledgeName) {
+					t.Fatalf("%s advertised knowledge tool %q: %#v", tc.home, knowledgeName, names)
+				}
+			}
+			if tc.granted && len(names) != 4 {
+				t.Fatalf("granted %s tools = %#v, want 4 workspace tools", tc.home, names)
+			}
+			if !tc.granted && len(names) != 0 {
+				t.Fatalf("ungranted %s tools leaked: %#v", tc.home, names)
+			}
+		})
+	}
+}
+
+func vaultToolRunner(t *testing.T, provider Provider, granted bool) (*Runner, string, *store.RunStore, *store.MessageStore) {
+	t.Helper()
+	db, _ := testutil.TempDB(t)
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	dataDir := t.TempDir()
+	ts := now.Format(time.RFC3339Nano)
+	if _, err := db.Exec(`
+		INSERT INTO vaults(id,name,created_at,updated_at) VALUES('v1','Vault',?,?);
+		INSERT INTO sessions
+		(id,home,vault_id,status,provider,model_id,model_parameters_json,tool_grants_json,title,created_at,updated_at)
+		VALUES('s-vault','vault','v1','active','openai','gpt-fixed','{}','{}','Chat',?,?);
+	`, ts, ts, ts, ts); err != nil {
+		t.Fatal(err)
+	}
+	grants := `{"workspace_files":false}`
+	if granted {
+		grants = `{"workspace_files":true}`
+	}
+	if _, err := db.Exec(`UPDATE sessions SET tool_grants_json=? WHERE id='s-vault'`, grants); err != nil {
+		t.Fatal(err)
+	}
+	workspace := filepath.Join(dataDir, "files", "vaults", "v1", "sessions", "s-vault")
+	if err := os.MkdirAll(workspace, 0700); err != nil {
+		t.Fatal(err)
+	}
+	runs := &store.RunStore{DB: db, Now: func() time.Time { return now }}
+	messages := &store.MessageStore{DB: db, Now: func() time.Time { return now }}
+	return &Runner{
+		DB: db, DataDir: dataDir, Provider: provider, Messages: messages, Runs: runs,
+		Sessions: &store.SessionStore{DB: db},
+	}, "s-vault", runs, messages
+}
+
+// Break this would catch: workspace names executed without a grant, or unknown
+// names (including write_knowledge) accepted on project home.
+func TestRunnerProjectHomeRejectsWorkspaceAndUnknownWithoutGrant(t *testing.T) {
+	for _, call := range []ToolCall{
+		{ID: "ws", Name: "write_file", Arguments: `{"path":"draft.txt","content":"nope"}`},
+		{ID: "unknown", Name: "write_knowledge", Arguments: `{"path":"AGENTS.md","content":"x"}`},
+	} {
+		t.Run(call.Name, func(t *testing.T) {
+			provider := &scriptedProvider{responses: []ChatResponse{{ToolCalls: []ToolCall{call}}, {Content: "done"}}}
+			runner, sessionID, runs, messages := projectKnowledgeRunner(t, provider, false)
+			runID, err := runner.Start(context.Background(), sessionID, "req-"+call.Name, "try")
+			if err != nil {
+				t.Fatal(err)
+			}
+			runner.Wait()
+			run, lookupErr := runs.ByID(context.Background(), runID)
+			if lookupErr != nil || run.Status != domain.AgentRunStatusCompleted {
+				t.Fatalf("run = %#v, %v", run, lookupErr)
+			}
+			history, _ := messages.List(context.Background(), sessionID)
+			var result string
+			for _, message := range history {
+				if message.Role == domain.MessageRoleTool {
+					result = message.Content
+				}
+			}
+			if result == "" || !strings.Contains(result, "error") {
+				t.Fatalf("want rejected tool result, got %q history=%#v", result, history)
+			}
+			if _, err := os.Stat(filepath.Join(runner.DataDir, "files", "vaults", "v1", "projects", "p1", "sessions", sessionID, "draft.txt")); !os.IsNotExist(err) {
+				t.Fatalf("workspace file written without grant: %v", err)
+			}
+			agents, err := os.ReadFile(filepath.Join(runner.DataDir, "files", "vaults", "v1", "projects", "p1", "AGENTS.md"))
+			if err != nil || string(agents) != "PROJECT_AGENTS_KNOWLEDGE_BODY\n" {
+				t.Fatalf("AGENTS.md mutated: %q, %v", agents, err)
+			}
+		})
+	}
+}
+
+// Break this would catch: compound generation inheriting project knowledge tools.
+func TestCompoundProjectHomeStaysToolsOff(t *testing.T) {
+	payload, err := json.Marshal([]store.CompoundItem{{
+		Kind:          store.CompoundKindAgentsPatch,
+		Path:          "AGENTS.md",
+		Action:        store.CompoundActionUpdate,
+		Content:       compoundAgentsBody,
+		ContentSHA256: compoundSHA(compoundAgentsBody),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &scriptedProvider{responses: []ChatResponse{{Content: string(payload)}}}
+	runner, sessionID, _, _ := projectKnowledgeRunner(t, provider, true)
+	runner.Compound = &store.CompoundStore{DB: runner.DB}
+
+	if _, err := runner.StartCompound(context.Background(), sessionID, "rk-proj-tools", "compound"); err != nil {
+		t.Fatalf("StartCompound: %v", err)
+	}
+	if len(provider.requests) != 1 {
+		t.Fatalf("provider calls = %d, want 1", len(provider.requests))
+	}
+	if n := len(provider.requests[0].Tools); n != 0 {
+		t.Fatalf("compound registered %d tools: %#v", n, provider.requests[0].Tools)
+	}
+}

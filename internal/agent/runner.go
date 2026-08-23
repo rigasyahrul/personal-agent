@@ -176,13 +176,6 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 	var workspace *tools.Workspace
 	var root *fsroot.Root
 	if grants.WorkspaceFiles {
-		vaultID, projectID := "", ""
-		if session.VaultID != nil {
-			vaultID = *session.VaultID
-		}
-		if session.ProjectID != nil {
-			projectID = *session.ProjectID
-		}
 		root, err = fsroot.Open(layout.SessionWorkspace(r.DataDir, session.Home, vaultID, projectID, session.ID))
 		if err != nil {
 			return err
@@ -190,7 +183,13 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 		defer root.Close()
 		workspace = tools.NewWorkspace(root)
 		workspace.Barrier = r.Barrier
-		req.Tools = workspaceToolDefinitions
+		req.Tools = append(req.Tools, workspaceToolDefinitions...)
+	}
+	var knowledge *tools.KnowledgeToolHandler
+	if session.Home == layout.SessionHome("project") && projectID != "" {
+		knowledge = tools.NewKnowledgeToolHandler(&store.KnowledgeStore{DB: r.DB}, projectID)
+		knowledge.ScopeRoot = layout.ProjectRoot(r.DataDir, vaultID, projectID)
+		req.Tools = append(req.Tools, knowledgeToolDefinitions...)
 	}
 	run := runID
 	for round := 0; round < maxToolRounds; round++ {
@@ -212,9 +211,6 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 			}
 			callIDs[call.ID] = struct{}{}
 		}
-		if workspace == nil {
-			return errors.New("provider returned a tool call without a workspace grant")
-		}
 		encodedCalls, err := json.Marshal(response.ToolCalls)
 		if err != nil {
 			return err
@@ -227,14 +223,9 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 		assistant := ChatMessage{Role: domain.MessageRoleAssistant, Content: response.Content, ToolCalls: response.ToolCalls}
 		req.Messages = append(req.Messages, assistant)
 		for _, call := range response.ToolCalls {
-			result, toolErr := workspace.Execute(ctx, call.Name, json.RawMessage(call.Arguments))
-			content := safeToolError()
-			if toolErr == nil {
-				encoded, marshalErr := json.Marshal(result)
-				if marshalErr != nil {
-					return marshalErr
-				}
-				content = string(encoded)
+			content, dispatchErr := dispatchTool(ctx, workspace, knowledge, call)
+			if dispatchErr != nil {
+				return dispatchErr
 			}
 			callID := call.ID
 			if err := r.Messages.Append(ctx, domain.Message{SessionID: session.ID, RunID: &run, Role: domain.MessageRoleTool,
@@ -245,6 +236,53 @@ func (r *Runner) execute(ctx context.Context, runID string, session domain.Sessi
 		}
 	}
 	return errors.New("tool round limit exceeded")
+}
+
+func dispatchTool(ctx context.Context, workspace *tools.Workspace, knowledge *tools.KnowledgeToolHandler, call ToolCall) (string, error) {
+	switch {
+	case isKnowledgeTool(call.Name):
+		if knowledge == nil {
+			return safeToolError(), nil
+		}
+		raw, err := knowledge.Execute(ctx, call.Name, json.RawMessage(call.Arguments))
+		if err != nil {
+			return safeToolError(), nil
+		}
+		return string(raw), nil
+	case isWorkspaceTool(call.Name):
+		if workspace == nil {
+			return safeToolError(), nil
+		}
+		result, err := workspace.Execute(ctx, call.Name, json.RawMessage(call.Arguments))
+		if err != nil {
+			return safeToolError(), nil
+		}
+		encoded, err := json.Marshal(result)
+		if err != nil {
+			return "", err
+		}
+		return string(encoded), nil
+	default:
+		return safeToolError(), nil
+	}
+}
+
+func isKnowledgeTool(name string) bool {
+	switch name {
+	case tools.ToolSearchProject, tools.ToolReadKnowledge, tools.ToolListKnowledge:
+		return true
+	default:
+		return false
+	}
+}
+
+func isWorkspaceTool(name string) bool {
+	switch name {
+	case "read_file", "write_file", "edit_file", "mkdir":
+		return true
+	default:
+		return false
+	}
 }
 
 func safeToolError() string { return `{"error":"workspace tool request rejected"}` }
