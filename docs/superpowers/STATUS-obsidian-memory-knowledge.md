@@ -18,7 +18,7 @@
 | **P1** Compound | 20–35 | `done` | `feat/obsidian-p1-compound` | P0 done + pushed | Explicit compound, skill, review card, publish |
 | **P2** Obsidian links | 40–52 | `done` | `feat/obsidian-p2-links` | P1 done + pushed | Frontmatter, wikilinks, backlinks |
 | **P3** Search + tools | 60–72 | `done` | `feat/obsidian-p3-search` | P2 done + pushed | FTS, knowledge tools, craft gate |
-| **Ship** whole branch | — | `ready` | merge to main | P0–P3 + whole-branch review | Final consulting-grok-review + push |
+| **Ship** whole branch | — | `in_progress` | merge to main | P0–P3 + whole-branch review | Final consulting-grok-review + push |
 
 Statuses: `ready` | `in_progress` | `review` | `done` | `blocked`
 
@@ -197,6 +197,7 @@ Task 35: complete (P1 gate empty commit, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Ship recovery `0ccb51f` (decide retry + SessionChat keep card); review ship-recovery-review PASS
 - 2026-08-23 — P3 `done` (Tasks 71+72). Gate: go test ./... + npm test 293 + web build
 - 2026-08-23 — Tasks 65+67+70 complete (`2f00478`/`8fe0a6b`/`560bf10`)
 - 2026-08-23 — Tasks 64+66 complete (`5228570`/`57d4811`)
