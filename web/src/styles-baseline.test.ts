@@ -55,6 +55,8 @@ describe('visual baseline', () => {
       '.compound-item',
       '.backlinks',
       '.backlinks__item',
+      '.knowledge-search',
+      '.knowledge-search__hit',
     ]) {
       expect(css).toContain(token);
     }

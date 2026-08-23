@@ -2,7 +2,7 @@
 import { request, api as baseApi } from './client'
 import { createCompound, decideCompound, getCompound } from './compound'
 import { getProjectMemoryLessons } from './memory'
-import { listProjectNoteBacklinks } from './notes'
+import { listProjectNoteBacklinks, searchProject } from './notes'
 import type {
   BackupListResponse,
   BackupRun,
@@ -29,8 +29,8 @@ export * from './client'
 export * from './types'
 export { createCompound, decideCompound, getCompound } from './compound'
 export { getProjectMemoryLessons } from './memory'
-export { listProjectNoteBacklinks, mapNoteBacklink } from './notes'
-export type { NoteBacklink, NoteBacklinkDTO } from './notes'
+export { listProjectNoteBacklinks, mapNoteBacklink, searchProject } from './notes'
+export type { KnowledgeSearchHit, NoteBacklink, NoteBacklinkDTO } from './notes'
 
 const enc = (value: string) => encodeURIComponent(value)
 
@@ -51,6 +51,7 @@ export const api = {
     request<NoteDetail>(`/api/v1/notes/${enc(noteId)}`) as Promise<NoteDetail>,
 
   listProjectNoteBacklinks,
+  searchProject,
 
   listModels: () =>
     request<ModelsResponse>('/api/v1/models') as Promise<ModelsResponse>,

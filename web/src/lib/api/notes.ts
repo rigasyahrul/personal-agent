@@ -41,3 +41,22 @@ export async function listProjectNoteBacklinks(
   )
   return (data?.items ?? []).map(mapNoteBacklink)
 }
+
+export type KnowledgeSearchHit = {
+  knowledge_id: string
+  path: string
+  title: string
+  snippet: string
+  kind: string
+  source_note_id?: string
+}
+
+export async function searchProject(
+  projectId: string,
+  query: string,
+): Promise<KnowledgeSearchHit[]> {
+  const data = await request<{ hits?: KnowledgeSearchHit[] }>(
+    `/api/v1/projects/${enc(projectId)}/search?q=${enc(query)}`,
+  )
+  return data?.hits ?? []
+}
