@@ -92,10 +92,13 @@ Task 12: complete (P0 gate empty commit, pushed)
 | 26 | PASS requesting-code-review (pi session task-26-review) | `14c25eb` pushed |
 | 27 | PASS requesting-code-review (pi session task-27-review) | `9a9202f` pushed |
 | 28 | PASS requesting-code-review (pi session task-28-review) | `f96315c` pushed |
-| 29 | | |
+| 29 | PASS requesting-code-review (pi session task-29-review) | `817abeb` pushed |
 | 30 | PASS requesting-code-review (pi session task-30-review) | `dd5bc94` pushed |
 | 31 | PASS requesting-code-review (pi session task-31-review) | `8caf7b9` pushed |
-| 32–35 | | |
+| 32 | | |
+| 33 | PASS requesting-code-review (pi session task-33-review) | `7fa79ef` pushed |
+| 34 | PASS requesting-code-review (pi session task-34-review) | `1372a13` pushed |
+| 35 | | |
 
 Ledger:
 ```
@@ -121,6 +124,12 @@ Task 30: requesting-code-review PASS (pi session task-30-review, Critical none, 
 Task 30: complete (commit dd5bc94, pushed)
 Task 31: requesting-code-review PASS (pi session task-31-review, Critical none, Important none)
 Task 31: complete (commit 8caf7b9, pushed)
+Task 29: requesting-code-review PASS (pi session task-29-review, Critical none, Important none)
+Task 29: complete (commit 817abeb, pushed)
+Task 33: requesting-code-review PASS (pi session task-33-review, Critical none, Important none)
+Task 33: complete (commit 7fa79ef, pushed)
+Task 34: requesting-code-review PASS (pi session task-34-review, Critical none, Important none)
+Task 34: complete (commit 1372a13, pushed)
 ```
 
 ### P2
@@ -160,6 +169,7 @@ Task 31: complete (commit 8caf7b9, pushed)
 
 ## Last updated
 
+- 2026-08-23 — Tasks 29+33+34 complete (`817abeb`/`7fa79ef`/`1372a13`); vibe-pass Compound on :18080 hub session
 - 2026-08-23 — Tasks 28+30+31 complete (`f96315c`/`dd5bc94`/`8caf7b9`); requesting-code-review pi sessions task-28/30/31-review
 - 2026-08-23 — Task 27 complete (`9a9202f`); requesting-code-review pi session task-27-review
 - 2026-08-23 — Task 26 complete (`14c25eb`); requesting-code-review pi session task-26-review
