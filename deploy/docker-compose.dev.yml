@@ -23,7 +23,7 @@ services:
       PA_DATA_DIR: /data
       PA_ADDR: :8080
       PA_UI_DEV_PROXY: http://127.0.0.1:5173
-    restart: unless-stopped
+    restart: 'no'
 
 volumes:
   go-mod-cache:
