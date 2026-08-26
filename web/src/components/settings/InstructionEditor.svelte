@@ -10,13 +10,20 @@
     system: 'SYSTEM',
     agents: 'AGENTS',
   }
+  const PLACEHOLDERS: Record<InstructionName, string> = {
+    soul: 'Identity, values, and voice for this scope.',
+    system: 'How the agent should behave in this scope.',
+    agents: 'Standing rules. Keep them short. Leave ## Memory pointing at [[memory/lessons]].',
+  }
 
   let {
     scope,
     projectId,
+    variant = 'page',
   }: {
     scope: 'global' | 'project'
     projectId?: string
+    variant?: 'page' | 'rail'
   } = $props()
 
   let name = $state<InstructionName>('soul')
@@ -93,10 +100,15 @@
   }
 </script>
 
-<section class="panel panel--pad instruction-editor" aria-label="Instructions">
-  <header class="instruction-editor__head">
-    <h2 class="instruction-editor__title">Instructions</h2>
-  </header>
+<section
+  class="instruction-editor {variant === 'rail' ? 'instruction-editor--rail' : 'panel panel--pad'}"
+  aria-label="Instructions"
+>
+  {#if variant !== 'rail'}
+    <header class="instruction-editor__head">
+      <h2 class="instruction-editor__title">Instructions</h2>
+    </header>
+  {/if}
 
   <div class="instruction-editor__tabs" role="tablist" aria-label="Instruction files">
     {#each NAMES as next (next)}
@@ -123,10 +135,13 @@
     {/if}
 
     <label class="instruction-editor__field">
-      {LABELS[name]}
+      {#if variant !== 'rail'}
+        {LABELS[name]}
+      {/if}
       <textarea
         class="field-textarea"
         aria-label={LABELS[name]}
+        placeholder={PLACEHOLDERS[name]}
         bind:value={content}
         rows="10"
         disabled={saving}

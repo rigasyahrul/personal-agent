@@ -379,9 +379,9 @@ Auth: owner session + CSRF on mutations (existing). Knowledge path validation is
 ## 12. UI surface (slice 1)
 
 1. **Project hub / notes:** browse source + memory; open note with **backlinks** panel; project search field.
-2. **Instruction editors** (minimal): view/edit SOUL, SYSTEM, AGENTS for project and global settings/desk.
+2. **Instruction editors** (minimal): project SOUL / SYSTEM / AGENTS live in the **Config rail** (`InstructionEditor` `variant="rail"`). Global files stay on Settings. **Do not** add a second instruction card on the hub canvas.
 3. **Session:** Compound control; proposal review card; agent tools for read/search within grants.
-4. **Memory rail:** replace non-persistent textarea with real scoped memory summary or link into memory tree (no fake local-only state).
+4. **Memory:** not a Config textarea. Product memory is later (`/docs/memory`); do not shoehorn lessons preview into Config beside the instruction editor.
 5. Tokens-first UI (`app.css`); frontend-ui-craft for visible surfaces.
 
 ---

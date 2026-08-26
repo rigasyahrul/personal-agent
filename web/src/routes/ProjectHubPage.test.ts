@@ -356,15 +356,46 @@ describe('ProjectHubPage', () => {
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
   })
 
-  it('saves a project instruction with PUT', async () => {
+  it('hosts project instructions in the Config rail, not a hub canvas card', async () => {
     render(ProjectHubPage, { props: { projectId: 'p1' } })
+    await screen.findByRole('textbox', { name: /message/i })
     const textarea = await screen.findByRole('textbox', { name: 'SOUL' })
     expect(textarea).toHaveValue('Ship it.\n')
+    const main = document.querySelector('.project-workspace__main')
+    const rail = document.querySelector('.project-workspace__rail')
+    expect(main?.querySelector('.instruction-editor')).toBeNull()
+    expect(main?.querySelector('[aria-label="Instructions"]')).toBeNull()
+    expect(rail?.querySelector('.instruction-editor')).toBeTruthy()
+    expect(rail?.querySelector('.instruction-editor--rail')).toBeTruthy()
+    expect(rail?.querySelector('.panel.instruction-editor')).toBeNull()
     await fireEvent.input(textarea, { target: { value: 'Ship sooner.\n' } })
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => {
       expect(api.putProjectInstruction).toHaveBeenCalledWith('p1', 'soul', 'Ship sooner.\n')
     })
+  })
+
+  it('keeps SOUL SYSTEM AGENTS in the rail while a session is open', async () => {
+    vi.mocked(api.listProjectSessions).mockResolvedValue([
+      {
+        id: 's1',
+        title: 'Test 1',
+        status: 'idle',
+        provider: 'openai',
+        model_id: 'gpt',
+        created_at: '2026-05-30T12:00:00.000Z',
+      },
+    ])
+    vi.mocked(api.listMessages).mockResolvedValue([])
+    vi.mocked(api.currentRun).mockResolvedValue(null)
+
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+    await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
+    expect(document.querySelector('.project-workspace__main .instruction-editor')).toBeNull()
+    expect(await screen.findByRole('textbox', { name: 'SOUL' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'SYSTEM' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'AGENTS' })).toBeInTheDocument()
   })
 
   it('wires quiet Notes and Review header links', async () => {

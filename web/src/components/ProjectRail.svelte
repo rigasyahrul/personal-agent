@@ -5,6 +5,7 @@
   import type { ProjectRailMode, ProjectRailTab } from '../lib/project-rail-prefs'
   import { buildHierarchy, flattenTree, type TreeNode } from '../lib/workspace-tree'
   import { railIconPath, type RailIconName } from './rail-icons'
+  import InstructionEditor from './settings/InstructionEditor.svelte'
   import Skeleton from './Skeleton.svelte'
 
   export type OpenFileMeta = {
@@ -34,9 +35,7 @@
 
   type RailEntry = WorkspaceEntry & { note_id?: string }
 
-  const MEMORY_PREVIEW_LINES = 12
   let localTab = $state<ProjectRailTab>('config')
-  let instructions = $state('')
   const activeTab = $derived(controlledTab ?? localTab)
   const activeMode = $derived(mode ?? 'open')
 
@@ -47,11 +46,6 @@
   let loading = $state(false)
   let error = $state('')
   let loadToken = 0
-
-  let lessonsContent = $state('')
-  let memoryLoading = $state(false)
-  let memoryError = $state('')
-  let memoryLoadToken = 0
 
   function noteKindToWorkspace(kind: NoteTreeEntry['kind']): WorkspaceEntry['kind'] {
     if (kind === 'folder' || kind === 'directory') return 'directory'
@@ -99,37 +93,11 @@
     }
   }
 
-  function firstNonEmptyLines(content: string, limit = MEMORY_PREVIEW_LINES): string {
-    return content
-      .split('\n')
-      .filter((line) => line.trim() !== '')
-      .slice(0, limit)
-      .join('\n')
-  }
-
-  async function loadLessons() {
-    const token = ++memoryLoadToken
-    memoryLoading = true
-    memoryError = ''
-    try {
-      const next = await api.getProjectMemoryLessons(projectId)
-      if (token !== memoryLoadToken) return
-      lessonsContent = next?.content ?? ''
-    } catch (cause) {
-      if (token !== memoryLoadToken) return
-      memoryError = cause instanceof Error ? cause.message : 'Unable to load memory.'
-      lessonsContent = ''
-    } finally {
-      if (token === memoryLoadToken) memoryLoading = false
-    }
-  }
-
   $effect(() => {
     void projectId
     void sessionId
     void workspaceFilesEnabled
     if (activeTab === 'files') void loadFiles()
-    if (activeTab === 'config') void loadLessons()
   })
 
   function selectTab(next: ProjectRailTab) {
@@ -140,24 +108,6 @@
   const projectRows = $derived(flattenTree(buildHierarchy(projectEntries)))
   const workspaceRows = $derived(flattenTree(buildHierarchy(workspaceEntries)))
   const hasAnyFiles = $derived(projectRows.length > 0 || workspaceRows.length > 0)
-  const lessonsPreview = $derived(firstNonEmptyLines(lessonsContent))
-  const canOpenMemory = $derived(Boolean(sessionId && onOpenFile))
-
-  async function openMemory() {
-    if (!sessionId || !onOpenFile) return
-    let noteId: string | undefined
-    try {
-      const notes = await api.listProjectNotes(projectId)
-      const hit = (notes ?? []).find((entry) => entry.path === 'memory/lessons.md' && entry.note_id)
-      if (hit?.note_id) noteId = hit.note_id
-    } catch {
-      // P2 will hook knowledge/read; still open by path.
-    }
-    onOpenFile('memory/lessons.md', {
-      source: 'project-note',
-      ...(noteId ? { noteId } : {}),
-    })
-  }
 
   function onProjectRowClick(path: string, kind: TreeNode['kind']) {
     if (kind === 'directory') return
@@ -259,34 +209,7 @@
         id="rail-panel-config"
         aria-labelledby="rail-tab-config"
       >
-        {#if memoryLoading}
-          <div class="space-y-2" aria-busy="true">
-            <Skeleton class="h-6" />
-            <Skeleton class="h-6" />
-          </div>
-        {:else if memoryError}
-          <p role="alert" class="alert alert--error">{memoryError}</p>
-        {:else if !lessonsPreview}
-          <p class="text-sm text-muted" style="margin:0">No lessons yet.</p>
-        {:else}
-          <pre class="text-sm rail-memory-preview" data-testid="memory-lessons-preview">{lessonsPreview}</pre>
-        {/if}
-        {#if canOpenMemory && !memoryLoading}
-          <button type="button" class="btn btn--ghost" onclick={() => void openMemory()}>
-            Open memory
-          </button>
-        {/if}
-        <label class="rail-config-field" for="rail-instructions">
-          <span class="rail-config-field__label">Instructions (system)</span>
-          <textarea
-            id="rail-instructions"
-            class="field-textarea rail-config-field__input"
-            aria-label="Instructions (system)"
-            bind:value={instructions}
-            rows="8"
-          ></textarea>
-        </label>
-        <p class="rail-config-hint text-sm text-slate-500">Not saved yet — persistence coming later.</p>
+        <InstructionEditor scope="project" {projectId} variant="rail" />
       </div>
     {:else}
       <div class="rail-panel form-stack" role="tabpanel" id="rail-panel-files" aria-labelledby="rail-tab-files">

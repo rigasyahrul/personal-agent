@@ -36,18 +36,21 @@ Scan this first. Open the linked file only when you need detail.
 | worktree | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | agents | [2026-08-19 — Lessons file is stable `lessons.md`](20260819-2200-lessons-file-is-stable-lessons-md.md) |
 | amp | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
-| hub | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
+| hub | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
-| knowledge | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
+| knowledge | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | compounding | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
-| craft | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
+| craft | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | browser | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
-| vibe-pass | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
+| vibe-pass | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | ux | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
 | benchmark | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
 | darwin | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | dist | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
-| docker | [2026-08-19 — Sessions chat focus + Docker live-reload](20260819-2100-sessions-chat-focus-docker-live-reload.md) |
+| docker | [2026-08-26 — Docker --build context is not a registry pull](20260826-1635-docker-build-context-not-registry-pull.md) |
+| dockerignore | [2026-08-26 — Docker --build context is not a registry pull](20260826-1635-docker-build-context-not-registry-pull.md) |
+| colima | [2026-08-26 — Docker --build context is not a registry pull](20260826-1635-docker-build-context-not-registry-pull.md) |
+| compose | [2026-08-26 — Docker --build context is not a registry pull](20260826-1635-docker-build-context-not-registry-pull.md) |
 | docs | [2026-08-19 — Lessons file is stable `lessons.md`](20260819-2200-lessons-file-is-stable-lessons-md.md) |
 | docs layout | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
 | fixtures | [2026-08-13 — Verify escaped literals at the byte level](20260813-2300-verify-escaped-literals-at-the-byte-level.md) |
@@ -70,7 +73,7 @@ Scan this first. Open the linked file only when you need detail.
 | plans | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
 | restore | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | review | [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) |
-| rail | [2026-08-21 — CSS grid + display:none collapses track](20260821-1616-css-grid-display-none-collapses-track.md) |
+| rail | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | css | [2026-08-21 — CSS grid + display:none collapses track](20260821-1616-css-grid-display-none-collapses-track.md) |
 | sdd | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
 | session | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
@@ -102,6 +105,10 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-26** — [Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md)  
+  Tags: rail, hub, frontend, craft, vibe-pass, knowledge
+- **2026-08-26** — [Docker --build context is not a registry pull](20260826-1635-docker-build-context-not-registry-pull.md)  
+  Tags: docker, dockerignore, colima, compose
 - **2026-08-23** — [Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md)  
   Tags: pi, master, sqlite, knowledge, compound, ship, vibe-pass, worktree
 - [2026-08-22 — Multi-pass plan review before P0](20260822-1800-multi-pass-plan-review-before-p0.md) — consulting-grok-review gates + Canonical traps

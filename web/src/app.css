@@ -2178,6 +2178,9 @@ a.list-row:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
 }
+.instruction-editor__field .field-textarea::placeholder {
+  color: var(--muted);
+}
 .instruction-editor__actions {
   display: flex;
   flex-wrap: wrap;
@@ -2188,6 +2191,32 @@ a.list-row:hover {
   margin: 0;
   font-size: 13px;
   color: var(--muted);
+}
+.instruction-editor--rail {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  gap: 10px;
+}
+.instruction-editor--rail .instruction-editor__tabs {
+  flex-shrink: 0;
+}
+.instruction-editor--rail .instruction-editor__field {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.instruction-editor--rail .instruction-editor__field .field-textarea {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  resize: none;
+}
+.instruction-editor--rail .instruction-editor__actions {
+  flex-shrink: 0;
 }
 
 /* —— Project workspace responsive (desktop-first hub + rail) —— */

@@ -1,9 +1,9 @@
 # Design: Project right rail — icon chrome (Grok-style)
 
-**Status:** Approved for planning (user sign-off 2026-08-21)  
+**Status:** Approved for planning (user sign-off 2026-08-21). **Config body superseded 2026-08-26:** persist SOUL / SYSTEM / AGENTS in the rail (see §5). Icon chrome / modes unchanged.  
 **Date:** 2026-08-21  
 **Stack:** Existing Svelte 5 + TypeScript + Vite + Tailwind SPA under `web/`  
-**Backend:** No new APIs. Config remains non-persistent chrome. Files uses existing note/workspace APIs.
+**Backend:** Instruction GET/PUT APIs for Config. Files uses existing note/workspace APIs.
 
 **Visual refs (repo root during design; prefer durable paths in plans):**
 
@@ -47,7 +47,7 @@ Also: product **Memory** does not belong in this rail. Project/docs memory lives
 1. Replace rail text tabs with an **icon-only toolbar** matching the approved layout and tooltip labels.
 2. Three layout modes: **open**, **expanded**, **collapsed**.
 3. Default on hub enter (no saved state): **open** + **Config** selected.
-4. **Config** panel = **Instructions (system)** only (non-persistent helper copy).
+4. **Config** panel = persisted SOUL / SYSTEM / AGENTS (supersedes the original non-persistent helper copy).
 5. **Files** panel = **keep existing** tree behavior and data sources (no tree/search redesign).
 6. Persist last **mode** + **selected panel** in `localStorage`.
 7. Spec-as-test + browser vibe-pass against named icon/layout refs before done.
@@ -127,10 +127,12 @@ Active panel control uses `.rail-icon--active` (or equivalent) + `aria-selected`
 
 ### Config (default tab)
 
-- Single field: **Instructions (system)** — multiline `textarea` (`field-textarea`)  
-- Helper: “Not saved yet — persistence coming later.”  
-- **No Memory field**  
-- No save button, toast, or “saved” claim  
+**Superseded 2026-08-26** (user: put SOUL / SYSTEM / AGENTS in this rail, not a hub canvas card):
+
+- `InstructionEditor` `variant="rail"` — tabs SOUL / SYSTEM / AGENTS, persisted GET/PUT, Save  
+- No page `panel` card inside the rail; no duplicate editor on the hub canvas  
+- **No Memory field** / no lessons preview here — product memory is `/docs/memory` later  
+- Do **not** restore the fake unsaved “Instructions (system)” textarea or “Not saved yet — persistence coming later.”  
 
 ### Files
 

@@ -59,6 +59,7 @@ describe('visual baseline', () => {
       '.knowledge-search__hit',
       '.instruction-editor',
       '.instruction-editor__tab',
+      '.instruction-editor--rail',
     ]) {
       expect(css).toContain(token);
     }

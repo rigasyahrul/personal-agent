@@ -22,10 +22,11 @@
 3. Prefer `make docker-dev` for instant UI; do not require dist rebuild on that path.
 4. If blocked starting the app, say blocked — never fake a vibe-pass.
 5. For layout complaints: measure live DOM, do not iterate CSS blindly.
+6. **This repo (2026-08-26):** vibe-pass via `.chrome.mcp.json` → CDP on `localhost:9222`. Do **not** desktop screen-record.
 
 **Codified into:**
 - `AGENTS.md` standing rule **UI code without browser = not done (HARD)**
-- `.agents/skills/frontend-ui-craft/SKILL.md` HARD GATE + rationalizations + docker-dev loop
+- `.agents/skills/frontend-ui-craft/SKILL.md` HARD GATE + `.chrome.mcp.json` / `:9222` appendix
 - Existing baseline/layout tests remain secondary to browser evidence
 
 **Evidence:**

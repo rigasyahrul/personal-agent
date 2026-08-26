@@ -60,4 +60,44 @@ describe('InstructionEditor', () => {
     })
     expect(api.putGlobalInstruction).not.toHaveBeenCalled()
   })
+
+  it('shows a distinct placeholder for each instruction file', async () => {
+    vi.mocked(api.getProjectInstruction).mockResolvedValue({ content: '' })
+    render(InstructionEditor, {
+      props: { scope: 'project', projectId: 'p1', variant: 'rail' },
+    })
+
+    const soul = await screen.findByRole('textbox', { name: 'SOUL' })
+    expect(soul).toHaveAttribute(
+      'placeholder',
+      'Identity, values, and voice for this scope.',
+    )
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'SYSTEM' }))
+    const system = await screen.findByRole('textbox', { name: 'SYSTEM' })
+    expect(system).toHaveAttribute(
+      'placeholder',
+      'How the agent should behave in this scope.',
+    )
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'AGENTS' }))
+    const agents = await screen.findByRole('textbox', { name: 'AGENTS' })
+    expect(agents).toHaveAttribute(
+      'placeholder',
+      'Standing rules. Keep them short. Leave ## Memory pointing at [[memory/lessons]].',
+    )
+  })
+
+  it('uses rail chrome without a page panel card', async () => {
+    render(InstructionEditor, {
+      props: { scope: 'project', projectId: 'p1', variant: 'rail' },
+    })
+
+    await screen.findByRole('textbox', { name: 'SOUL' })
+    const root = document.querySelector('.instruction-editor')
+    expect(root).toHaveClass('instruction-editor--rail')
+    expect(root).not.toHaveClass('panel')
+    expect(root).not.toHaveClass('panel--pad')
+    expect(screen.queryByRole('heading', { name: 'Instructions' })).toBeNull()
+  })
 })
