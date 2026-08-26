@@ -2,7 +2,7 @@
 
 **Status:** Draft — awaiting user review  
 **Date:** 2026-08-27  
-**Stack:** Existing Svelte 5 + TypeScript + Vite SPA under `web/`; Go session/workspace/promote APIs unchanged except hub session grant default.  
+**Stack:** Existing Svelte 5 + TypeScript + Vite SPA under `web/`; Go session/workspace/promote APIs. Workspace file tools are **always on** (not a user grant).  
 **Route:** `#/projects/:id` (hub + embedded session). Compound control lives on `SessionChat` wherever that component mounts.
 
 **Related:**
@@ -20,7 +20,7 @@
 
 Clicking **Compound** today does not compound. It posts the last six messages as `user_context`, and `Runs.Admit` inserts that dump as a normal user chat row. The model answers like ChatGPT. The user expected Amp **Ship**: one click sends a **fixed instruction**, then the agent works in the thread.
 
-A normal chat turn cannot write project-durable `AGENTS.md` / `memory/**` (`write_knowledge` is not in slice 1). Session `write_file` lands in `sessions/{id}/`, not the project. Hub sessions currently start with `workspace_files: false`, so the agent cannot create those files at all.
+A normal chat turn cannot write project-durable `AGENTS.md` / `memory/**` (`write_knowledge` is not in slice 1). Session `write_file` lands in `sessions/{id}/`, not the project. There is no product UI to turn workspace files on or off, but many sessions (including **ivory bold**) were created with `workspace_files: false`, so the agent cannot create drafts at all.
 
 Amp **Changes** is the wrong metaphor (git diffs of files that already *are* the project). Session writes are **drafts** until the user copies them into project notes.
 
@@ -31,7 +31,7 @@ Amp **Changes** is the wrong metaphor (git diffs of files that already *are* the
 ### Goals
 
 1. **Compound** sends one canned user message via `sendMessage` (same admission as Send). No transcript dump. No `POST /compound` from this button. No review card on this path.
-2. Hub-created sessions grant **`workspace_files: true`** so the agent can write session files.
+2. **Every session can write session files.** No user-facing workspace grant. Existing sessions (ivory bold, Test 1) included.
 3. Right rail left-cluster order: **Drafts · Files · Config**. Right cluster unchanged (Expand · Collapse).
 4. **Drafts** lists this session’s workspace files only. Click opens the file. Hover **⋯** → **Save to project notes?** → existing promote modal. Save is a **copy**; the draft stays. After success, stay on Drafts and show toast **“Saved to Files.”** Files list refreshes immediately so the copy is there when the user opens Files.
 5. Small reusable **Toast** (success first) using existing `--success` / `--success-soft` tokens.
@@ -54,7 +54,7 @@ Amp **Changes** is the wrong metaphor (git diffs of files that already *are* the
 | Surface | Owner | Change |
 |---------|--------|--------|
 | Compound button | `SessionChat.svelte` | `onclick` → `sendMessage` with locked prompt; drop `startCompound` / `createCompound` / review-card wiring from the button |
-| Hub create session | `ProjectHubPage.svelte` | `tool_grants.workspace_files: true` (new sessions only; existing rows stay as stored). `ProjectSessionsPage` checkbox unchanged. |
+| Workspace grant | Runner + create paths + `ProjectSessionsPage` | Always on. Remove “Allow workspace files” checkbox. Create always sends `true`. Runtime registers workspace tools even if a stored session has `false`. |
 | Rail tabs | `project-rail-prefs.ts`, `ProjectRail.svelte` | Tab type adds `drafts`; left order Drafts, Files, Config; new panel |
 | Drafts rows | `ProjectRail.svelte` | Workspace tree for the open session; ⋯ menu; promote |
 | Promote | existing `PromoteDialog` | Unchanged contract; on success: refresh Files data, keep Drafts selected, show toast |
@@ -77,7 +77,7 @@ Body:
 Compound this conversation. Extract only non-obvious learnings. Write durable notes as session files — they stay drafts until I save them to Files. Prefer a short standing-rule note over a diary. If nothing reusable was learned, say so and stop. Do not dump the transcript.
 ```
 
-That string is the user message. It appears in the thread as the user. The agent run is a normal chat run (tools per session grants). With hub `workspace_files: true`, `write_file` / `edit_file` / `mkdir` are available.
+That string is the user message. It appears in the thread as the user. The agent run is a normal chat run. `write_file` / `edit_file` / `mkdir` are always available (including sessions stored with `workspace_files: false`).
 
 ### After send
 
@@ -99,7 +99,7 @@ That string is the user message. It appears in the thread as the user. The agent
 | **Drafts** | `GET` workspace tree for the **open session** | Agent workspace tools; user does not create drafts from the rail in this pass |
 | **Files** | Project notes (`listProjectNotes`) | Human create (existing) + **copy** from Drafts via promote |
 
-No open session, or workspace grant false: Drafts shows **“No drafts in this session.”** Do not fall back to another session’s files.
+No open session, or the session workspace is empty: Drafts shows **“No drafts in this session.”** Do not fall back to another session’s files. Do not hide Drafts because of a stored grant.
 
 Click a draft file → existing hub `onOpenFile` with `source: 'workspace'`. Directories are not openable.
 
@@ -170,9 +170,10 @@ Place over the project workspace (bottom-center or bottom-right of `.project-wor
 - Compound click calls `sendMessage` once with the locked prompt + `request_key`; does **not** call `createCompound`; does not pass a transcript `user_context`.
 - Compound disabled while sending / run queued / running (existing gates).
 - Composer node identity unchanged across Compound send + poll (`SessionChat.focus` gate).
-- Hub `createProjectSession` (and hub startSession body) sends `workspace_files: true`.
+- Hub `createProjectSession` (and hub startSession body) sends `workspace_files: true`. Sessions page create does too; checkbox is gone.
+- A session stored with `workspace_files: false` still gets workspace tools (ivory bold).
 - Rail left icon order: Drafts, Files, Config. Default tab Config. `drafts` persists and reads back; unknown tab → config.
-- Drafts lists workspace files only when a session is open and grant is on; empty copy otherwise.
+- Drafts lists workspace files when a session is open; empty copy when none exist.
 - Files panel does not render the old Workspace subsection.
 - ⋯ → promote; on success Files list includes the new note **without** switching tab; toast text present.
 - Promote failure: no toast; Drafts still has the file.
@@ -191,7 +192,7 @@ Check: Compound sends the canned prompt (not a transcript); Drafts / Files / Con
 
 1. Toast component + success tokens.
 2. Rail tab type + icon order + Drafts panel; move workspace list out of Files.
-3. Hub `workspace_files: true`; ⋯ → promote; refresh notes + toast.
+3. Always-on workspace tools; drop grant checkbox; ⋯ → promote; refresh notes + toast.
 4. Replace Compound `startCompound` with `sendMessage(locked prompt)`.
 5. Tests + vibe-pass.
 
@@ -202,4 +203,5 @@ Check: Compound sends the canned prompt (not a transcript); Drafts / Files / Con
 - No TBD / TODO placeholders.
 - Button path and durable-memory API do not contradict: button does not write `AGENTS.md` / `memory/**`.
 - Save is copy; Files updates immediately; rail stays on Drafts — consistent.
-- Scope is one implementation plan (UI + hub grant). Backend compound stack is explicitly out of delete-scope.
+- Scope is one implementation plan (UI + always-on workspace tools). Backend compound stack is explicitly out of delete-scope.
+- Workspace is not a setting: create `true`, runtime ignores stored `false`.
