@@ -182,6 +182,51 @@ func TestDockerDevHMRIsDocumentedAndProductionIsMountFree(t *testing.T) {
 	}
 }
 
+func TestRootDockerignoreShrinksComposeBuildContext(t *testing.T) {
+	// Compose build.context is the repo root. Docker only reads `.dockerignore`
+	// next to that context — deploy/.dockerignore is unused.
+	for _, file := range []string{"docker-compose.yml", "docker-compose.dev.yml"} {
+		if !strings.Contains(readFile(t, file), "context: ..") {
+			t.Errorf("%s must keep build context at repo root", file)
+		}
+	}
+
+	ignore, err := os.ReadFile("../.dockerignore")
+	if err != nil {
+		t.Fatal("repo-root .dockerignore is required so --build does not ship .worktrees/node_modules into the daemon:", err)
+	}
+	text := string(ignore)
+	for _, pattern := range []string{
+		".worktrees",
+		"web/node_modules",
+		"web/dist",
+		".git",
+		"/data",
+		"/tmp",
+		"/personal-agent",
+		"deploy/.env",
+	} {
+		if !strings.Contains(text, pattern) {
+			t.Errorf(".dockerignore missing %q", pattern)
+		}
+	}
+	for _, line := range []string{"deploy", "deploy/", "cmd", "cmd/", "internal", "internal/", "web", "web/", "*"} {
+		for _, raw := range strings.Split(text, "\n") {
+			got := strings.TrimSpace(raw)
+			if i := strings.Index(got, "#"); i >= 0 {
+				got = strings.TrimSpace(got[:i])
+			}
+			if got == line {
+				t.Errorf(".dockerignore must not ignore %q (Dockerfiles COPY Go/web/deploy inputs)", line)
+			}
+		}
+	}
+	docs := readFile(t, "../docs/ops/deploy.md")
+	if !strings.Contains(docs, ".dockerignore") {
+		t.Error("deploy docs must explain repo-root .dockerignore; Sending build context is host→daemon, not a registry pull")
+	}
+}
+
 func writeExecutable(t *testing.T, path, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {

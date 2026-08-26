@@ -53,6 +53,8 @@ make docker-dev
 
 `make docker-dev` runs `up` only (no image rebuild). Use `make docker-dev-build` when the dev image itself must be rebuilt (`Dockerfile.dev`, base tools, etc.). Day-to-day Go/UI edits hot-reload via the mounted repo.
 
+`Sending build context to Docker daemon` is the local repo uploaded to the Docker daemon (Colima on macOS), not a registry pull. Compose `build.context` is the repo root, so `.dockerignore` must live there — `deploy/.dockerignore` is ignored. Keep `.worktrees`, `web/node_modules`, `data`, and `deploy/.env` out of that tarball.
+
 `deploy/docker-compose.dev.yml` mounts the repository at `/src` and starts `deploy/dev-entrypoint.sh`. The script runs Air for Go reloads and Vite for Svelte/TypeScript/CSS HMR. Go remains the only browser-facing server on port 8080: API and health requests terminate in Go, while non-API GETs are proxied because the override sets `PA_UI_DEV_PROXY=http://127.0.0.1:5173`.
 
 Vite listens only inside the container on port 5173. Its client uses `host: localhost`, `clientPort: 8080`, and `path: /@vite-hmr`; Go carries `ws://localhost:8080/@vite-hmr`. Edits under `web/src/` update without rebuilding or recreating the container. Air continues to exclude `web/`, because Vite owns frontend watching.

@@ -1,0 +1,29 @@
+# Compose build.context is the repo root (`context: ..`).
+# Docker reads THIS file — deploy/.dockerignore is unused.
+#
+# `Sending build context to Docker daemon` is host → daemon (e.g. Colima),
+# not a registry pull. Without these excludes, --build ships multi-GB trees.
+
+.git
+.worktrees
+.amp
+.pi
+.agents
+.DS_Store
+
+/data
+/tmp
+/personal-agent
+
+web/node_modules
+web/dist
+
+.env
+**/.env
+deploy/.env
+
+*.test
+*.out
+coverage.*
+*.coverprofile
+profile.cov
