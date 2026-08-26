@@ -47,12 +47,14 @@ go.work.sum
 web/node_modules/
 web/dist/
 
-# Amp orb runtime state (PA_DATA_DIR under services.yaml)
-.amp/state/
+# Amp local/runtime (artifacts, plugins, services.yaml)
+.amp/
 
 # Isolated agent checkouts
 .worktrees/
 
-# Pi worker scratch (generated briefs + sessions). Keep .pi/prompts/ committed.
-.pi/worker-sessions/
-.pi/workers/
+# Pi local prompts, worker scratch, and sessions
+.pi/
+
+# Local Chrome DevTools MCP config
+.chrome.mcp.json
