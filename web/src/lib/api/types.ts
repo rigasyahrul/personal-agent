@@ -62,10 +62,15 @@ export interface ChatMessage {
   /** RFC3339 from API when present (domain.Message.created_at). */
   created_at?: string
   changed_path?: string
+  run_id?: string
+  tool_calls_json?: string
+  tool_call_id?: string
 }
 
 export interface RunStatus {
   status: string
+  id?: string
+  started_at?: string
 }
 
 export interface NoteTreeEntry {
