@@ -877,4 +877,124 @@ describe('SessionChat', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(/not finished|unfinished|still publishing/i)
     })
   })
+
+  const granted = { ...session, tool_grants: { workspace_files: true as const } }
+  const treeEntries = [
+    { path: 'standing-rule.md', kind: 'file' as const },
+    { path: 'notes/standing-rule.md', kind: 'file' as const },
+    { path: 'notes', kind: 'directory' as const },
+    { path: 'other.md', kind: 'file' as const },
+  ]
+
+  async function typeMention(composer: HTMLTextAreaElement, value: string) {
+    await fireEvent.input(composer, { target: { value } })
+    composer.setSelectionRange(value.length, value.length)
+    await fireEvent.keyUp(composer)
+  }
+
+  it('opens a filename-first workspace list on @ when granted', async () => {
+    vi.mocked(api.workspaceTree).mockResolvedValue({ entries: treeEntries })
+    render(SessionChat, { props: { session: granted, projectId: 'p1', pollInterval: 60_000 } })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, '@')
+    const list = await screen.findByRole('listbox', { name: 'Workspace files' })
+    expect(list).toBeInTheDocument()
+    expect(screen.getAllByText('standing-rule.md').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('notes/')).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'notes' })).toBeNull()
+    expect(composer).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('does not open on @ when workspace files are not granted', async () => {
+    render(SessionChat, { props: { session, projectId: 'p1', pollInterval: 60_000 } })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, '@')
+    expect(screen.queryByRole('listbox', { name: 'Workspace files' })).toBeNull()
+    expect(api.workspaceTree).not.toHaveBeenCalled()
+  })
+
+  it('does not open for foo@bar', async () => {
+    vi.mocked(api.workspaceTree).mockResolvedValue({ entries: treeEntries })
+    render(SessionChat, { props: { session: granted, projectId: 'p1', pollInterval: 60_000 } })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, 'foo@bar')
+    expect(screen.queryByRole('listbox', { name: 'Workspace files' })).toBeNull()
+  })
+
+  it('filters as the query grows', async () => {
+    vi.mocked(api.workspaceTree).mockResolvedValue({ entries: treeEntries })
+    render(SessionChat, { props: { session: granted, projectId: 'p1', pollInterval: 60_000 } })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, '@other')
+    await screen.findByRole('listbox', { name: 'Workspace files' })
+    expect(screen.getByRole('option', { name: /other\.md/ })).toBeInTheDocument()
+    expect(screen.queryByText('standing-rule.md')).toBeNull()
+  })
+
+  it('Enter on an open list inserts @path and does not send', async () => {
+    vi.mocked(api.sendMessage).mockResolvedValue(null)
+    vi.mocked(api.workspaceTree).mockResolvedValue({ entries: treeEntries })
+    render(SessionChat, {
+      props: { session: granted, projectId: 'p1', pollInterval: 60_000, uuid: () => 'mention-key' },
+    })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, '@stand')
+    await screen.findByRole('listbox', { name: 'Workspace files' })
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
+    expect(api.sendMessage).not.toHaveBeenCalled()
+    expect(composer).toHaveValue('@notes/standing-rule.md ')
+    expect(screen.queryByRole('listbox', { name: 'Workspace files' })).toBeNull()
+  })
+
+  it('Enter with the list closed still sends', async () => {
+    vi.mocked(api.sendMessage).mockResolvedValue(null)
+    render(SessionChat, {
+      props: { session: granted, projectId: 'p1', pollInterval: 60_000, uuid: () => 'send-key' },
+    })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await fireEvent.input(composer, { target: { value: 'Hello from Enter' } })
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
+    await waitFor(() => {
+      expect(api.sendMessage).toHaveBeenCalledWith(
+        granted.id,
+        expect.objectContaining({ content: 'Hello from Enter', request_key: 'send-key' }),
+      )
+    })
+  })
+
+  it('Escape closes the list and keeps the typed query', async () => {
+    vi.mocked(api.workspaceTree).mockResolvedValue({ entries: treeEntries })
+    render(SessionChat, { props: { session: granted, projectId: 'p1', pollInterval: 60_000 } })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, '@stand')
+    await screen.findByRole('listbox', { name: 'Workspace files' })
+    await fireEvent.keyDown(composer, { key: 'Escape' })
+    expect(screen.queryByRole('listbox', { name: 'Workspace files' })).toBeNull()
+    expect(composer).toHaveValue('@stand')
+  })
+
+  it('Enter on an open empty list does not send', async () => {
+    vi.mocked(api.sendMessage).mockResolvedValue(null)
+    vi.mocked(api.workspaceTree).mockResolvedValue({ entries: treeEntries })
+    render(SessionChat, {
+      props: { session: granted, projectId: 'p1', pollInterval: 60_000, uuid: () => 'empty-key' },
+    })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, '@zzzz-nope')
+    expect(await screen.findByText('No matching files')).toBeInTheDocument()
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
+    expect(api.sendMessage).not.toHaveBeenCalled()
+    expect(composer).toHaveValue('@zzzz-nope')
+  })
+
+  it('shows a tree error in the overlay and keeps the textarea node', async () => {
+    vi.mocked(api.workspaceTree).mockRejectedValue(new Error('boom'))
+    render(SessionChat, { props: { session: granted, projectId: 'p1', pollInterval: 60_000 } })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, '@')
+    expect(await screen.findByText("Couldn't load files")).toBeInTheDocument()
+    expect(screen.getByLabelText('Message')).toBe(composer)
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
+    expect(api.sendMessage).not.toHaveBeenCalled()
+  })
 })
