@@ -38,7 +38,7 @@ Scan this first. Open the linked file only when you need detail.
 | worktree | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | agents | [2026-08-27 — Facts and logs first, then problems, then plan](20260827-1634-facts-logs-then-problems-then-plan.md) |
 | amp | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
-| hub | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
+| hub | [2026-08-27 — Composer @ file list is not a hidden grant](20260827-1810-composer-at-mentions-no-hidden-grant.md) |
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | knowledge | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | compounding | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
@@ -78,7 +78,7 @@ Scan this first. Open the linked file only when you need detail.
 | rail | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | css | [2026-08-21 — CSS grid + display:none collapses track](20260821-1616-css-grid-display-none-collapses-track.md) |
 | sdd | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
-| session | [2026-08-20 — Hub start/list soft-fail + rail notes](20260820-2235-hub-start-list-soft-fail-and-rail-notes.md) |
+| session | [2026-08-27 — Composer @ file list is not a hidden grant](20260827-1810-composer-at-mentions-no-hidden-grant.md) |
 | jsdom | [2026-08-21 — CSS grid + display:none collapses track](20260821-1616-css-grid-display-none-collapses-track.md) |
 | session-focus | [2026-08-20 — Orb loss: unpushed commits vanish; restore from Amp threads](20260820-1248-orb-loss-unpushed-restore-from-threads.md) |
 | shell | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
@@ -107,6 +107,8 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-27** — [Composer @ file list is not a hidden grant](20260827-1810-composer-at-mentions-no-hidden-grant.md)  
+  Tags: hub, session, craft, frontend
 - **2026-08-27** — [Facts and logs first, then problems, then plan](20260827-1634-facts-logs-then-problems-then-plan.md)  
   Tags: agents, craft, browser, vibe-pass, ux
 - **2026-08-27** — [Never claim UI without opening the named URL](20260827-1631-never-claim-ui-without-opening-named-url.md)  
