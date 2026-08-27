@@ -42,10 +42,10 @@ Scan this first. Open the linked file only when you need detail.
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | knowledge | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | compounding | [2026-08-20 — Compound memory is selective, not a session dump](20260820-2300-compound-memory-is-selective-not-a-session-dump.md) |
-| craft | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
-| browser | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
-| vibe-pass | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
-| ux | [2026-08-21 — UI changes require browser vibe-pass](20260821-1700-ui-changes-require-browser-vibe-pass.md) |
+| craft | [2026-08-27 — Never claim UI without opening the named URL](20260827-1631-never-claim-ui-without-opening-named-url.md) |
+| browser | [2026-08-27 — Never claim UI without opening the named URL](20260827-1631-never-claim-ui-without-opening-named-url.md) |
+| vibe-pass | [2026-08-27 — Never claim UI without opening the named URL](20260827-1631-never-claim-ui-without-opening-named-url.md) |
+| ux | [2026-08-27 — Never claim UI without opening the named URL](20260827-1631-never-claim-ui-without-opening-named-url.md) |
 | benchmark | [2026-08-21 — Benchmark UI: tokens ≠ fidelity](20260821-0001-benchmark-ui-tokens-not-fidelity.md) |
 | darwin | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
 | dist | [2026-08-20 — UI craft tokens + Go dist cache-bust](20260820-0953-ui-craft-tokens-and-dist-cache-bust.md) |
@@ -107,6 +107,8 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-27** — [Never claim UI without opening the named URL](20260827-1631-never-claim-ui-without-opening-named-url.md)  
+  Tags: craft, browser, vibe-pass, ux, frontend
 - **2026-08-27** — [Never scan $HOME; named refs are in repo](20260827-1124-never-scan-home-named-refs-are-in-repo.md)  
   Tags: agents, files, home, refs, craft
 - **2026-08-26** — [Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md)  

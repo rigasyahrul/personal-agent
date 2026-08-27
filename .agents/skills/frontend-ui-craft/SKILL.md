@@ -32,6 +32,7 @@ This skill is the agent loop for frontend work: screen spec → build → vibe-p
 2. Navigate to the **changed route**, interact like a user, and capture **evidence**: screenshot and/or measured layout metrics (getBoundingClientRect gaps, heights).
 3. Report in the completion message: **URL**, **viewport**, **what you checked**, **pass/fail**.
 4. If the app is not up: start it (`make docker-dev` preferred) or mark **blocked**. Never invent “looks correct from CSS.”
+5. If the user **names a URL or an action** (“open this link”, “type `@`”): open **that URL**, do **that action**, screenshot. `lsof` / curl / “the module is in the Vite graph” is **not** using the UI. Do not answer as if you typed in the app.
 
 **Blind UI coding is a process failure** equal to shipping without tests. Unit tests + reading `app.css` do **not** satisfy this gate.
 
@@ -64,6 +65,7 @@ Do not ship or claim done while these remain unless the user **explicitly** waiv
 | Metric cards ≡ action/nav cards (same weight) | Weak hierarchy |
 | Disabled nav with no explanation | Broken mental model |
 | "Done" without opening real UI when reachable | Guessing |
+| Claimed you used the UI from curl / `lsof` / served JS / git merge | Lying with confidence — user named a URL |
 | Poll/timer full re-render or `innerHTML` killing focused inputs | Hostile UX |
 | User named/supplied **benchmark screenshots** but agent only checked tokens/classes/tests | Tokens ≠ fidelity — structural match required |
 | Claimed vibe-pass without **side-by-side** vs each named ref | Guessing against screenshots |
