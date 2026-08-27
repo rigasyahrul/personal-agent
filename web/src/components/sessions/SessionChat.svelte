@@ -10,6 +10,7 @@
     Project,
     RunStatus,
     Session,
+    WorkspaceEntry,
     WorkspaceFile,
   } from '../../lib/api/types'
   import {
@@ -35,6 +36,13 @@
   import CompoundReviewCard from './CompoundReviewCard.svelte'
   import SessionFileTab from './SessionFileTab.svelte'
   import SessionFilesBar from './SessionFilesBar.svelte'
+  import { changedPathsFromMessages } from '../../lib/workspace-tree'
+  import {
+    activeMention,
+    insertMention,
+    rankWorkspaceFiles,
+    type RankedFile,
+  } from '../../lib/mention-files'
 
   type TabId = 'agent' | `file:${string}`
   type FileSource = 'project-note' | 'workspace'
@@ -95,6 +103,15 @@
   let messages = $state<ChatMessage[]>([])
   let run = $state<RunStatus | null>(null)
   let draft = $state('')
+  let composerEl: HTMLTextAreaElement | undefined = $state()
+  let caret = $state(0)
+  let mentionDismissed = $state(false)
+  let treeEntries = $state<WorkspaceEntry[] | null>(null)
+  let treeLoading = $state(false)
+  let treeError = $state('')
+  let treeLoadToken = 0
+  let treeSignature = ''
+  let mentionIndex = $state(0)
   let sending = $state(false)
   let sendingLock = false
   let error = $state('')
@@ -116,6 +133,13 @@
   let deciding = $state(false)
   let compoundingLock = false
   let showWorkspace = $derived(workspaceEnabled(session))
+  const mention = $derived(activeMention(draft, caret))
+  const mentionActive = $derived(Boolean(showWorkspace && mention && !mentionDismissed))
+  const mentionRows = $derived(
+    mentionActive && treeEntries
+      ? rankWorkspaceFiles(treeEntries, mention?.query ?? '')
+      : [],
+  )
   let activePath = $state<string | null>(null)
   let openFileTabs = $state<FileTabState[]>([])
   let activeTab = $state<TabId>('agent')
@@ -401,10 +425,97 @@
     }
   }
 
+  async function ensureTree() {
+    const token = ++treeLoadToken
+    treeLoading = true
+    treeError = ''
+    try {
+      const tree = await api.workspaceTree(session.id)
+      if (token !== treeLoadToken) return
+      treeEntries = tree?.entries ?? []
+    } catch {
+      if (token !== treeLoadToken) return
+      treeError = "Couldn't load files"
+      treeEntries = []
+    } finally {
+      if (token === treeLoadToken) treeLoading = false
+    }
+  }
+
+  $effect(() => {
+    void session.id
+    treeEntries = null
+    treeError = ''
+    treeSignature = ''
+    treeLoadToken += 1
+  })
+
+  $effect(() => {
+    if (!mentionActive || !showWorkspace) return
+    const sig = [...changedPathsFromMessages(messages)].sort().join('|')
+    if (treeEntries === null || (sig && sig !== treeSignature)) {
+      if (sig) treeSignature = sig
+      void ensureTree()
+    }
+  })
+
+  function syncCaret(e: Event) {
+    const el = e.currentTarget as HTMLTextAreaElement
+    caret = el.selectionStart ?? el.value.length
+  }
+
+  $effect(() => {
+    const token = mention ? `${mention.start}:${mention.query}` : ''
+    void token
+    mentionDismissed = false
+  })
+
+  $effect(() => {
+    if (mentionIndex >= mentionRows.length) mentionIndex = 0
+  })
+
+  function pickMention(row: RankedFile) {
+    const current = activeMention(draft, caret)
+    if (!current) return
+    const next = insertMention(draft, current, row.path)
+    draft = next.text
+    caret = next.cursor
+    mentionDismissed = true
+    requestAnimationFrame(() => {
+      composerEl?.focus()
+      composerEl?.setSelectionRange(next.cursor, next.cursor)
+    })
+  }
+
   /** Enter sends; Shift+Enter inserts a newline (same as hub composer). */
   function onComposerKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Enter' || e.shiftKey) return
     if (e.isComposing) return
+    if (mentionActive) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (mentionRows.length) mentionIndex = (mentionIndex + 1) % mentionRows.length
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (mentionRows.length) {
+          mentionIndex = (mentionIndex - 1 + mentionRows.length) % mentionRows.length
+        }
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        mentionDismissed = true
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const row = mentionRows[mentionIndex] ?? mentionRows[0]
+        if (row) pickMention(row)
+        return
+      }
+    }
+    if (e.key !== 'Enter' || e.shiftKey) return
     e.preventDefault()
     if (sendDisabled || !draft.trim()) return
     const form = (e.currentTarget as HTMLTextAreaElement).form
@@ -901,6 +1012,38 @@
         onsubmit={send}
       >
         <div class="session-composer__card">
+          {#if mentionActive}
+            <div class="session-composer__mentions" id="session-composer-mentions">
+              {#if treeLoading && treeEntries === null}
+                <p class="session-composer__mentions-status">Loading files…</p>
+              {:else if treeError}
+                <p class="session-composer__mentions-status">{treeError}</p>
+              {:else if mentionRows.length === 0}
+                <p class="session-composer__mentions-status">No matching files</p>
+              {:else}
+                <ul role="listbox" aria-label="Workspace files">
+                  {#each mentionRows as row, i (row.path)}
+                    <li
+                      id={`mention-option-${i}`}
+                      class="mention-option"
+                      class:mention-option--active={i === mentionIndex}
+                      role="option"
+                      aria-selected={i === mentionIndex}
+                      onmousedown={(event) => {
+                        event.preventDefault()
+                        pickMention(row)
+                      }}
+                    >
+                      <span class="mention-option__name">{row.name}</span>
+                      {#if row.parent}
+                        <span class="mention-option__path">{row.parent}</span>
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/if}
           <textarea
             class="session-composer__input"
             name="message"
@@ -908,7 +1051,21 @@
             placeholder="Reply…"
             required
             rows="2"
+            bind:this={composerEl}
             bind:value={draft}
+            autocomplete="off"
+            aria-autocomplete="list"
+            aria-expanded={mentionActive && mentionRows.length > 0}
+            aria-controls={mentionActive ? 'session-composer-mentions' : undefined}
+            aria-activedescendant={
+              mentionActive && mentionRows.length
+                ? `mention-option-${mentionIndex}`
+                : undefined
+            }
+            oninput={syncCaret}
+            onkeyup={syncCaret}
+            onclick={syncCaret}
+            onselect={syncCaret}
             onkeydown={onComposerKeydown}
           ></textarea>
           <div class="session-composer__toolbar">

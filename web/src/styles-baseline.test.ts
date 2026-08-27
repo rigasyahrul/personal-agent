@@ -94,6 +94,12 @@ describe('visual baseline', () => {
       '.session-composer__card',
       '.session-composer__model',
       '.session-composer__send',
+      '.session-composer__mentions',
+      '.session-composer__mentions-status',
+      '.mention-option',
+      '.mention-option--active',
+      '.mention-option__name',
+      '.mention-option__path',
       '.session-chat-column',
       '.message-copy',
       '.content-canvas--session-focus',
@@ -101,6 +107,20 @@ describe('visual baseline', () => {
       expect(css).toContain(token);
     }
   });
+
+  it('mention overlay uses theme tokens and editor-row density', () => {
+    expect(css).toMatch(/\.session-composer__card\s*\{[^}]*position:\s*relative/s)
+    expect(css).toMatch(/\.session-composer__mentions\s*\{[^}]*position:\s*absolute/s)
+    expect(css).toMatch(/\.session-composer__mentions\s*\{[^}]*bottom:\s*calc\(100%/s)
+    expect(css).toMatch(/\.mention-option\s*\{[^}]*min-height:\s*36px/s)
+    expect(css).toMatch(/\.mention-option--active\s*\{[^}]*background:\s*var\(--accent-soft\)/s)
+    const blocks =
+      css.match(
+        /\.(session-composer__mentions[\w-]*|mention-option[\w-]*)\s*\{[^}]*\}/g,
+      ) ?? []
+    expect(blocks.length).toBeGreaterThan(3)
+    expect(blocks.filter((block) => /indigo/i.test(block))).toEqual([])
+  })
 
   it('aligns session header height with rail iconbar (48px chrome row)', () => {
     expect(css).toMatch(/\.rail-iconbar\s*\{[^}]*height:\s*48px/s);

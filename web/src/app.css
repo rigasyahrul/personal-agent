@@ -1494,6 +1494,7 @@ a.list-row:hover {
   background: var(--panel, #fff);
 }
 .session-composer__card {
+  position: relative;
   width: 100%;
   max-width: 44rem;
   display: grid;
@@ -1574,6 +1575,70 @@ a.list-row:hover {
 .session-composer--hidden {
   /* Keep form in DOM for focus/draft stability; hide when a file tab is active. */
   display: none !important;
+}
+.session-composer__mentions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 3;
+  margin: 0;
+  padding: 6px;
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgb(24 24 27 / 0.04), 0 4px 16px rgb(24 24 27 / 0.06);
+}
+.session-composer__mentions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.session-composer__mentions-status {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.mention-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.mention-option--active {
+  background: var(--accent-soft);
+}
+.mention-option:hover {
+  background: var(--accent-soft);
+}
+.mention-option__name {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--fg);
+}
+.mention-option--active .mention-option__name,
+.mention-option:hover .mention-option__name {
+  color: var(--accent);
+}
+.mention-option__path {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .message-prose {
   width: 100%;
