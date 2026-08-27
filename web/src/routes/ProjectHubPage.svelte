@@ -19,6 +19,7 @@
   } from '../lib/project-rail-prefs'
   import { routeToHash } from '../lib/router'
   import { randomSessionTitle } from '../lib/session-title'
+  import type { ThoughtsView } from '../lib/thoughts'
 
   let {
     projectId,
@@ -46,6 +47,9 @@
     source: 'project-note' | 'workspace'
     noteId?: string
   } | null>(null)
+  let thoughtsRunId = $state<string | null>(null)
+  let thoughtsPrevTab = $state<ProjectRailTab | null>(null)
+  let thoughtsView = $state<ThoughtsView | null>(null)
 
   async function loadDefaultModel() {
     try {
@@ -119,7 +123,24 @@
   function closeSession() {
     activeSession = null
     openFileRequest = null
+    thoughtsRunId = null
+    thoughtsPrevTab = null
+    thoughtsView = null
     void reloadSessions()
+  }
+
+  function openThoughts(runId: string) {
+    if (thoughtsRunId == null) thoughtsPrevTab = railTab
+    thoughtsRunId = runId
+  }
+
+  function closeThoughts() {
+    thoughtsRunId = null
+    thoughtsView = null
+    if (thoughtsPrevTab) {
+      railTab = thoughtsPrevTab
+      thoughtsPrevTab = null
+    }
   }
 
   async function renameSession(session: Session) {
@@ -145,6 +166,9 @@
       if (activeSession?.id === session.id) {
         activeSession = null
         openFileRequest = null
+        thoughtsRunId = null
+        thoughtsPrevTab = null
+        thoughtsView = null
       }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Could not delete session.'
@@ -234,6 +258,9 @@
             onclose={closeSession}
             embeddedInHub={true}
             bind:openFileRequest
+            thoughtsRunId={thoughtsRunId}
+            onOpenThoughts={openThoughts}
+            onThoughtsView={(v) => (thoughtsView = v)}
           />
         {/key}
       {:else}
@@ -319,6 +346,8 @@
         workspaceFilesEnabled={workspaceFilesEnabled}
         tab={railTab}
         mode={railMode}
+        thoughts={thoughtsView}
+        onCloseThoughts={closeThoughts}
         onTabChange={(tab) => {
           writeProjectRailTab(localStorage, tab)
           railTab = tab

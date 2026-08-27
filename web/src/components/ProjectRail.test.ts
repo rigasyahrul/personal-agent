@@ -210,4 +210,32 @@ describe('ProjectRail', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
     expect(onModeChange).toHaveBeenCalledWith('open')
   })
+
+  it('swaps Config/Files for Thoughts and restores on close', async () => {
+    const onCloseThoughts = vi.fn()
+    const thoughts = {
+      runId: 'r1',
+      elapsedSec: 32,
+      live: false,
+      rows: [{ id: 'c1', verb: 'Read', arg: 'source/standing-rule.md', status: 'ok' as const }],
+    }
+    render(ProjectRail, { props: { projectId: 'p1', tab: 'config', thoughts, onCloseThoughts } })
+    expect(screen.getByRole('heading', { name: 'Thoughts' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Config', hidden: true })).not.toBeVisible()
+    expect(screen.getByRole('tab', { name: 'Files', hidden: true })).not.toBeVisible()
+    expect(screen.getByText('Read')).toBeInTheDocument()
+    expect(screen.getByText('source/standing-rule.md')).toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: 'Close thoughts' }))
+    expect(onCloseThoughts).toHaveBeenCalled()
+  })
+
+  it('shows Working… when the run has no tool rows yet', () => {
+    render(ProjectRail, {
+      props: {
+        projectId: 'p1',
+        thoughts: { runId: 'r1', elapsedSec: 3, live: true, rows: [] },
+      },
+    })
+    expect(screen.getByText('Working…')).toBeInTheDocument()
+  })
 })

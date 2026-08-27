@@ -103,6 +103,8 @@ describe('visual baseline', () => {
       '.session-chat-column',
       '.message-copy',
       '.content-canvas--session-focus',
+      '.thought-chip',
+      '.thoughts-rail',
     ]) {
       expect(css).toContain(token);
     }

@@ -802,6 +802,12 @@ a.list-row:hover {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
+.project-rail[data-thoughts='1'] .rail-iconbar,
+.project-rail[data-thoughts='1'] .rail-panel,
+.rail-iconbar[hidden],
+.rail-panel[hidden] {
+  display: none;
+}
 .rail-iconbar__group {
   display: inline-flex;
   align-items: center;
@@ -1961,6 +1967,94 @@ a.list-row:hover {
   outline: 2px solid var(--ring, #a1a1aa);
   outline-offset: 2px;
   border-radius: 4px;
+}
+.thoughts-rail {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--panel);
+}
+.thoughts-rail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.thoughts-rail__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #18181b;
+  line-height: 1.2;
+}
+.thoughts-rail__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.thoughts-rail__close:hover {
+  background: #f4f4f5;
+  color: #18181b;
+}
+.thoughts-rail__close:focus-visible {
+  outline: 2px solid var(--ring, #a1a1aa);
+  outline-offset: 2px;
+}
+.thoughts-rail__empty {
+  margin: 12px 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.thoughts-rail__list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  align-content: start;
+  gap: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.thought-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #18181b;
+}
+.thought-row__verb {
+  font-weight: 550;
+}
+.thought-row__arg {
+  color: var(--muted);
+  font-style: italic;
+  word-break: break-all;
 }
 .message-bubble {
   border-radius: 18px;

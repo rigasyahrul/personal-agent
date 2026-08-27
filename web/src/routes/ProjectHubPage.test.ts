@@ -463,4 +463,38 @@ describe('ProjectHubPage', () => {
     expect(workspace).toHaveAttribute('data-rail', 'collapsed')
     expect(localStorage.getItem('pa.projectRail.mode')).toBe('collapsed')
   })
+
+  it('opens Thoughts from the chip and restores Config on close without remounting composer', async () => {
+    vi.mocked(api.listProjectSessions).mockResolvedValue([
+      {
+        id: 's1',
+        title: 'Test 1',
+        status: 'idle',
+        provider: 'openai',
+        model_id: 'gpt',
+      },
+    ])
+    vi.mocked(api.listMessages).mockResolvedValue([
+      { sequence: 1, role: 'user', content: 'what is in the file?', run_id: 'r1', created_at: '2026-08-27T00:00:00Z' },
+      {
+        sequence: 2,
+        role: 'assistant',
+        content: '',
+        run_id: 'r1',
+        tool_calls_json: JSON.stringify([{ id: 'c1', name: 'read_knowledge', arguments: '{"path":"source/standing-rule.md"}' }]),
+        created_at: '2026-08-27T00:00:05Z',
+      },
+      { sequence: 3, role: 'tool', content: '{"path":"source/standing-rule.md"}', run_id: 'r1', tool_call_id: 'c1', created_at: '2026-08-27T00:00:06Z' },
+      { sequence: 4, role: 'assistant', content: 'Here it is.', run_id: 'r1', created_at: '2026-08-27T00:00:10Z' },
+    ])
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+    await fireEvent.click(await screen.findByRole('button', { name: /Test 1/i }))
+    const composer = await screen.findByLabelText('Message')
+    await fireEvent.click(await screen.findByRole('button', { name: /Thought for/ }))
+    expect(await screen.findByRole('heading', { name: 'Thoughts' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Config', hidden: true })).not.toBeVisible()
+    await fireEvent.click(screen.getByRole('button', { name: 'Close thoughts' }))
+    expect(screen.getByRole('tab', { name: 'Config' })).toBeVisible()
+    expect(screen.getByLabelText('Message')).toBe(composer)
+  })
 })

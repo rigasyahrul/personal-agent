@@ -1,6 +1,6 @@
 <!-- web/src/components/sessions/SessionChat.svelte -->
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, untrack } from 'svelte'
   import { api } from '../../lib/api'
   import type {
     ChatMessage,
@@ -29,9 +29,11 @@
   } from '../../lib/session-prefs'
   import { formatMessageDateTime, formatSessionDate } from '../../lib/format-session-date'
   import {
+    buildThoughtsView,
     chipInsertAfterSequence,
     runElapsedSec,
     shouldShowChip,
+    type ThoughtsView,
   } from '../../lib/thoughts'
   import Breadcrumbs from '../Breadcrumbs.svelte'
   import MarkdownView from '../markdown/MarkdownView.svelte'
@@ -86,6 +88,8 @@
     openFileRequest = $bindable<OpenFileRequest | null>(null),
     embeddedInHub = false,
     onOpenThoughts,
+    thoughtsRunId = $bindable<string | null>(null),
+    onThoughtsView,
   }: {
     session: Session
     projectId: string
@@ -102,6 +106,8 @@
     /** When true, hide internal Show files toggle / SessionFilesBar (hub ProjectRail owns files). */
     embeddedInHub?: boolean
     onOpenThoughts?: (runId: string) => void
+    thoughtsRunId?: string | null
+    onThoughtsView?: (view: ThoughtsView | null) => void
   } = $props()
 
   let loadedProject = $state<Project | null>(null)
@@ -211,6 +217,27 @@
     }
     return true
   }
+
+  $effect(() => {
+    const runId = thoughtsRunId
+    const msgs = messages
+    const current = run
+    const now = nowMs
+    untrack(() => {
+      if (!runId) {
+        onThoughtsView?.(null)
+        return
+      }
+      onThoughtsView?.(
+        buildThoughtsView({
+          runId,
+          messages: msgs,
+          current,
+          nowMs: now,
+        }),
+      )
+    })
+  })
 
   function thoughtChipAfter(message: ChatMessage): { runId: string; n: number } | null {
     const runId = message.run_id

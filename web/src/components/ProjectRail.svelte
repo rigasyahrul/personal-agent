@@ -3,6 +3,7 @@
   import { api } from '../lib/api'
   import type { NoteTreeEntry, WorkspaceEntry } from '../lib/api/types'
   import type { ProjectRailMode, ProjectRailTab } from '../lib/project-rail-prefs'
+  import type { ThoughtsView } from '../lib/thoughts'
   import { buildHierarchy, flattenTree, type TreeNode } from '../lib/workspace-tree'
   import { railIconPath, type RailIconName } from './rail-icons'
   import InstructionEditor from './settings/InstructionEditor.svelte'
@@ -22,6 +23,8 @@
     onTabChange,
     onModeChange,
     onOpenFile,
+    thoughts = null,
+    onCloseThoughts,
   }: {
     projectId: string
     sessionId?: string | null
@@ -31,6 +34,8 @@
     onTabChange?: (tab: ProjectRailTab) => void
     onModeChange?: (mode: ProjectRailMode) => void
     onOpenFile?: (path: string, meta?: OpenFileMeta) => void
+    thoughts?: ThoughtsView | null
+    onCloseThoughts?: () => void
   } = $props()
 
   type RailEntry = WorkspaceEntry & { note_id?: string }
@@ -38,6 +43,7 @@
   let localTab = $state<ProjectRailTab>('config')
   const activeTab = $derived(controlledTab ?? localTab)
   const activeMode = $derived(mode ?? 'open')
+  const thoughtsOpen = $derived(Boolean(thoughts))
 
   let projectEntries = $state<RailEntry[]>([])
   let workspaceEntries = $state<WorkspaceEntry[]>([])
@@ -144,6 +150,7 @@
   class="project-rail"
   class:project-rail--collapsed={activeMode === 'collapsed'}
   data-rail-mode={activeMode}
+  data-thoughts={thoughtsOpen ? '1' : undefined}
 >
   {#if activeMode === 'collapsed'}
     <div class="rail-collapsed-chrome" data-testid="rail-collapsed-chrome">
@@ -156,8 +163,8 @@
       >{@render icon('show-canvas')}</button>
     </div>
   {:else}
-    <div class="rail-iconbar" role="toolbar" aria-label="Project rail">
-      <div class="rail-iconbar__group" role="tablist" aria-label="Project rail panels">
+    <div class="rail-iconbar" role="toolbar" aria-label="Project rail" hidden={thoughtsOpen}>
+      <div class="rail-iconbar__group" role="tablist" aria-label="Project rail panels" hidden={thoughtsOpen}>
         <button
           type="button"
           role="tab"
@@ -202,17 +209,50 @@
       </div>
     </div>
 
+    {#if thoughts}
+      <section class="thoughts-rail" data-thoughts="1">
+        <header class="thoughts-rail__header">
+          <h2 class="thoughts-rail__title">Thoughts</h2>
+          <button
+            type="button"
+            class="thoughts-rail__close"
+            aria-label="Close thoughts"
+            onclick={() => onCloseThoughts?.()}
+          >×</button>
+        </header>
+        {#if thoughts.rows.length === 0}
+          <p class="thoughts-rail__empty">Working…</p>
+        {:else}
+          <ol class="thoughts-rail__list">
+            {#each thoughts.rows as row (row.id)}
+              <li class="thought-row" data-status={row.status}>
+                <span class="thought-row__verb">{row.verb}</span>
+                {#if row.arg}<span class="thought-row__arg">{row.arg}</span>{/if}
+              </li>
+            {/each}
+          </ol>
+        {/if}
+      </section>
+    {/if}
+
     {#if activeTab === 'config'}
       <div
         class="rail-panel rail-panel--config"
         role="tabpanel"
         id="rail-panel-config"
         aria-labelledby="rail-tab-config"
+        hidden={thoughtsOpen}
       >
         <InstructionEditor scope="project" {projectId} variant="rail" />
       </div>
     {:else}
-      <div class="rail-panel form-stack" role="tabpanel" id="rail-panel-files" aria-labelledby="rail-tab-files">
+      <div
+        class="rail-panel form-stack"
+        role="tabpanel"
+        id="rail-panel-files"
+        aria-labelledby="rail-tab-files"
+        hidden={thoughtsOpen}
+      >
         {#if loading}
           <div class="space-y-2" aria-busy="true">
             <Skeleton class="h-6" />
