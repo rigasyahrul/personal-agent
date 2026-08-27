@@ -206,6 +206,46 @@ describe('SessionChat', () => {
     expect(assistantRow?.querySelector('.message-prose')).toBeTruthy()
   })
 
+  it('hides empty assistant tool-call turns and shows a Thought chip', async () => {
+    vi.mocked(api.listMessages).mockResolvedValue([
+      { sequence: 1, role: 'user', content: 'Can you tell me, what is in the @standing-rule.md ?', run_id: 'r1', created_at: '2026-08-27T00:00:00Z' },
+      {
+        sequence: 2,
+        role: 'assistant',
+        content: '',
+        run_id: 'r1',
+        tool_calls_json: JSON.stringify([
+          { id: 'c1', name: 'read_knowledge', arguments: '{"path":"source/standing-rule.md"}' },
+        ]),
+        created_at: '2026-08-27T00:00:05Z',
+      },
+      { sequence: 3, role: 'tool', content: '{"error":"workspace tool request rejected"}', run_id: 'r1', tool_call_id: 'c1', created_at: '2026-08-27T00:00:06Z' },
+      { sequence: 4, role: 'assistant', content: 'Here is the content of @standing-rule.md.', run_id: 'r1', created_at: '2026-08-27T00:00:10Z' },
+    ])
+    const onOpenThoughts = vi.fn()
+    render(SessionChat, { props: { session, projectId: 'p1', pollInterval: 60_000, onOpenThoughts } })
+    expect(await screen.findByText('Can you tell me, what is in the @standing-rule.md ?')).toBeInTheDocument()
+    expect(screen.getByText('Here is the content of @standing-rule.md.')).toBeInTheDocument()
+    expect(document.querySelectorAll('li[data-role="assistant"]')).toHaveLength(1)
+    expect(document.querySelectorAll('li[data-role="other"]')).toHaveLength(0)
+    expect(screen.queryByText(/^ASSISTANT$/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/workspace tool request rejected/)).not.toBeInTheDocument()
+    const chip = screen.getByRole('button', { name: /Thought for \d+s/ })
+    expect(chip).toHaveClass('thought-chip')
+    await fireEvent.click(chip)
+    expect(onOpenThoughts).toHaveBeenCalledWith('r1')
+  })
+
+  it('does not show a Thought chip for an instant no-tool reply', async () => {
+    vi.mocked(api.listMessages).mockResolvedValue([
+      { sequence: 1, role: 'user', content: 'hi', run_id: 'r2', created_at: '2026-08-27T00:00:00Z' },
+      { sequence: 2, role: 'assistant', content: 'hey', run_id: 'r2', created_at: '2026-08-27T00:00:00Z' },
+    ])
+    render(SessionChat, { props: { session, projectId: 'p1', pollInterval: 60_000 } })
+    expect(await screen.findByText('hey')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Thought for/ })).toBeNull()
+  })
+
   it('copy control is an icon under assistant prose and copies plain text', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })

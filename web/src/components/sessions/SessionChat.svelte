@@ -28,6 +28,11 @@
     writeFilesBarWidthPct,
   } from '../../lib/session-prefs'
   import { formatMessageDateTime, formatSessionDate } from '../../lib/format-session-date'
+  import {
+    chipInsertAfterSequence,
+    runElapsedSec,
+    shouldShowChip,
+  } from '../../lib/thoughts'
   import Breadcrumbs from '../Breadcrumbs.svelte'
   import MarkdownView from '../markdown/MarkdownView.svelte'
   import { createSessionPoller } from './session-poller'
@@ -80,6 +85,7 @@
     openPath = $bindable<string | null>(null),
     openFileRequest = $bindable<OpenFileRequest | null>(null),
     embeddedInHub = false,
+    onOpenThoughts,
   }: {
     session: Session
     projectId: string
@@ -95,6 +101,7 @@
     openFileRequest?: OpenFileRequest | null
     /** When true, hide internal Show files toggle / SessionFilesBar (hub ProjectRail owns files). */
     embeddedInHub?: boolean
+    onOpenThoughts?: (runId: string) => void
   } = $props()
 
   let loadedProject = $state<Project | null>(null)
@@ -120,6 +127,7 @@
   /** Sequence of assistant message last copied; drives brief "Copied" feedback. */
   let copiedSeq = $state<number | null>(null)
   let copiedClearTimer: ReturnType<typeof setTimeout> | null = null
+  let nowMs = $state(Date.now())
   let generation = 0
   let destroyed = false
   let sendToken: object | null = null
@@ -191,9 +199,26 @@
     for (let i = 0; i < left.length; i++) {
       const a = left[i]
       const b = right[i]
-      if (a?.sequence !== b?.sequence || a?.role !== b?.role || a?.content !== b?.content) return false
+      if (
+        a?.sequence !== b?.sequence ||
+        a?.role !== b?.role ||
+        a?.content !== b?.content ||
+        a?.run_id !== b?.run_id ||
+        a?.tool_calls_json !== b?.tool_calls_json
+      ) {
+        return false
+      }
     }
     return true
+  }
+
+  function thoughtChipAfter(message: ChatMessage): { runId: string; n: number } | null {
+    const runId = message.run_id
+    if (!runId) return null
+    if (chipInsertAfterSequence(messages, runId) !== message.sequence) return null
+    const input = { runId, messages, current: run, nowMs }
+    if (!shouldShowChip(input)) return null
+    return { runId, n: runElapsedSec(input) }
   }
 
   async function loadSnapshot(): Promise<{ messages: ChatMessage[]; run: RunStatus | null }> {
@@ -764,6 +789,16 @@
     return () => window.removeEventListener('keydown', onKeyDown)
   })
 
+  $effect(() => {
+    const live = run?.status === 'queued' || run?.status === 'running'
+    if (!live) return
+    nowMs = Date.now()
+    const timer = setInterval(() => {
+      nowMs = Date.now()
+    }, 1000)
+    return () => clearInterval(timer)
+  })
+
   /** Hub ProjectRail drives file tabs via openFileRequest; clear after handling so the same path can re-open. */
   $effect(() => {
     const req = openFileRequest
@@ -891,6 +926,7 @@
           <ol class="messages message-thread session-focus__messages">
             {#each [...messages].sort((a, b) => a.sequence - b.sequence) as message (message.sequence)}
               {#if message.role === 'user'}
+                {@const chip = thoughtChipAfter(message)}
                 <li
                   class="message message-row message-row--user"
                   data-role="user"
@@ -900,7 +936,29 @@
                     <p>{message.content}</p>
                   </div>
                 </li>
-              {:else if message.role === 'assistant' || message.role === 'model'}
+                {#if chip}
+                  <li class="message message-row message-row--thought" data-role="thought">
+                    <button
+                      type="button"
+                      class="thought-chip"
+                      aria-label="Thought for {chip.n}s"
+                      onclick={() => onOpenThoughts?.(chip.runId)}
+                    >
+                      <svg class="thought-chip__bulb" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.3 3.5.7.7 1.3 1.5 1.5 2.5" />
+                        <path d="M9 18h6" />
+                        <path d="M10 22h4" />
+                      </svg>
+                      <svg class="thought-chip__panel" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <path d="M9 3v18" />
+                        <path d="m16 15-3-3 3-3" />
+                      </svg>
+                      <span>Thought for {chip.n}s</span>
+                    </button>
+                  </li>
+                {/if}
+              {:else if (message.role === 'assistant' || message.role === 'model') && (message.content ?? '').trim()}
                 {@const shortDate = formatSessionDate(message.created_at)}
                 {@const fullDate = formatMessageDateTime(message.created_at)}
                 <li
@@ -958,18 +1016,6 @@
                         >{shortDate}</time>
                       {/if}
                     </div>
-                  </div>
-                </li>
-              {:else}
-                <li
-                  class="message message-row message-row--other"
-                  data-role="other"
-                  data-raw-role={message.role}
-                >
-                  <div class="message-meta text-sm text-slate-500">
-                    <span class="font-medium uppercase tracking-wide" style="font-size:11px"
-                    >{message.role}</span>
-                    <p style="margin:0.25rem 0 0; white-space:pre-wrap">{message.content}</p>
                   </div>
                 </li>
               {/if}

@@ -1922,6 +1922,46 @@ a.list-row:hover {
   flex-direction: column;
   gap: 0;
 }
+.message-row--thought {
+  justify-content: flex-start;
+}
+.thought-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #71717a;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.thought-chip__bulb,
+.thought-chip__panel {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.thought-chip__panel {
+  display: none;
+}
+.thought-chip:hover .thought-chip__bulb {
+  display: none;
+}
+.thought-chip:hover .thought-chip__panel {
+  display: block;
+}
+.thought-chip:focus-visible {
+  outline: 2px solid var(--ring, #a1a1aa);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .message-bubble {
   border-radius: 18px;
   padding: 14px 18px;
