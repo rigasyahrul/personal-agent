@@ -49,6 +49,7 @@ After non-trivial work or a user correction: run **`compounding-engineering`** �
 
 ### Standing rules
 
+- **Do / check / fix → facts, then problems, then plan.** When the user says do this, check that, or fix it: (1) **fact-find** first — named URL in the real browser if it’s UI; **console/network/app logs**; DOM/API as needed; (2) **analyze**; (3) **summarize the problems to the user**; (4) **fix plan** — then wait or implement only as they asked. No confident story from git/`lsof`/curl/code-reading. User correction 2026-08-27. → `docs/memory/20260827-1634-facts-logs-then-problems-then-plan.md`
 - **Never scan $HOME.** Stay in this git repo (or a named `.worktrees/` checkout). Do not `find`/`grep`/`ls` `/Users/<name>`, `~`, or the whole machine. User `@file.png` (and similar) refs: `Read` that path in cwd/repo. A named mock for a **new** UI element is a product ref, not a search target — do not hunt the filesystem for it. User correction 2026-08-27. → `docs/memory/20260827-1124-never-scan-home-named-refs-are-in-repo.md`
 - **Ship = push.** Commit is not enough. After ship/done/archive: `git push`, confirm not `ahead of origin`, then archive the thread. → `docs/memory/` (ship entry)
 - **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is selective lesson entries + index only.

@@ -36,7 +36,7 @@ Scan this first. Open the linked file only when you need detail.
 | sqlite | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | compound | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | worktree | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
-| agents | [2026-08-19 — Lessons file is stable `lessons.md`](20260819-2200-lessons-file-is-stable-lessons-md.md) |
+| agents | [2026-08-27 — Facts and logs first, then problems, then plan](20260827-1634-facts-logs-then-problems-then-plan.md) |
 | amp | [2026-08-20 — Master Grok spawn: local `-x`, isolate worktrees](20260820-2200-master-grok-spawn-local-x-isolate-worktrees.md) |
 | hub | [2026-08-26 — Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md) |
 | backup | [2026-08-19 — macOS local `make test` platform gaps](20260819-1900-macos-local-make-test-platform-gaps.md) |
@@ -107,6 +107,8 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-27** — [Facts and logs first, then problems, then plan](20260827-1634-facts-logs-then-problems-then-plan.md)  
+  Tags: agents, craft, browser, vibe-pass, ux
 - **2026-08-27** — [Never claim UI without opening the named URL](20260827-1631-never-claim-ui-without-opening-named-url.md)  
   Tags: craft, browser, vibe-pass, ux, frontend
 - **2026-08-27** — [Never scan $HOME; named refs are in repo](20260827-1124-never-scan-home-named-refs-are-in-repo.md)  
