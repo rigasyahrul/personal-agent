@@ -49,6 +49,7 @@ After non-trivial work or a user correction: run **`compounding-engineering`** �
 
 ### Standing rules
 
+- **Never scan $HOME.** Stay in this git repo (or a named `.worktrees/` checkout). Do not `find`/`grep`/`ls` `/Users/<name>`, `~`, or the whole machine. User `@file.png` (and similar) refs: `Read` that path in cwd/repo. A named mock for a **new** UI element is a product ref, not a search target — do not hunt the filesystem for it. User correction 2026-08-27. → `docs/memory/20260827-1124-never-scan-home-named-refs-are-in-repo.md`
 - **Ship = push.** Commit is not enough. After ship/done/archive: `git push`, confirm not `ahead of origin`, then archive the thread. → `docs/memory/` (ship entry)
 - **Plans live under Superpowers**, not memory: `docs/superpowers/plans/`. Memory is selective lesson entries + index only.
 - **Big multi-agent plans:** lock + one assembled plan + Canonical contracts; high-stakes review until Approved. → `docs/memory/`

@@ -30,6 +30,8 @@ Scan this first. Open the linked file only when you need detail.
 
 | Topic | Latest lesson |
 |-------|----------------|
+| home | [2026-08-27 — Never scan $HOME; named refs are in repo](20260827-1124-never-scan-home-named-refs-are-in-repo.md) |
+| refs | [2026-08-27 — Never scan $HOME; named refs are in repo](20260827-1124-never-scan-home-named-refs-are-in-repo.md) |
 | pi | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | sqlite | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
 | compound | [2026-08-23 — Pi master + SQLite 1-conn + ship recovery](20260823-1639-pi-master-obsidian-sqlite-and-ship-recovery.md) |
@@ -105,6 +107,8 @@ Scan this first. Open the linked file only when you need detail.
 
 ## Entries (newest first)
 
+- **2026-08-27** — [Never scan $HOME; named refs are in repo](20260827-1124-never-scan-home-named-refs-are-in-repo.md)  
+  Tags: agents, files, home, refs, craft
 - **2026-08-26** — [Project instructions live in Config rail](20260826-1653-project-instructions-live-in-config-rail.md)  
   Tags: rail, hub, frontend, craft, vibe-pass, knowledge
 - **2026-08-26** — [Docker --build context is not a registry pull](20260826-1635-docker-build-context-not-registry-pull.md)  
