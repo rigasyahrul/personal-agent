@@ -6,8 +6,14 @@
   import SessionCardRow from '../components/sessions/SessionCardRow.svelte'
   import SessionChat from '../components/sessions/SessionChat.svelte'
   import { api } from '../lib/api'
-  import type { ModelOption, Project, Session } from '../lib/api/types'
+  import type { ModelOption, Project, Session, WorkspaceEntry } from '../lib/api/types'
   import { formatSessionDate } from '../lib/format-session-date'
+  import {
+    activeMention,
+    insertMention,
+    rankWorkspaceFiles,
+    type RankedFile,
+  } from '../lib/mention-files'
   import { workspaceEnabled } from '../lib/promote'
   import {
     readProjectRailMode,
@@ -36,6 +42,14 @@
   let sessionsError = $state('')
   let draft = $state('')
   let starting = $state(false)
+  let hubComposerEl: HTMLTextAreaElement | undefined = $state()
+  let hubCaret = $state(0)
+  let hubMentionDismissed = $state(false)
+  let hubNoteEntries = $state<WorkspaceEntry[] | null>(null)
+  let hubNotesLoading = $state(false)
+  let hubNotesError = $state('')
+  let hubMentionIndex = $state(0)
+  let hubNotesToken = 0
   let activeSession = $state<Session | null>(null)
   /** Default model for hub start (same chip as open-session composer). */
   let defaultModel = $state<ModelOption | null>(null)
@@ -222,10 +236,96 @@
     }
   }
 
+  const hubMention = $derived(activeMention(draft, hubCaret))
+  const hubMentionActive = $derived(Boolean(hubMention && !hubMentionDismissed))
+  const hubMentionRows = $derived(
+    hubMentionActive && hubNoteEntries
+      ? rankWorkspaceFiles(hubNoteEntries, hubMention?.query ?? '')
+      : [],
+  )
+
+  async function ensureHubNotes() {
+    const token = ++hubNotesToken
+    hubNotesLoading = true
+    hubNotesError = ''
+    try {
+      const notes = await api.listProjectNotes(projectId)
+      if (token !== hubNotesToken) return
+      hubNoteEntries = (notes ?? []).map((entry) => ({
+        path: entry.path,
+        kind: entry.kind === 'folder' || entry.kind === 'directory' ? 'directory' : 'file',
+      }))
+    } catch {
+      if (token !== hubNotesToken) return
+      hubNotesError = "Couldn't load files"
+      hubNoteEntries = []
+    } finally {
+      if (token === hubNotesToken) hubNotesLoading = false
+    }
+  }
+
+  $effect(() => {
+    if (!hubMentionActive) return
+    if (hubNoteEntries === null) void ensureHubNotes()
+  })
+
+  $effect(() => {
+    const token = hubMention ? `${hubMention.start}:${hubMention.query}` : ''
+    void token
+    hubMentionDismissed = false
+  })
+
+  $effect(() => {
+    if (hubMentionIndex >= hubMentionRows.length) hubMentionIndex = 0
+  })
+
+  function syncHubCaret(e: Event) {
+    const el = e.currentTarget as HTMLTextAreaElement
+    hubCaret = el.selectionStart ?? el.value.length
+  }
+
+  function pickHubMention(row: RankedFile) {
+    const current = activeMention(draft, hubCaret)
+    if (!current) return
+    const next = insertMention(draft, current, row.path)
+    draft = next.text
+    hubCaret = next.cursor
+    hubMentionDismissed = true
+    requestAnimationFrame(() => {
+      hubComposerEl?.focus()
+      hubComposerEl?.setSelectionRange(next.cursor, next.cursor)
+    })
+  }
+
   /** Enter submits (create session); Shift+Enter inserts a newline. */
   function onComposerKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Enter' || e.shiftKey) return
     if (e.isComposing) return
+    if (hubMentionActive) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (hubMentionRows.length) hubMentionIndex = (hubMentionIndex + 1) % hubMentionRows.length
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (hubMentionRows.length) {
+          hubMentionIndex = (hubMentionIndex - 1 + hubMentionRows.length) % hubMentionRows.length
+        }
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        hubMentionDismissed = true
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const row = hubMentionRows[hubMentionIndex] ?? hubMentionRows[0]
+        if (row) pickHubMention(row)
+        return
+      }
+    }
+    if (e.key !== 'Enter' || e.shiftKey) return
     e.preventDefault()
     const form = (e.currentTarget as HTMLTextAreaElement).form
     if (!form || starting || !draft.trim()) return
@@ -278,12 +378,53 @@
         <section class="hub-start">
           <form class="hub-composer" onsubmit={startSession}>
             <div class="session-composer__card hub-composer__card">
+              {#if hubMentionActive}
+                <div class="session-composer__mentions" id="hub-composer-mentions">
+                  {#if hubNotesLoading && hubNoteEntries === null}
+                    <p class="session-composer__mentions-status">Loading files…</p>
+                  {:else if hubNotesError}
+                    <p class="session-composer__mentions-status">{hubNotesError}</p>
+                  {:else if hubMentionRows.length === 0}
+                    <p class="session-composer__mentions-status">No matching files</p>
+                  {:else}
+                    <ul role="listbox" aria-label="Workspace files">
+                      {#each hubMentionRows as row, i (row.path)}
+                        <li
+                          id={`hub-mention-option-${i}`}
+                          class="mention-option"
+                          class:mention-option--active={i === hubMentionIndex}
+                          role="option"
+                          aria-selected={i === hubMentionIndex}
+                          onmousedown={(event) => {
+                            event.preventDefault()
+                            pickHubMention(row)
+                          }}
+                        >
+                          <span class="mention-option__name">{row.name}</span>
+                          {#if row.parent}
+                            <span class="mention-option__path">{row.parent}</span>
+                          {/if}
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </div>
+              {/if}
               <textarea
                 class="session-composer__input"
+                bind:this={hubComposerEl}
                 bind:value={draft}
                 aria-label="Message"
                 placeholder="How can I help you today?"
                 rows="3"
+                autocomplete="off"
+                aria-autocomplete="list"
+                aria-expanded={hubMentionActive && hubMentionRows.length > 0}
+                aria-controls={hubMentionActive ? 'hub-composer-mentions' : undefined}
+                oninput={syncHubCaret}
+                onkeyup={syncHubCaret}
+                onclick={syncHubCaret}
+                onselect={syncHubCaret}
                 onkeydown={onComposerKeydown}
               ></textarea>
               <div class="session-composer__toolbar">

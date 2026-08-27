@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -35,15 +34,8 @@ func (h *chatHandlers) workspaceRoot(r *http.Request) (*fsroot.Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	var grants struct {
-		WorkspaceFiles bool `json:"workspace_files"`
-	}
-	if err := json.Unmarshal([]byte(session.ToolGrantsJSON), &grants); err != nil {
-		return nil, err
-	}
-	if !grants.WorkspaceFiles {
-		return nil, errWorkspaceFilesDisabled
-	}
+	// Listing session files is not behind a user-facing grant (there is no UI).
+	// Write tools still honor stored grants in the runner.
 	vaultID, projectID := "", ""
 	if session.VaultID != nil {
 		vaultID = *session.VaultID

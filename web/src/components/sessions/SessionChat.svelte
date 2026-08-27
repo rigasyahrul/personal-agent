@@ -148,7 +148,7 @@
   let compoundingLock = false
   let showWorkspace = $derived(workspaceEnabled(session))
   const mention = $derived(activeMention(draft, caret))
-  const mentionActive = $derived(Boolean(showWorkspace && mention && !mentionDismissed))
+  const mentionActive = $derived(Boolean(mention && !mentionDismissed))
   const mentionRows = $derived(
     mentionActive && treeEntries
       ? rankWorkspaceFiles(treeEntries, mention?.query ?? '')
@@ -486,9 +486,18 @@
       if (token !== treeLoadToken) return
       treeEntries = tree?.entries ?? []
     } catch {
-      if (token !== treeLoadToken) return
-      treeError = "Couldn't load files"
-      treeEntries = []
+      try {
+        const notes = await api.listProjectNotes(projectId)
+        if (token !== treeLoadToken) return
+        treeEntries = (notes ?? []).map((entry) => ({
+          path: entry.path,
+          kind: entry.kind === 'folder' || entry.kind === 'directory' ? 'directory' : 'file',
+        }))
+      } catch {
+        if (token !== treeLoadToken) return
+        treeError = "Couldn't load files"
+        treeEntries = []
+      }
     } finally {
       if (token === treeLoadToken) treeLoading = false
     }
@@ -503,7 +512,7 @@
   })
 
   $effect(() => {
-    if (!mentionActive || !showWorkspace) return
+    if (!mentionActive) return
     const sig = [...changedPathsFromMessages(messages)].sort().join('|')
     if (treeEntries === null || (sig && sig !== treeSignature)) {
       if (sig) treeSignature = sig

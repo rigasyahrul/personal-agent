@@ -53,15 +53,16 @@ export function isPromotableWorkspaceFile(entry: { kind?: string; path?: string 
 }
 
 export function workspaceEnabled(session: {
-  tool_grants?: { workspace_files?: boolean } | null
+  tool_grants?: { workspace_files?: boolean; session_files?: boolean } | null
   tool_grants_json?: string | null
 } | null | undefined): boolean {
   if (session?.tool_grants && typeof session.tool_grants === 'object') {
-    return session.tool_grants.workspace_files === true
+    return session.tool_grants.workspace_files === true || session.tool_grants.session_files === true
   }
   if (typeof session?.tool_grants_json !== 'string') return false
   try {
-    return JSON.parse(session.tool_grants_json)?.workspace_files === true
+    const grants = JSON.parse(session.tool_grants_json)
+    return grants?.workspace_files === true || grants?.session_files === true
   } catch {
     return false
   }

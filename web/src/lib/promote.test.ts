@@ -28,6 +28,8 @@ describe('promote helpers', () => {
     expect(workspaceEnabled({ tool_grants_json: '{"workspace_files":true}' })).toBe(true)
     expect(workspaceEnabled({ tool_grants_json: '{"workspace_files":false}' })).toBe(false)
     expect(workspaceEnabled({ tool_grants_json: '{bad' })).toBe(false)
+    expect(workspaceEnabled({ tool_grants_json: '{"session_files":true}' })).toBe(true)
+    expect(workspaceEnabled({ tool_grants: { session_files: true } })).toBe(true)
   })
 
   it('only treats regular .md files as promotable', () => {

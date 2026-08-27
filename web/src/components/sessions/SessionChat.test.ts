@@ -15,6 +15,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       sendMessage: vi.fn(),
       workspaceTree: vi.fn(),
       workspaceFile: vi.fn(),
+      listProjectNotes: vi.fn(),
       getProjectNote: vi.fn(),
       operationStatus: vi.fn(),
       promoteSession: vi.fn(),
@@ -55,6 +56,7 @@ describe('SessionChat', () => {
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
     vi.mocked(api.sendMessage).mockReset()
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
+    vi.mocked(api.listProjectNotes).mockReset().mockResolvedValue([])
     vi.mocked(api.getProject).mockReset().mockResolvedValue({
       id: 'p1',
       name: 'Sleep Protocol',
@@ -945,12 +947,27 @@ describe('SessionChat', () => {
     expect(composer).toHaveAttribute('aria-expanded', 'true')
   })
 
-  it('does not open on @ when workspace files are not granted', async () => {
+  it('opens the file list on @ even without workspace_files grant', async () => {
+    vi.mocked(api.workspaceTree).mockResolvedValue({ entries: treeEntries })
     render(SessionChat, { props: { session, projectId: 'p1', pollInterval: 60_000 } })
     const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
     await typeMention(composer, '@')
-    expect(screen.queryByRole('listbox', { name: 'Workspace files' })).toBeNull()
-    expect(api.workspaceTree).not.toHaveBeenCalled()
+    expect(await screen.findByRole('listbox', { name: 'Workspace files' })).toBeInTheDocument()
+    expect(api.workspaceTree).toHaveBeenCalledWith(session.id)
+  })
+
+  it('opens the file list when session_files is granted', async () => {
+    vi.mocked(api.workspaceTree).mockResolvedValue({ entries: treeEntries })
+    render(SessionChat, {
+      props: {
+        session: { ...session, tool_grants_json: '{"session_files":true}' },
+        projectId: 'p1',
+        pollInterval: 60_000,
+      },
+    })
+    const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
+    await typeMention(composer, '@')
+    expect(await screen.findByRole('listbox', { name: 'Workspace files' })).toBeInTheDocument()
   })
 
   it('does not open for foo@bar', async () => {
@@ -1029,6 +1046,7 @@ describe('SessionChat', () => {
 
   it('shows a tree error in the overlay and keeps the textarea node', async () => {
     vi.mocked(api.workspaceTree).mockRejectedValue(new Error('boom'))
+    vi.mocked(api.listProjectNotes).mockRejectedValue(new Error('notes down'))
     render(SessionChat, { props: { session: granted, projectId: 'p1', pollInterval: 60_000 } })
     const composer = (await screen.findByLabelText('Message')) as HTMLTextAreaElement
     await typeMention(composer, '@')

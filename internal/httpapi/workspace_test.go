@@ -91,8 +91,8 @@ func TestWorkspaceAuthenticationGrantMissingAndEmptyTree(t *testing.T) {
 	if got := apiRequest(t, h, http.MethodGet, "/api/v1/sessions/"+on.ID+"/workspace/tree", nil, nil, "").Code; got != http.StatusUnauthorized {
 		t.Fatalf("anonymous = %d", got)
 	}
-	if got := apiRequest(t, h, http.MethodGet, "/api/v1/sessions/"+off.ID+"/workspace/tree", nil, cookies, "").Code; got != http.StatusForbidden {
-		t.Fatalf("grant off = %d", got)
+	if got := apiRequest(t, h, http.MethodGet, "/api/v1/sessions/"+off.ID+"/workspace/tree", nil, cookies, "").Code; got != http.StatusOK {
+		t.Fatalf("grant off list = %d", got)
 	}
 	if got := apiRequest(t, h, http.MethodGet, "/api/v1/sessions/missing/workspace/tree", nil, cookies, "").Code; got != http.StatusNotFound {
 		t.Fatalf("missing = %d", got)

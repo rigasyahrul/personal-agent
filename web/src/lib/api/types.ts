@@ -33,7 +33,7 @@ export interface Session {
   project_id?: string | null
   created_at?: string
   updated_at?: string
-  tool_grants?: { workspace_files?: boolean } | null
+  tool_grants?: { workspace_files?: boolean; session_files?: boolean } | null
   tool_grants_json?: string | null
 }
 

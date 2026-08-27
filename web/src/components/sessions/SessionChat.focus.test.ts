@@ -15,6 +15,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       sendMessage: vi.fn(),
       workspaceTree: vi.fn(),
       workspaceFile: vi.fn(),
+      listProjectNotes: vi.fn(),
       operationStatus: vi.fn(),
       promoteSession: vi.fn(),
       retryReviewPending: vi.fn(),
@@ -48,6 +49,7 @@ describe('SessionChat focus invariant', () => {
     vi.mocked(api.currentRun).mockReset().mockResolvedValue(null)
     vi.mocked(api.sendMessage).mockReset()
     vi.mocked(api.workspaceTree).mockReset().mockResolvedValue({ entries: [] })
+    vi.mocked(api.listProjectNotes).mockReset().mockResolvedValue([])
     vi.mocked(api.createCompound).mockReset().mockResolvedValue({
       id: 'prop-1',
       status: 'pending',

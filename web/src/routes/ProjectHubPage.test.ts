@@ -222,6 +222,23 @@ describe('ProjectHubPage', () => {
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
   })
 
+  it('opens a file list on @ in the hub composer', async () => {
+    vi.mocked(api.listProjectNotes).mockResolvedValue([
+      { path: 'standing-rule.md', kind: 'file' },
+      { path: 'notes/outline.md', kind: 'file' },
+    ])
+    render(ProjectHubPage, { props: { projectId: 'p1' } })
+    const composer = (await screen.findByRole('textbox', { name: /message/i })) as HTMLTextAreaElement
+    await fireEvent.input(composer, { target: { value: '@stand' } })
+    composer.setSelectionRange(6, 6)
+    await fireEvent.keyUp(composer)
+    expect(await screen.findByRole('listbox', { name: 'Workspace files' })).toBeInTheDocument()
+    expect(screen.getByText('standing-rule.md')).toBeInTheDocument()
+    await fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false })
+    expect(api.createProjectSession).not.toHaveBeenCalled()
+    expect(composer).toHaveValue('@standing-rule.md ')
+  })
+
   it('Enter in hub composer creates session; Shift+Enter does not submit', async () => {
     vi.mocked(api.createProjectSession).mockImplementation(async (_pid, input) => ({
       id: 's-enter',
